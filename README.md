@@ -11,7 +11,8 @@
   וגם כ**אפליקציית אנדרואיד**.
 - **expo-router** לניווט מבוסס־קבצים (תיקיית `app/`).
 - כיווניות **RTL** נכפית דרך [lib/rtl.ts](./lib/rtl.ts) ובתבנית ה־HTML [app/+html.tsx](./app/+html.tsx).
-- אחסון מקומי במכשיר/דפדפן בלבד בשלב זה (ללא שרת).
+- אחסון מקומי בלבד בשלב זה (ללא שרת) דרך `@react-native-async-storage/async-storage`,
+  שממופה ל־`localStorage` ב־web. עטיפת JSON: [lib/storage.ts](./lib/storage.ts).
 
 ## אתר (web)
 
@@ -36,9 +37,12 @@
 | `app/+html.tsx` | תבנית HTML לגרסת web (עברית, RTL) |
 | `app/index.tsx` | מסך בית עם ניווט למסכים |
 | `app/report.tsx` | דיווח יום עבודה (זמני — שלב 2–4) |
-| `app/workplaces.tsx` | מקומות עבודה (זמני — שלב 1) |
+| `app/workplaces.tsx` | רשימת מקומות העבודה + כפתור הוספה (שלב 1) |
+| `app/workplace-form.tsx` | טופס הוספה / עריכה / מחיקה של מקום עבודה (שלב 1) |
 | `app/settings.tsx` | הגדרות ותגיות (זמני — שלב 6) |
-| `components/` | רכיבים משותפים (`Screen`, `NavCard`, `Placeholder`) |
+| `lib/storage.ts` | עטיפת JSON מעל AsyncStorage (מקומי, עובד גם ב־web) |
+| `lib/workplaces.ts` | מודל `Workplace` ופעולות טעינה/שמירה/עדכון/מחיקה |
+| `components/` | רכיבים משותפים (`Screen`, `NavCard`, `Placeholder`, `Button`, `FormField`, `TextField`, `SegmentedControl`, `WorkplaceCard`) |
 | `theme/colors.ts` | צבעים, ריווח ורדיוסים |
 
 ## הרצה
@@ -55,7 +59,8 @@ npx expo-doctor    # בדיקת תקינות הפרויקט
 
 - [x] **שלב 0 — יסודות טכניים:** שלד Expo רץ (web + אנדרואיד), ניווט, RTL, ערכת צבעים,
       מסך בית, פריסת אתר ל־GitHub Pages.
-- [ ] שלב 1 — פרופיל ומקומות עבודה
+- [x] **שלב 1 — פרופיל ומקומות עבודה:** מודל `Workplace`, אחסון מקומי, מסך רשימה וטופס
+      הוספה / עריכה / מחיקה. הנתונים נטענים בהפעלה ונשמרים אוטומטית.
 - [ ] שלב 2 — מסך דיווח בסיסי
 - [ ] שלב 3 — שעות אקדמיות ודקות מצטברות
 - [ ] שלב 4 — חישוב שכר

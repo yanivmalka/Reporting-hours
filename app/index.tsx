@@ -35,7 +35,9 @@ export default function HomeScreen() {
         />
       </View>
 
-      <Text style={styles.footnote}>שלב 0 — שלד טכני. המסכים ימולאו בשלבים הבאים.</Text>
+      <Text style={styles.footnote}>
+        שלב 1 — מקומות עבודה פעיל. מסכי הדיווח והתגיות ימולאו בשלבים הבאים.
+      </Text>
     </Screen>
   );
 }
