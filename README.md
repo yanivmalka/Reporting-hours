@@ -7,16 +7,33 @@
 
 ## סטאק
 
-- **React Native + Expo (SDK 57)** ב־TypeScript — חוצה־פלטפורמות, מייצר APK.
+- **React Native + Expo (SDK 57)** ב־TypeScript — קוד אחד שרץ גם כ**אתר** (react-native-web)
+  וגם כ**אפליקציית אנדרואיד**.
 - **expo-router** לניווט מבוסס־קבצים (תיקיית `app/`).
-- כיווניות **RTL** נכפית דרך [lib/rtl.ts](./lib/rtl.ts).
-- אחסון מקומי במכשיר בלבד בשלב זה (ללא שרת).
+- כיווניות **RTL** נכפית דרך [lib/rtl.ts](./lib/rtl.ts) ובתבנית ה־HTML [app/+html.tsx](./app/+html.tsx).
+- אחסון מקומי במכשיר/דפדפן בלבד בשלב זה (ללא שרת).
+
+## אתר (web)
+
+- בנייה מקומית: `npm run build:web` → פלט סטטי בתיקיית `dist/`.
+- פריסה: workflow ב־[.github/workflows/deploy-web.yml](./.github/workflows/deploy-web.yml)
+  בונה ופורס ל־**GitHub Pages** בכל push ל־`main`.
+- כתובת: `https://yanivmalka.github.io/Reporting-hours/`
+  (דורש הפעלה חד־פעמית: Settings → Pages → Source = "GitHub Actions").
+- ה־`baseUrl` מוגדר ל־`/Reporting-hours` ב־`app.json` בשל נתיב ה־project-site של Pages;
+  יש לשנותו אם עוברים לדומיין ייעודי.
+
+## APK (אנדרואיד)
+
+תשתית ה־build ל־APK (EAS) תתווסף בשלב המעבר לאריזה (שלב 8). עד אז מריצים על אנדרואיד
+דרך Expo Go (`npm start` + סריקת QR).
 
 ## מבנה
 
 | נתיב | תיאור |
 |------|-------|
 | `app/_layout.tsx` | Stack navigator, ערכת צבעים, כפיית RTL |
+| `app/+html.tsx` | תבנית HTML לגרסת web (עברית, RTL) |
 | `app/index.tsx` | מסך בית עם ניווט למסכים |
 | `app/report.tsx` | דיווח יום עבודה (זמני — שלב 2–4) |
 | `app/workplaces.tsx` | מקומות עבודה (זמני — שלב 1) |
@@ -36,7 +53,8 @@ npx expo-doctor    # בדיקת תקינות הפרויקט
 
 ## סטטוס
 
-- [x] **שלב 0 — יסודות טכניים:** שלד Expo רץ, ניווט, RTL, ערכת צבעים, מסך בית.
+- [x] **שלב 0 — יסודות טכניים:** שלד Expo רץ (web + אנדרואיד), ניווט, RTL, ערכת צבעים,
+      מסך בית, פריסת אתר ל־GitHub Pages.
 - [ ] שלב 1 — פרופיל ומקומות עבודה
 - [ ] שלב 2 — מסך דיווח בסיסי
 - [ ] שלב 3 — שעות אקדמיות ודקות מצטברות

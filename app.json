@@ -22,7 +22,8 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "static"
     },
     "plugins": [
       "expo-router",
@@ -38,6 +39,9 @@
     ],
     "extra": {
       "supportsRTL": true
+    },
+    "experiments": {
+      "baseUrl": "/Reporting-hours"
     }
   }
 }
