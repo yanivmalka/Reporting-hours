@@ -41,13 +41,29 @@ export function parseTime(value: string): number | null {
   return hours * 60 + minutes;
 }
 
-/** הצגת משך בדקות כטקסט עברי, למשל "4 שע׳ ו־15 דק׳". */
-export function formatDuration(totalMinutes: number): string {
+/** תוויות שפה לפירמוט משך; ברירת המחדל עברית לשמירה על תאימות לאחור. */
+export type DurationLabels = {
+  hoursShort: string;
+  minutesShort: string;
+  join: string;
+};
+
+const DEFAULT_DURATION_LABELS: DurationLabels = {
+  hoursShort: 'שע׳',
+  minutesShort: 'דק׳',
+  join: ' ו־',
+};
+
+/** הצגת משך בדקות כטקסט קצר, למשל "4 שע׳ ו־15 דק׳" או "4h 15m". */
+export function formatDuration(
+  totalMinutes: number,
+  labels: DurationLabels = DEFAULT_DURATION_LABELS,
+): string {
   const safe = Math.max(0, Math.round(totalMinutes));
   const hours = Math.floor(safe / 60);
   const minutes = safe % 60;
   const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours} שע׳`);
-  if (minutes > 0 || hours === 0) parts.push(`${minutes} דק׳`);
-  return parts.join(' ו־');
+  if (hours > 0) parts.push(`${hours} ${labels.hoursShort}`);
+  if (minutes > 0 || hours === 0) parts.push(`${minutes} ${labels.minutesShort}`);
+  return parts.join(labels.join);
 }
