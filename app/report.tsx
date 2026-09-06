@@ -4,7 +4,11 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import { Screen } from '../components/Screen';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
+import { useToast } from '../components/Toast';
+import { toAcademic } from '../lib/academic';
+import { addAccumulatedMinutes } from '../lib/accumulated';
 import { addReport, makeBreakId } from '../lib/reports';
 import { formatDuration, isValidISODate, parseTime, todayISO } from '../lib/time';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -14,6 +18,9 @@ import { radius, spacing, type AppColors } from '../theme/colors';
 
 /** שורת הפסקה בטופס — משך בדקות נשמר כמחרוזת לעריכה חופשית. */
 type BreakRow = { id: string; minutes: string };
+
+/** מה לעשות עם הדקות שאינן משלימות שעה אקדמית. */
+type LeftoverChoice = 'carry' | 'include';
 
 type Errors = {
   workplace?: string;
@@ -39,6 +46,7 @@ export default function ReportScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
 
   const [workplaceId, setWorkplaceId] = useState<string | null>(null);
@@ -46,6 +54,7 @@ export default function ReportScreen() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [breaks, setBreaks] = useState<BreakRow[]>([]);
+  const [leftoverChoice, setLeftoverChoice] = useState<LeftoverChoice>('carry');
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
 
@@ -116,6 +125,13 @@ export default function ReportScreen() {
     setErrors(found);
     if (Object.values(found).some(Boolean)) return;
 
+    const net = Math.max(
+      0,
+      (parseTime(end) as number) - (parseTime(start) as number) - sumBreaks(breaks),
+    );
+    const leftover = toAcademic(net).leftoverMinutes;
+    const carried = leftoverChoice === 'carry' ? leftover : 0;
+
     setSaving(true);
     await addReport({
       workplaceId: workplaceId as string,
@@ -125,7 +141,15 @@ export default function ReportScreen() {
       breaks: breaks
         .map((row) => ({ id: row.id, minutes: parseNum(row.minutes) }))
         .filter((b) => b.minutes > 0),
+      carriedMinutes: carried,
     });
+
+    if (carried > 0) {
+      const state = await addAccumulatedMinutes(carried);
+      showToast(
+        `נוספו ${carried} דק׳ למונה "דקות עבודה מצטברות" · סה״כ ${state.minutes} דק׳`,
+      );
+    }
     router.replace('/reports');
   }
 
@@ -160,13 +184,22 @@ export default function ReportScreen() {
   const endMin = parseTime(end);
   const rangeMin = startMin != null && endMin != null && endMin > startMin ? endMin - startMin : null;
   const netPreview = rangeMin == null ? null : Math.max(0, rangeMin - sumBreaks(breaks));
+  const academicPreview = netPreview == null ? null : toAcademic(netPreview);
+  const leftoverPreview = academicPreview?.leftoverMinutes ?? 0;
+  const academicHoursNow =
+    academicPreview == null
+      ? 0
+      : leftoverChoice === 'carry'
+        ? academicPreview.wholeHours
+        : academicPreview.decimalHours;
 
   return (
     <Screen>
       <View style={styles.intro}>
         <Text style={styles.title}>דיווח יום עבודה</Text>
         <Text style={styles.subtitle}>
-          בחירת מקום עבודה, טווח שעות והפסקות. זמן העבודה נטו מחושב אוטומטית.
+          בחירת מקום עבודה, טווח שעות והפסקות. זמן העבודה נטו והשעות האקדמיות
+          מחושבים אוטומטית.
         </Text>
       </View>
 
@@ -248,18 +281,49 @@ export default function ReportScreen() {
         </View>
       </FormField>
 
+      {leftoverPreview > 0 ? (
+        <FormField
+          label="דקות עודפות"
+          hint={`נותרו ${leftoverPreview} דק׳ שאינן משלימות שעה אקדמית (45 דק׳)`}
+        >
+          <SegmentedControl<LeftoverChoice>
+            options={[
+              { value: 'carry', label: 'למונה המצטבר' },
+              { value: 'include', label: 'לכלול בדיווח' },
+            ]}
+            value={leftoverChoice}
+            onChange={setLeftoverChoice}
+          />
+        </FormField>
+      ) : null}
+
       <View style={styles.summary}>
         <Text style={styles.summaryLine}>
           טווח שעות: {rangeMin == null ? '—' : formatDuration(rangeMin)}
         </Text>
-        <Text style={styles.summaryNet}>
+        <Text style={styles.summaryLine}>
           זמן עבודה נטו: {netPreview == null ? '—' : formatDuration(netPreview)}
         </Text>
+        <Text style={styles.summaryNet}>
+          שעות אקדמיות: {academicPreview == null ? '—' : formatHours(academicHoursNow)}
+        </Text>
+        {leftoverPreview > 0 ? (
+          <Text style={styles.summaryHint}>
+            {leftoverChoice === 'carry'
+              ? `${leftoverPreview} דק׳ עודפות ייכנסו למונה "דקות עבודה מצטברות"`
+              : `${leftoverPreview} דק׳ עודפות ייכללו בדיווח כשבר שעה`}
+          </Text>
+        ) : null}
       </View>
 
       <Button label="שמירת הדיווח" onPress={handleSave} loading={saving} />
     </Screen>
   );
+}
+
+/** מספר שעות אקדמיות לתצוגה: שלם בלי שבר, אחרת עד שתי ספרות. */
+function formatHours(hours: number): string {
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(2).replace(/0$/, '');
 }
 
 const makeStyles = (colors: AppColors) =>
@@ -356,6 +420,11 @@ const makeStyles = (colors: AppColors) =>
   summaryNet: {
     fontSize: 16,
     fontWeight: '700',
+    color: colors.brandDark,
+    textAlign: 'right',
+  },
+  summaryHint: {
+    fontSize: 12,
     color: colors.brandDark,
     textAlign: 'right',
   },

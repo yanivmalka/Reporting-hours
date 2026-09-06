@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DrawerProvider, DrawerToggle } from '../components/AppDrawer';
+import { ToastProvider } from '../components/Toast';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
 
@@ -12,7 +13,9 @@ export default function RootLayout() {
     <I18nProvider>
       <ThemeProvider>
         <SafeAreaProvider>
-          <Chrome />
+          <ToastProvider>
+            <Chrome />
+          </ToastProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </I18nProvider>
