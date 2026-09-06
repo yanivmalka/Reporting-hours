@@ -20,6 +20,7 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" options={{ title: 'דיווח שעות' }} />
         <Stack.Screen name="report" options={{ title: 'דיווח יום עבודה' }} />
+        <Stack.Screen name="reports" options={{ title: 'הדיווחים שלי' }} />
         <Stack.Screen name="workplaces" options={{ title: 'מקומות עבודה' }} />
         <Stack.Screen name="workplace-form" options={{ title: 'מקום עבודה' }} />
         <Stack.Screen name="settings" options={{ title: 'הגדרות ותגיות' }} />

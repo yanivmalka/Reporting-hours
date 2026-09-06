@@ -24,6 +24,11 @@ export default function HomeScreen() {
           onPress={() => router.push('/report')}
         />
         <NavCard
+          title="הדיווחים שלי"
+          subtitle="רשימת ימי העבודה שדווחו וזמן העבודה נטו"
+          onPress={() => router.push('/reports')}
+        />
+        <NavCard
           title="מקומות עבודה"
           subtitle="הגדרת תעריפים, סוג תשלום ונסיעות"
           onPress={() => router.push('/workplaces')}
@@ -36,7 +41,8 @@ export default function HomeScreen() {
       </View>
 
       <Text style={styles.footnote}>
-        שלב 1 — מקומות עבודה פעיל. מסכי הדיווח והתגיות ימולאו בשלבים הבאים.
+        שלב 2 — דיווח ימי עבודה ורשימת דיווחים פעילים. שעות אקדמיות, שכר,
+        נסיעות ותגיות יתווספו בשלבים הבאים.
       </Text>
     </Screen>
   );

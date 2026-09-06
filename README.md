@@ -36,13 +36,16 @@
 | `app/_layout.tsx` | Stack navigator, ערכת צבעים, כפיית RTL |
 | `app/+html.tsx` | תבנית HTML לגרסת web (עברית, RTL) |
 | `app/index.tsx` | מסך בית עם ניווט למסכים |
-| `app/report.tsx` | דיווח יום עבודה (זמני — שלב 2–4) |
+| `app/report.tsx` | טופס דיווח יום עבודה: מקום עבודה, תאריך, טווח שעות, הפסקות וזמן נטו (שלב 2) |
+| `app/reports.tsx` | רשימת הדיווחים שנשמרו, מהחדש לישן (שלב 2) |
 | `app/workplaces.tsx` | רשימת מקומות העבודה + כפתור הוספה (שלב 1) |
 | `app/workplace-form.tsx` | טופס הוספה / עריכה / מחיקה של מקום עבודה (שלב 1) |
 | `app/settings.tsx` | הגדרות ותגיות (זמני — שלב 6) |
 | `lib/storage.ts` | עטיפת JSON מעל AsyncStorage (מקומי, עובד גם ב־web) |
 | `lib/workplaces.ts` | מודל `Workplace` ופעולות טעינה/שמירה/עדכון/מחיקה |
-| `components/` | רכיבים משותפים (`Screen`, `NavCard`, `Placeholder`, `Button`, `FormField`, `TextField`, `SegmentedControl`, `WorkplaceCard`) |
+| `lib/reports.ts` | מודל `WorkReport`, פעולות שמירה/מחיקה וחישוב זמן עבודה נטו |
+| `lib/time.ts` | עזרי זמן ותאריך: פענוח `HH:MM`, אימות תאריך, ותצוגת משך בעברית |
+| `components/` | רכיבים משותפים (`Screen`, `NavCard`, `Placeholder`, `Button`, `FormField`, `TextField`, `SegmentedControl`, `WorkplaceCard`, `ReportCard`) |
 | `theme/colors.ts` | צבעים, ריווח ורדיוסים |
 
 ## הרצה
@@ -61,7 +64,8 @@ npx expo-doctor    # בדיקת תקינות הפרויקט
       מסך בית, פריסת אתר ל־GitHub Pages.
 - [x] **שלב 1 — פרופיל ומקומות עבודה:** מודל `Workplace`, אחסון מקומי, מסך רשימה וטופס
       הוספה / עריכה / מחיקה. הנתונים נטענים בהפעלה ונשמרים אוטומטית.
-- [ ] שלב 2 — מסך דיווח בסיסי
+- [x] **שלב 2 — מסך דיווח בסיסי:** מודל `WorkReport`, טופס דיווח (מקום עבודה, תאריך,
+      טווח שעות, כמה הפסקות) עם חישוב זמן עבודה נטו חי, ורשימת דיווחים נשמרת מקומית.
 - [ ] שלב 3 — שעות אקדמיות ודקות מצטברות
 - [ ] שלב 4 — חישוב שכר
 - [ ] שלב 5 — חישוב נסיעות
