@@ -1,24 +1,12 @@
 /**
- * ערכת צבעים בסיסית לאפליקציה.
- * צבע המותג הוא טורקיז כהה (#0E7C7B); ברירת מחדל בהירה בלבד בשלב זה.
+ * מידות משותפות (ריווח ורדיוסים) וטיפוסי צבע.
+ *
+ * הצבעים עצמם עברו ל־theme/palettes.ts ומסופקים בזמן ריצה דרך
+ * useTheme() ב־theme/ThemeContext.tsx, כדי לתמוך במצב יום/לילה ובכמה
+ * ערכות צבעים שהמשתמש מחליף מתפריט ההמבורגר. `fallbackColors` משמש רק
+ * לקוד שאינו רכיב React (למשל ערכי ברירת מחדל של הניווט לפני טעינת הקונטקסט).
  */
-export const colors = {
-  brand: '#0E7C7B',
-  brandDark: '#0A5C5B',
-  brandLight: '#E3F1F1',
-
-  background: '#F5F7F7',
-  surface: '#FFFFFF',
-  border: '#E2E6E6',
-
-  text: '#1A2323',
-  textMuted: '#5C6B6B',
-  textOnBrand: '#FFFFFF',
-
-  success: '#2E7D32',
-  warning: '#B26A00',
-  danger: '#C62828',
-} as const;
+import { getPalette, DEFAULT_PALETTE_ID, type ColorScheme } from './palettes';
 
 export const spacing = {
   xs: 4,
@@ -34,4 +22,7 @@ export const radius = {
   lg: 20,
 } as const;
 
-export type AppColors = typeof colors;
+export type AppColors = ColorScheme;
+
+/** ערכת ברירת המחדל (טורקיז, בהיר) — לשימוש מחוץ לעץ הרכיבים בלבד. */
+export const fallbackColors: ColorScheme = getPalette(DEFAULT_PALETTE_ID).light;

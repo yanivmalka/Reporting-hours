@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { formatDuration, formatISODate } from '../lib/time';
-import { colors, radius, spacing } from '../theme/colors';
+import { useThemedStyles } from '../theme/useThemedStyles';
+import { radius, spacing, type AppColors } from '../theme/colors';
 
 type ReportCardProps = {
   report: WorkReport;
@@ -11,6 +12,7 @@ type ReportCardProps = {
 
 /** שורת רשימה לדיווח יום עבודה: מקום, תאריך, טווח שעות, הפסקות וזמן נטו. */
 export function ReportCard({ report, workplaceName }: ReportCardProps) {
+  const styles = useThemedStyles(makeStyles);
   const breakTotal = totalBreakMinutes(report.breaks);
   const net = netMinutes(report);
 
@@ -31,42 +33,43 @@ export function ReportCard({ report, workplaceName }: ReportCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  name: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'right',
-    flex: 1,
-  },
-  date: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  line: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'right',
-    writingDirection: 'ltr',
-  },
-  net: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.brandDark,
-    textAlign: 'right',
-  },
-});
+const makeStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      gap: spacing.xs,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    name: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.text,
+      textAlign: 'right',
+      flex: 1,
+    },
+    date: {
+      fontSize: 13,
+      color: colors.textMuted,
+    },
+    line: {
+      fontSize: 13,
+      color: colors.textMuted,
+      textAlign: 'right',
+      writingDirection: 'ltr',
+    },
+    net: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.brandDark,
+      textAlign: 'right',
+    },
+  });

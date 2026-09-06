@@ -6,7 +6,9 @@ import { ReportCard } from '../components/ReportCard';
 import { Screen } from '../components/Screen';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
-import { colors, spacing } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
+import { spacing, type AppColors } from '../theme/colors';
 
 /** מיון: תאריך יורד, ובאותו תאריך לפי סדר ההזנה היורד. */
 function byNewest(a: WorkReport, b: WorkReport): number {
@@ -16,6 +18,8 @@ function byNewest(a: WorkReport, b: WorkReport): number {
 
 export default function ReportsScreen() {
   const router = useRouter();
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const [reports, setReports] = useState<WorkReport[] | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
 
@@ -78,7 +82,8 @@ export default function ReportsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: AppColors) =>
+  StyleSheet.create({
   center: {
     flex: 1,
     alignItems: 'center',

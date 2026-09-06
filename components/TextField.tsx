@@ -1,5 +1,7 @@
 import { StyleSheet, TextInput } from 'react-native';
-import { colors, radius, spacing } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
+import { radius, spacing, type AppColors } from '../theme/colors';
 
 type TextFieldProps = {
   value: string;
@@ -17,6 +19,8 @@ export function TextField({
   numeric,
   invalid,
 }: TextFieldProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <TextInput
       value={value}
@@ -34,23 +38,24 @@ export function TextField({
   );
 }
 
-const styles = StyleSheet.create({
-  input: {
-    minHeight: 48,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    textAlign: 'right',
-  },
-  numeric: {
-    textAlign: 'left',
-    writingDirection: 'ltr',
-  },
-  invalid: {
-    borderColor: colors.danger,
-  },
-});
+const makeStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    input: {
+      minHeight: 48,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+      fontSize: 16,
+      color: colors.text,
+      textAlign: 'right',
+    },
+    numeric: {
+      textAlign: 'left',
+      writingDirection: 'ltr',
+    },
+    invalid: {
+      borderColor: colors.danger,
+    },
+  });

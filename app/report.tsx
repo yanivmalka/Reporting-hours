@@ -8,7 +8,9 @@ import { TextField } from '../components/TextField';
 import { addReport, makeBreakId } from '../lib/reports';
 import { formatDuration, isValidISODate, parseTime, todayISO } from '../lib/time';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
-import { colors, radius, spacing } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
+import { radius, spacing, type AppColors } from '../theme/colors';
 
 /** שורת הפסקה בטופס — משך בדקות נשמר כמחרוזת לעריכה חופשית. */
 type BreakRow = { id: string; minutes: string };
@@ -35,6 +37,8 @@ function sumBreaks(rows: BreakRow[]): number {
 
 export default function ReportScreen() {
   const router = useRouter();
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
 
   const [workplaceId, setWorkplaceId] = useState<string | null>(null);
@@ -258,7 +262,8 @@ export default function ReportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: AppColors) =>
+  StyleSheet.create({
   center: {
     flex: 1,
     alignItems: 'center',

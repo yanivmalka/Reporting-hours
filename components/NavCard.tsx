@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing } from '../theme/colors';
+import { useThemedStyles } from '../theme/useThemedStyles';
+import { radius, spacing, type AppColors } from '../theme/colors';
 
 type NavCardProps = {
   title: string;
@@ -10,6 +11,7 @@ type NavCardProps = {
 
 /** כרטיס ניווט למסך בית: כותרת, תיאור וחץ. */
 export function NavCard({ title, subtitle, onPress, disabled }: NavCardProps) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Pressable
       onPress={onPress}
@@ -29,41 +31,42 @@ export function NavCard({ title, subtitle, onPress, disabled }: NavCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  pressed: {
-    backgroundColor: colors.brandLight,
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-  texts: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.text,
-    textAlign: 'right',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'right',
-  },
-  chevron: {
-    fontSize: 26,
-    color: colors.brand,
-  },
-});
+const makeStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      padding: spacing.md,
+      gap: spacing.md,
+    },
+    pressed: {
+      backgroundColor: colors.brandLight,
+    },
+    disabled: {
+      opacity: 0.5,
+    },
+    texts: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    title: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text,
+      textAlign: 'right',
+    },
+    subtitle: {
+      fontSize: 13,
+      color: colors.textMuted,
+      textAlign: 'right',
+    },
+    chevron: {
+      fontSize: 26,
+      color: colors.brand,
+    },
+  });

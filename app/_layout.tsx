@@ -3,28 +3,51 @@ import '../lib/rtl';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { colors } from '../theme/colors';
+import { DrawerProvider, DrawerToggle } from '../components/AppDrawer';
+import { I18nProvider, useI18n } from '../lib/i18n';
+import { ThemeProvider, useTheme } from '../theme/ThemeContext';
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
+    <I18nProvider>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <Chrome />
+        </SafeAreaProvider>
+      </ThemeProvider>
+    </I18nProvider>
+  );
+}
+
+/** קליפת האפליקציה — כותרת, ניווט ותפריט ההמבורגר — תלויי ערכת צבעים ושפה. */
+function Chrome() {
+  const { colors } = useTheme();
+  const { t } = useI18n();
+
+  return (
+    <DrawerProvider>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.brand },
           headerTintColor: colors.textOnBrand,
           headerTitleStyle: { fontWeight: '700' },
-          headerBackTitle: 'חזרה',
+          headerBackTitle: t('common.back'),
           contentStyle: { backgroundColor: colors.background },
+          headerRight: () => <DrawerToggle />,
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'דיווח שעות' }} />
-        <Stack.Screen name="report" options={{ title: 'דיווח יום עבודה' }} />
-        <Stack.Screen name="reports" options={{ title: 'הדיווחים שלי' }} />
-        <Stack.Screen name="workplaces" options={{ title: 'מקומות עבודה' }} />
-        <Stack.Screen name="workplace-form" options={{ title: 'מקום עבודה' }} />
-        <Stack.Screen name="settings" options={{ title: 'הגדרות ותגיות' }} />
+        <Stack.Screen name="index" options={{ title: t('nav.home') }} />
+        <Stack.Screen name="report" options={{ title: t('nav.report') }} />
+        <Stack.Screen name="reports" options={{ title: t('nav.reports') }} />
+        <Stack.Screen name="workplaces" options={{ title: t('nav.workplaces') }} />
+        <Stack.Screen
+          name="workplace-form"
+          options={{ title: t('nav.workplaceForm') }}
+        />
+        <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
+        <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
       </Stack>
-    </SafeAreaProvider>
+    </DrawerProvider>
   );
 }

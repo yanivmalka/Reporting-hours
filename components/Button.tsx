@@ -1,5 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
-import { colors, radius, spacing } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
+import { radius, spacing, type AppColors } from '../theme/colors';
 
 type ButtonProps = {
   label: string;
@@ -17,6 +19,8 @@ export function Button({
   disabled,
   loading,
 }: ButtonProps) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const isDisabled = disabled || loading;
   return (
     <Pressable
@@ -30,7 +34,9 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.textOnBrand : colors.brand} />
+        <ActivityIndicator
+          color={variant === 'primary' ? colors.textOnBrand : colors.brand}
+        />
       ) : (
         <Text style={[styles.label, styles[`${variant}Label`]]}>{label}</Text>
       )}
@@ -38,44 +44,45 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    minHeight: 48,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  primary: {
-    backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
-  primaryLabel: {
-    color: colors.textOnBrand,
-  },
-  secondary: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-  },
-  secondaryLabel: {
-    color: colors.text,
-  },
-  danger: {
-    backgroundColor: colors.surface,
-    borderColor: colors.danger,
-  },
-  dangerLabel: {
-    color: colors.danger,
-  },
-});
+const makeStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    base: {
+      minHeight: 48,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+    },
+    pressed: {
+      opacity: 0.85,
+    },
+    disabled: {
+      opacity: 0.5,
+    },
+    label: {
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    primary: {
+      backgroundColor: colors.brand,
+      borderColor: colors.brand,
+    },
+    primaryLabel: {
+      color: colors.textOnBrand,
+    },
+    secondary: {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+    },
+    secondaryLabel: {
+      color: colors.text,
+    },
+    danger: {
+      backgroundColor: colors.surface,
+      borderColor: colors.danger,
+    },
+    dangerLabel: {
+      color: colors.danger,
+    },
+  });

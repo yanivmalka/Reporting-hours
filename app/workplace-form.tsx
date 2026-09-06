@@ -9,14 +9,16 @@ import { TextField } from '../components/TextField';
 import {
   ARRIVAL_MODE_LABELS,
   PAYMENT_TYPE_LABELS,
-  deleteWorkplace,
   emptyDraft,
   loadWorkplaces,
+  trashWorkplace,
   upsertWorkplace,
   type ArrivalMode,
   type PaymentType,
 } from '../lib/workplaces';
-import { colors, spacing } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
+import { spacing, type AppColors } from '../theme/colors';
 
 /** מצב הטופס — שדות מספריים נשמרים כמחרוזת כדי לאפשר עריכה חופשית. */
 type FormState = {
@@ -56,6 +58,8 @@ function parseNum(value: string): number {
 
 export default function WorkplaceFormScreen() {
   const router = useRouter();
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === 'string' && params.id ? params.id : undefined;
   const isEdit = Boolean(id);
@@ -146,7 +150,7 @@ export default function WorkplaceFormScreen() {
       return;
     }
     setSaving(true);
-    await deleteWorkplace(id);
+    await trashWorkplace(id);
     router.back();
   }
 
@@ -256,7 +260,11 @@ export default function WorkplaceFormScreen() {
         />
         {isEdit ? (
           <Button
-            label={confirmingDelete ? 'לחצו שוב לאישור המחיקה' : 'מחיקת מקום העבודה'}
+            label={
+              confirmingDelete
+                ? 'לחצו שוב להעברה לאשפה'
+                : 'העברת מקום העבודה לאשפה'
+            }
             variant="danger"
             onPress={handleDelete}
             disabled={saving}
@@ -267,7 +275,8 @@ export default function WorkplaceFormScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_colors: AppColors) =>
+  StyleSheet.create({
   center: {
     flex: 1,
     alignItems: 'center',

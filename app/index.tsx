@@ -2,10 +2,12 @@ import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { NavCard } from '../components/NavCard';
 import { Screen } from '../components/Screen';
-import { colors, spacing } from '../theme/colors';
+import { useThemedStyles } from '../theme/useThemedStyles';
+import { spacing, type AppColors } from '../theme/colors';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const styles = useThemedStyles(makeStyles);
 
   return (
     <Screen>
@@ -48,7 +50,8 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: AppColors) =>
+  StyleSheet.create({
   header: {
     gap: spacing.sm,
   },
