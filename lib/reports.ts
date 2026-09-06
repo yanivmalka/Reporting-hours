@@ -1,11 +1,12 @@
+import { toAcademic, type AcademicBreakdown } from './academic';
 import { readJSON, writeJSON } from './storage';
 import { parseTime } from './time';
 
 /**
- * מודל הדיווח על יום עבודה (סעיף 4 ב־WISHLIST, שלבים 1–4) והפעולות לשמירתו.
- * בשלב זה נשמרים הנתונים הגולמיים בלבד — טווח השעות וההפסקות — וזמן העבודה
- * נטו מחושב מהם בכל פעם. ההמרה לשעות אקדמיות ומונה הדקות יתווספו בשלב 3.
- * האחסון מקומי בלבד, תחת מפתח יחיד שמכיל את כל הרשימה.
+ * מודל הדיווח על יום עבודה (סעיף 4 ב־WISHLIST) והפעולות לשמירתו.
+ * נשמרים הנתונים הגולמיים בלבד — טווח השעות, ההפסקות, וכמה דקות עודפות
+ * הועברו למונה "דקות עבודה מצטברות" — וזמן העבודה נטו והשעות האקדמיות
+ * מחושבים מהם בכל פעם. האחסון מקומי בלבד, תחת מפתח יחיד שמכיל את כל הרשימה.
  */
 
 /** הפסקה בודדת ביום עבודה — משך בדקות. */
@@ -25,6 +26,12 @@ export type WorkReport = {
   /** שעת סיום "HH:MM" */
   end: string;
   breaks: BreakEntry[];
+  /**
+   * דקות עודפות מן הדיווח שהועברו למונה "דקות עבודה מצטברות" במקום
+   * להיכלל בשעות האקדמיות של הדיווח (0–44). 0 כשהמשתמש בחר לכלול את
+   * הדקות העודפות בדיווח עצמו.
+   */
+  carriedMinutes: number;
   /** חותמת יצירה (מילישניות) — לסידור דיווחים באותו תאריך */
   createdAt: number;
 };
@@ -34,8 +41,13 @@ export type WorkReportDraft = Omit<WorkReport, 'id' | 'createdAt'>;
 
 const STORAGE_KEY = 'reporting-hours/reports/v1';
 
-export function loadReports(): Promise<WorkReport[]> {
-  return readJSON<WorkReport[]>(STORAGE_KEY, []);
+export async function loadReports(): Promise<WorkReport[]> {
+  const list = await readJSON<WorkReport[]>(STORAGE_KEY, []);
+  // דיווחים שנשמרו לפני שלב 3 חסרים את השדה — משלימים אותו כ־0.
+  return list.map((report) => ({
+    ...report,
+    carriedMinutes: report.carriedMinutes ?? 0,
+  }));
 }
 
 export function saveReports(list: WorkReport[]): Promise<void> {
@@ -79,4 +91,17 @@ export function netMinutes(input: Pick<WorkReport, 'start' | 'end' | 'breaks'>):
   const end = parseTime(input.end);
   if (start == null || end == null || end <= start) return null;
   return Math.max(0, end - start - totalBreakMinutes(input.breaks));
+}
+
+/**
+ * פירוק הדיווח לשעות אקדמיות. הדקות שהועברו למונה המצטבר
+ * (`carriedMinutes`) מנוכות מזמן העבודה נטו לפני ההמרה, כדי שלא ייספרו
+ * פעמיים. מחזיר null כשזמן העבודה נטו אינו ניתן לחישוב.
+ */
+export function academicOf(
+  report: Pick<WorkReport, 'start' | 'end' | 'breaks' | 'carriedMinutes'>,
+): AcademicBreakdown | null {
+  const net = netMinutes(report);
+  if (net == null) return null;
+  return toAcademic(Math.max(0, net - (report.carriedMinutes ?? 0)));
 }
