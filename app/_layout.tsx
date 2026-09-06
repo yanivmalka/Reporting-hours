@@ -6,17 +6,20 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DrawerProvider, DrawerToggle } from '../components/AppDrawer';
 import { ToastProvider } from '../components/Toast';
 import { I18nProvider, useI18n } from '../lib/i18n';
+import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
 
 export default function RootLayout() {
   return (
     <I18nProvider>
       <ThemeProvider>
-        <SafeAreaProvider>
-          <ToastProvider>
-            <Chrome />
-          </ToastProvider>
-        </SafeAreaProvider>
+        <PayBasisProvider>
+          <SafeAreaProvider>
+            <ToastProvider>
+              <Chrome />
+            </ToastProvider>
+          </SafeAreaProvider>
+        </PayBasisProvider>
       </ThemeProvider>
     </I18nProvider>
   );

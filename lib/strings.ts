@@ -38,7 +38,7 @@ const he = {
     workplaces: 'מקומות עבודה',
     workplaceForm: 'מקום עבודה',
     trash: 'אשפה',
-    settings: 'הגדרות ותגיות',
+    settings: 'דקות מצטברות',
   },
   home: {
     welcome: 'ברוך הבא 👋',
@@ -50,7 +50,7 @@ const he = {
     cardReportsSubtitle: 'רשימת ימי העבודה שדווחו וזמן העבודה נטו',
     cardWorkplacesTitle: 'מקומות עבודה',
     cardWorkplacesSubtitle: 'הגדרת תעריפים, סוג תשלום ונסיעות',
-    cardSettingsTitle: 'הגדרות ותגיות',
+    cardSettingsTitle: 'דקות מצטברות',
     cardSettingsSubtitle: 'סיכומי החודש, שעות, נסיעות ודקות מצטברות',
     footnote:
       'שלב 2 — דיווח ימי עבודה ורשימת דיווחים פעילים. שעות אקדמיות, שכר, נסיעות ותגיות יתווספו בשלבים הבאים.',
@@ -119,7 +119,7 @@ const he = {
     errTrips: 'מספר שלם, 0 ומעלה',
   },
   settings: {
-    heading: 'הגדרות ותגיות',
+    heading: 'דקות מצטברות',
     description:
       'כאן יוצגו התגיות: סכום עד חודש זה, שעות לחודש, נסיעות ודקות עבודה מצטברות.',
     stage: 'שלב 6',
@@ -177,7 +177,7 @@ const en: StringTree = {
     workplaces: 'Workplaces',
     workplaceForm: 'Workplace',
     trash: 'Trash',
-    settings: 'Settings & Stats',
+    settings: 'Accumulated Minutes',
   },
   home: {
     welcome: 'Welcome 👋',
@@ -189,7 +189,7 @@ const en: StringTree = {
     cardReportsSubtitle: 'The logged work days and their net working time',
     cardWorkplacesTitle: 'Workplaces',
     cardWorkplacesSubtitle: 'Set rates, payment type and travel',
-    cardSettingsTitle: 'Settings & Stats',
+    cardSettingsTitle: 'Accumulated Minutes',
     cardSettingsSubtitle: 'Monthly totals: hours, travel and accumulated minutes',
     footnote:
       'Stage 2 — Logging work days and the reports list are live. Academic hours, pay, travel and stats come in later stages.',
@@ -258,7 +258,7 @@ const en: StringTree = {
     errTrips: 'A whole number, 0 or more',
   },
   settings: {
-    heading: 'Settings & Stats',
+    heading: 'Accumulated Minutes',
     description:
       'This screen will show the stats: total up to this month, hours per month, travel and accumulated working minutes.',
     stage: 'Stage 6',

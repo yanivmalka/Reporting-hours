@@ -4,6 +4,8 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { WorkplaceCard } from '../components/WorkplaceCard';
+import { payBreakdown, type WorkplacePay } from '../lib/pay';
+import { PAY_BASIS_LABELS, usePayBasis } from '../lib/payBasis';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { travelBreakdown, type WorkplaceTravelCost } from '../lib/travel';
 import {
@@ -19,6 +21,7 @@ export default function WorkplacesScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
+  const { basis } = usePayBasis();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
   const [reports, setReports] = useState<WorkReport[]>([]);
 
@@ -45,6 +48,14 @@ export default function WorkplacesScreen() {
     ]),
   );
 
+  // שכר מחושב מצטבר לכל מקום עבודה (שלב 4), לפי בסיס החישוב הנבחר.
+  const payByWorkplace = new Map<string, WorkplacePay>(
+    payBreakdown(workplaces ?? [], reports, basis).perWorkplace.map((row) => [
+      row.workplaceId,
+      row,
+    ]),
+  );
+
   async function handleTrash(id: string) {
     const next = await trashWorkplace(id);
     setWorkplaces(next);
@@ -65,7 +76,8 @@ export default function WorkplacesScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>מקומות העבודה שלי</Text>
         <Text style={styles.subtitle}>
-          לכל מוסד: תעריף, סוג תשלום, יום קבלת השכר ונתוני נסיעה. אפשר לערוך
+          לכל מוסד: תעריף, סוג תשלום, יום קבלת השכר ונתוני נסיעה. כשיש
+          דיווחים מוצגים גם השכר המחושב ועלות הנסיעות המצטברת. אפשר לערוך
           ולהוסיף בכל עת.
         </Text>
       </View>
@@ -78,12 +90,18 @@ export default function WorkplacesScreen() {
         <View style={styles.list}>
           {workplaces.map((workplace) => {
             const travel = travelByWorkplace.get(workplace.id);
+            const pay = payByWorkplace.get(workplace.id);
+            // מציגים שכר רק כשדווח לפחות יום עבודה אחד למקום הזה.
+            const showPay = pay != null && pay.days > 0;
             return (
               <WorkplaceCard
                 key={workplace.id}
                 workplace={workplace}
                 travelCost={travel?.total}
                 travelDays={travel?.days}
+                pay={showPay ? pay.total : undefined}
+                payHours={showPay ? pay.hours : undefined}
+                payBasisLabel={PAY_BASIS_LABELS[basis]}
                 onPress={() =>
                   router.push({
                     pathname: '/workplace-form',

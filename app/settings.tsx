@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { useToast } from '../components/Toast';
 import {
   loadAccumulated,
@@ -12,6 +13,7 @@ import {
   type AccumulatedState,
 } from '../lib/accumulated';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
+import { PAY_BASIS_LABELS, usePayBasis, type PayBasis } from '../lib/payBasis';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -20,6 +22,7 @@ export default function SettingsScreen() {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const { basis, setBasis } = usePayBasis();
   const [state, setState] = useState<AccumulatedState | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -76,10 +79,31 @@ export default function SettingsScreen() {
   return (
     <Screen>
       <View style={styles.intro}>
-        <Text style={styles.title}>הגדרות ותגיות</Text>
+        <Text style={styles.title}>דקות מצטברות</Text>
         <Text style={styles.subtitle}>
-          תגיות הסיכום החודשי — סכום עד חודש זה, שעות ונסיעות — יתווספו בשלב 6.
-          כאן פועל כבר מונה "דקות עבודה מצטברות".
+          כאן נקבע בסיס חישוב השכר ופועל מונה "דקות עבודה מצטברות". תגיות
+          הסיכום החודשי — סכום עד חודש זה, שעות ונסיעות — יתווספו בשלב 6.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>בסיס חישוב השכר השעתי</Text>
+        <SegmentedControl<PayBasis>
+          options={[
+            { value: 'academic', label: PAY_BASIS_LABELS.academic },
+            { value: 'regular', label: PAY_BASIS_LABELS.regular },
+          ]}
+          value={basis}
+          onChange={setBasis}
+        />
+        <Text style={styles.note}>
+          {basis === 'academic'
+            ? 'התעריף השעתי מוכפל בשעות אקדמיות (45 דק׳). דקות שאינן משלימות שעה אקדמית נכנסות למונה "דקות עבודה מצטברות".'
+            : 'התעריף השעתי מוכפל בשעות רגילות (60 דק׳). כל זמן העבודה נטו נכנס לחישוב ללא עיגול.'}
+        </Text>
+        <Text style={styles.note}>
+          ההגדרה גלובלית ומשפיעה על כל הדיווחים והסיכומים, גם רטרואקטיבית.
+          למקום עבודה בתשלום חודשי הבחירה אינה רלוונטית.
         </Text>
       </View>
 
@@ -145,6 +169,15 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 14,
     lineHeight: 21,
     color: colors.textMuted,
+    textAlign: 'right',
+  },
+  section: {
+    gap: spacing.sm,
+  },
+  sectionLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
     textAlign: 'right',
   },
   card: {

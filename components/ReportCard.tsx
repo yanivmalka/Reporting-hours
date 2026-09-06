@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { academicOf, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { formatDuration, formatISODate } from '../lib/time';
+import { formatShekels } from '../lib/travel';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 
@@ -8,6 +9,11 @@ type ReportCardProps = {
   report: WorkReport;
   /** שם מקום העבודה; "מקום עבודה שנמחק" כשלא נמצא */
   workplaceName: string;
+  /**
+   * שכר מחושב לדיווח (שלב 4): מספר ₪ למקום עבודה שעתי, `null` למקום
+   * עבודה בתשלום חודשי (הסכום קבוע לחודש), ו־undefined כשלא ידוע/לא להצגה.
+   */
+  pay?: number | null;
 };
 
 /** תיאור השעות האקדמיות בדיווח, למשל "6 שע׳ אקדמיות ו־30 דק׳". */
@@ -20,8 +26,8 @@ function academicText(report: WorkReport): string {
   return `${academic.wholeHours} שע׳ אקדמיות ו־${academic.leftoverMinutes} דק׳`;
 }
 
-/** שורת רשימה לדיווח יום עבודה: מקום, תאריך, טווח שעות, הפסקות, זמן נטו ושעות אקדמיות. */
-export function ReportCard({ report, workplaceName }: ReportCardProps) {
+/** שורת רשימה לדיווח יום עבודה: מקום, תאריך, טווח שעות, הפסקות, זמן נטו, שעות אקדמיות ושכר. */
+export function ReportCard({ report, workplaceName, pay }: ReportCardProps) {
   const styles = useThemedStyles(makeStyles);
   const breakTotal = totalBreakMinutes(report.breaks);
   const net = netMinutes(report);
@@ -44,6 +50,11 @@ export function ReportCard({ report, workplaceName }: ReportCardProps) {
         <Text style={styles.carried}>
           {report.carriedMinutes} דק׳ הועברו למונה "דקות עבודה מצטברות"
         </Text>
+      ) : null}
+      {typeof pay === 'number' ? (
+        <Text style={styles.pay}>שכר: {formatShekels(pay)}</Text>
+      ) : pay === null ? (
+        <Text style={styles.carried}>שכר חודשי קבוע — נספר בסיכום החודשי</Text>
       ) : null}
     </View>
   );
@@ -97,6 +108,12 @@ const makeStyles = (colors: AppColors) =>
     carried: {
       fontSize: 12,
       color: colors.textMuted,
+      textAlign: 'right',
+    },
+    pay: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: colors.brandDark,
       textAlign: 'right',
     },
   });

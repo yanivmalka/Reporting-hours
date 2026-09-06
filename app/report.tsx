@@ -9,6 +9,7 @@ import { TextField } from '../components/TextField';
 import { useToast } from '../components/Toast';
 import { toAcademic } from '../lib/academic';
 import { addAccumulatedMinutes } from '../lib/accumulated';
+import { formatHours } from '../lib/pay';
 import { addReport, makeBreakId } from '../lib/reports';
 import { formatDuration, isValidISODate, parseTime, todayISO } from '../lib/time';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -319,11 +320,6 @@ export default function ReportScreen() {
       <Button label="שמירת הדיווח" onPress={handleSave} loading={saving} />
     </Screen>
   );
-}
-
-/** מספר שעות אקדמיות לתצוגה: שלם בלי שבר, אחרת עד שתי ספרות. */
-function formatHours(hours: number): string {
-  return Number.isInteger(hours) ? String(hours) : hours.toFixed(2).replace(/0$/, '');
 }
 
 const makeStyles = (colors: AppColors) =>

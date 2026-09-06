@@ -5,6 +5,7 @@ import {
   PAYMENT_TYPE_LABELS,
   type Workplace,
 } from '../lib/workplaces';
+import { formatHours } from '../lib/pay';
 import { formatShekels } from '../lib/travel';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -19,6 +20,12 @@ type WorkplaceCardProps = {
   travelCost?: number;
   /** מספר ימי העבודה שדווחו ושלפיהם חושבה עלות הנסיעות. */
   travelDays?: number;
+  /** השכר המחושב המצטבר למקום העבודה (שלב 4), ב־₪. */
+  pay?: number;
+  /** שעות משולמות מצטברות (למקום שעתי); לא מוגדר למקום בתשלום חודשי. */
+  payHours?: number;
+  /** תווית בסיס החישוב — "שעות אקדמיות" / "שעות רגילות". */
+  payBasisLabel?: string;
 };
 
 /** אייקון פח אשפה מצויר, בצבע אזהרה. */
@@ -42,14 +49,28 @@ export function WorkplaceCard({
   onTrash,
   travelCost,
   travelDays,
+  pay,
+  payHours,
+  payBasisLabel,
 }: WorkplaceCardProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const [hovered, setHovered] = useState(false);
 
   const { name, rate, paymentType, payday, arrivalMode } = workplace;
-  const pay =
+  const rateText =
     paymentType === 'hourly' ? `${rate} ₪ לשעה` : `${rate} ₪ לחודש`;
+
+  // שכר מחושב מצטבר (שלב 4). למקום שעתי מוצגות גם השעות שהתעריף הוכפל בהן.
+  const showPay = typeof pay === 'number';
+  const payText =
+    paymentType === 'monthly'
+      ? `שכר: ${formatShekels(pay ?? 0)}`
+      : payHours && payHours > 0
+        ? `שכר: ${formatShekels(pay ?? 0)} · ${formatHours(payHours)} ${
+            payBasisLabel ?? 'שע׳'
+          }`
+        : `שכר: ${formatShekels(pay ?? 0)}`;
 
   // עלות נסיעות מוצגת רק כשמגיעים בתחבורה ציבורית וכשחושב ערך (שלב 5).
   const showTravel =
@@ -72,9 +93,10 @@ export function WorkplaceCard({
       <View style={styles.texts}>
         <Text style={styles.name}>{name}</Text>
         <Text style={styles.line}>
-          {PAYMENT_TYPE_LABELS[paymentType]} · {pay} · תשלום ב־{payday} לחודש
+          {PAYMENT_TYPE_LABELS[paymentType]} · {rateText} · תשלום ב־{payday} לחודש
         </Text>
         <Text style={styles.line}>הגעה: {ARRIVAL_MODE_LABELS[arrivalMode]}</Text>
+        {showPay ? <Text style={styles.pay}>{payText}</Text> : null}
         {showTravel ? (
           <Text style={styles.travel}>{travelText}</Text>
         ) : null}
@@ -129,6 +151,12 @@ const makeStyles = (colors: AppColors) =>
     line: {
       fontSize: 13,
       color: colors.textMuted,
+      textAlign: 'right',
+    },
+    pay: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: colors.brandDark,
       textAlign: 'right',
     },
     travel: {

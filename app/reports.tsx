@@ -4,6 +4,8 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { ReportCard } from '../components/ReportCard';
 import { Screen } from '../components/Screen';
+import { reportPay } from '../lib/pay';
+import { usePayBasis } from '../lib/payBasis';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
@@ -20,6 +22,7 @@ export default function ReportsScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
+  const { basis } = usePayBasis();
   const [reports, setReports] = useState<WorkReport[] | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
 
@@ -47,15 +50,22 @@ export default function ReportsScreen() {
     );
   }
 
-  const nameOf = (id: string) =>
-    workplaces.find((w) => w.id === id)?.name ?? 'מקום עבודה שנמחק';
+  const workplaceOf = (id: string) => workplaces.find((w) => w.id === id);
+  const nameOf = (id: string) => workplaceOf(id)?.name ?? 'מקום עבודה שנמחק';
+  // שכר לכל דיווח (שלב 4): מספר ₪ למקום שעתי, null לחודשי, undefined כשמקום
+  // העבודה נמחק ואי אפשר לדעת את התעריף.
+  const payOf = (report: WorkReport) => {
+    const workplace = workplaceOf(report.workplaceId);
+    return workplace ? reportPay(report, workplace, basis) : undefined;
+  };
 
   return (
     <Screen>
       <View style={styles.intro}>
         <Text style={styles.title}>הדיווחים שלי</Text>
         <Text style={styles.subtitle}>
-          כל ימי העבודה שדווחו, מהחדש לישן, עם זמן העבודה נטו לכל אחד.
+          כל ימי העבודה שדווחו, מהחדש לישן — זמן עבודה נטו, שעות אקדמיות
+          והשכר המחושב לכל אחד.
         </Text>
       </View>
 
@@ -70,6 +80,7 @@ export default function ReportsScreen() {
               key={report.id}
               report={report}
               workplaceName={nameOf(report.workplaceId)}
+              pay={payOf(report)}
             />
           ))}
         </View>
