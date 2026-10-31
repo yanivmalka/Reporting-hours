@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DrawerProvider, DrawerToggle } from '../components/AppDrawer';
 import { ToastProvider } from '../components/Toast';
+import { UpdateChecker } from '../components/UpdateChecker';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -33,6 +34,7 @@ function Chrome() {
   return (
     <DrawerProvider>
       <StatusBar style="light" />
+      <UpdateChecker />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.brand },

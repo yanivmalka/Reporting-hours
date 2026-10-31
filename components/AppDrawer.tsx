@@ -39,6 +39,7 @@ import type { ThemeMode } from '../theme/palettes';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { SegmentedControl } from './SegmentedControl';
+import { UpdateSection } from './UpdateChecker';
 
 type DrawerContextValue = {
   open: () => void;
@@ -295,6 +296,8 @@ function AppDrawer() {
                   onChange={setLang}
                 />
               </View>
+
+              <UpdateSection />
             </ScrollView>
           </SafeAreaView>
         </Animated.View>

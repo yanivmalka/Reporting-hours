@@ -146,6 +146,19 @@ const he = {
     minutesShort: 'דק׳',
     join: ' ו־',
   },
+  update: {
+    section: 'גרסה ועדכונים',
+    current: 'גרסה {version} (בנייה {build})',
+    check: 'בדיקת עדכונים',
+    checking: 'בודק…',
+    upToDate: 'מותקנת הגרסה העדכנית ביותר',
+    failed: 'לא ניתן לבדוק עדכונים כרגע',
+    availableTitle: 'עדכון זמין',
+    availableBody: 'גרסה {version} זמינה להורדה. ה־APK יורד בדפדפן — פתחו אותו כדי להתקין.',
+    install: 'הורדה והתקנה',
+    later: 'אחר כך',
+    webNote: 'באתר הגרסה מתעדכנת אוטומטית.',
+  },
 } as const;
 
 const en: StringTree = {
@@ -284,6 +297,19 @@ const en: StringTree = {
     hoursShort: 'h',
     minutesShort: 'm',
     join: ' ',
+  },
+  update: {
+    section: 'Version & updates',
+    current: 'Version {version} (build {build})',
+    check: 'Check for updates',
+    checking: 'Checking…',
+    upToDate: 'You have the latest version',
+    failed: "Couldn't check for updates right now",
+    availableTitle: 'Update available',
+    availableBody: 'Version {version} is available. The APK downloads in your browser — open it to install.',
+    install: 'Download & install',
+    later: 'Later',
+    webNote: 'The website updates automatically.',
   },
 };
 

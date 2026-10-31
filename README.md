@@ -26,8 +26,17 @@
 
 ## APK (אנדרואיד)
 
-תשתית ה־build ל־APK (EAS) תתווסף בשלב המעבר לאריזה (שלב 8). עד אז מריצים על אנדרואיד
-דרך Expo Go (`npm start` + סריקת QR).
+- **בנייה אוטומטית:** [.github/workflows/build-apk.yml](./.github/workflows/build-apk.yml) רץ בכל push ל־`main`
+  (או ידנית מ־Actions): `expo prebuild` → `gradlew assembleRelease` → פרסום **GitHub Release**
+  בשם `v0.1.<מספר בנייה>` עם קובץ ה־APK.
+- **הורדה:** `https://github.com/yanivmalka/Reporting-hours/releases/latest`
+- **עדכון מתוך האפליקציה:** [lib/update.ts](./lib/update.ts) בודק בפתיחה את ה־Release האחרון ומשווה
+  למספר הבנייה המותקן (`extra.buildNumber`, מוזרק ב־[app.config.js](./app.config.js)). אם יש חדשה —
+  חלון "עדכון זמין" שפותח את הורדת ה־APK. בתפריט הצד: הגרסה המותקנת וכפתור "בדיקת עדכונים".
+- **חתימה:** עדכון מותקן רק אם נחתם באותו מפתח. אם הוגדרו הסודות `ANDROID_KEYSTORE_BASE64`,
+  `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` — נחתם בהם; אחרת במפתח ה־debug הקבוע של תבנית Expo
+  (יציב, אך ציבורי). מעבר בין המפתחות מחייב הסרה והתקנה מחדש פעם אחת.
+- בהתקנה הראשונה יש לאשר "התקנה ממקורות לא ידועים" לדפדפן.
 
 ## מבנה
 
@@ -49,6 +58,7 @@
 | `lib/pay.ts` | חישוב שכר טהור: שכר לדיווח, שכר מצטבר למקום עבודה, ופירוט לכל המקומות (שלב 4) |
 | `lib/payBasis.tsx` | בסיס חישוב השכר השעתי (אקדמיות / רגילות) — הגדרה גלובלית נשמרת מקומית ו־context (שלב 4) |
 | `lib/travel.ts` | חישוב עלות נסיעות לכל מקום עבודה: עלות לכיוון × נסיעות ליום × ימי עבודה שדווחו (שלב 5) |
+| `lib/update.ts` | בדיקת עדכוני APK מול GitHub Releases ופתיחת ההורדה |
 | `lib/time.ts` | עזרי זמן ותאריך: פענוח `HH:MM`, אימות תאריך, ותצוגת משך בעברית |
 | `components/` | רכיבים משותפים (`Screen`, `NavCard`, `Placeholder`, `Button`, `FormField`, `TextField`, `SegmentedControl`, `WorkplaceCard`, `ReportCard`, `Toast`) |
 | `theme/colors.ts` | צבעים, ריווח ורדיוסים |
