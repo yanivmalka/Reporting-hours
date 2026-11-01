@@ -15,6 +15,7 @@ import { loadAccumulated, saveAccumulated, type AccumulatedEntry } from './accum
 import { loadReports, saveReports, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import { formatTime } from './time';
+import { loadCourses, saveCourses, type Course } from './courses';
 import { saveWorkplaces, type Workplace } from './workplaces';
 
 const KEY_PREFIX = 'reporting-hours/';
@@ -184,6 +185,52 @@ const TIMETABLE: Record<number, { wp: string; hours: number }[]> = {
   ],
 };
 
+// ───────────────────────── קורסים קבועים ─────────────────────────
+
+/** שעות המערכת הקבועה: לכל יום ולכל מפגש — התחלה, סיום והפסקה (בדקות מתחילת היום). */
+function scheduleSlots(weekday: number) {
+  let clock = 8 * 60 + 30;
+  return (TIMETABLE[weekday] ?? []).map((slot) => {
+    const breakMinutes = slot.hours >= 3 ? 15 : 0;
+    const start = clock;
+    const end = start + slot.hours * ACADEMIC_HOUR_MINUTES + breakMinutes;
+    clock = end + 45; // נסיעה לסמינר הבא
+    return { ...slot, start, end, breakMinutes };
+  });
+}
+
+/** קורסי ההדגמה — אחד לכל משבצת במערכת השבועית. */
+function demoCourses(from: string, today: Date): Course[] {
+  const endOfMonth = (n: number) => {
+    const d = new Date(today.getFullYear(), today.getMonth() + n + 1, 0);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const semesterEnd = `${today.getMonth() >= 9 ? today.getFullYear() + 1 : today.getFullYear()}-01-31`;
+  const list: Course[] = [];
+  for (let weekday = 0; weekday <= 4; weekday++) {
+    scheduleSlots(weekday).forEach((slot, i) => {
+      const wp = WORKPLACES.find((w) => w.id === slot.wp)!;
+      const days = Object.values(TIMETABLE).filter((d) => d.some((x) => x.wp === wp.id)).length;
+      const group = days > 1 ? ` · קבוצה ${weekday <= 2 ? 'א׳' : 'ב׳'}` : '';
+      list.push({
+        id: `demo_cr_${weekday}_${i}`,
+        workplaceId: wp.id,
+        name:
+          (wp.track === 'history' ? 'תולדות האדריכלות — שנה א׳' : 'סדנת תכנון פנים — שנה א׳') + group,
+        weekday,
+        start: formatTime(slot.start),
+        end: formatTime(slot.end),
+        breakMinutes: slot.breakMinutes,
+        from,
+        // רוב הקורסים לפי סמסטר; בבית הספר "יסוד" — חודש־חודש.
+        to: wp.id === 'demo_wp_7' ? endOfMonth(0) : semesterEnd,
+        demo: true,
+      });
+    });
+  }
+  return list;
+}
+
 // ───────────────────────── תוכן השיעורים ─────────────────────────
 
 const HISTORY_TOPICS = [
@@ -331,7 +378,8 @@ export function generateDemoReports(today: Date = new Date()): Generated {
       total += 1;
     }
 
-    let clock = r.pick([8 * 60, 8 * 60 + 15, 8 * 60 + 30, 9 * 60]);
+    const planned = scheduleSlots(weekday);
+    let prevEnd = 0;
     slots.forEach((slot, i) => {
       const wp = WORKPLACES.find((w) => w.id === slot.wp)!;
       const academic = hours[i];
@@ -349,8 +397,13 @@ export function generateDemoReports(today: Date = new Date()): Generated {
       // זמן נטו: השעות האקדמיות + דקות עודפות "לא עגולות" (או אפס).
       const extra = r.chance(0.25) ? 0 : r.pick([5, 10, 10, 15, 20, 25, 30, 35, 40]);
       const net = academic * ACADEMIC_HOUR_MINUTES + extra;
-      const start = roundTo5(clock);
+      // לפי שעת הקורס הקבוע, עם סטייה קטנה (איחור / התחלה מוקדמת).
+      // ולא לפני סוף המפגש הקודם + נסיעה.
+      const start = roundTo5(
+        Math.max(planned[i].start + r.pick([-5, 0, 0, 0, 5, 10]), prevEnd + r.pick([30, 40, 45])),
+      );
       const end = start + net + breakTotal;
+      prevEnd = end;
       const leftover = net % ACADEMIC_HOUR_MINUTES;
       const carried = leftover > 0 && r.chance(0.6) ? leftover : 0;
       carriedTotal += carried;
@@ -382,7 +435,6 @@ export function generateDemoReports(today: Date = new Date()): Generated {
         createdAt: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() + end * 60 * 1000,
       });
 
-      clock = end + r.pick([30, 40, 45, 60, 75]); // נסיעה בין סמינרים
     });
   }
   return { reports, carriedTotal };
@@ -418,6 +470,13 @@ export async function loadDemoData(): Promise<number> {
 
   // דיווחים.
   const { reports } = generateDemoReports();
+
+  // קורסים קבועים (מחליפים קורסי הדגמה קודמים; קורסים של המשתמש נשמרים).
+  const firstDate = reports.reduce((m, r) => (r.date < m ? r.date : m), reports[0]?.date ?? '');
+  const now = new Date();
+  const fromMonth = `${firstDate.slice(0, 7)}-01`;
+  const userCourses = (await loadCourses()).filter((c) => !c.demo);
+  await saveCourses([...userCourses, ...demoCourses(fromMonth, now)]);
   const current = await loadReports();
   await saveReports([...current.filter((r) => !r.demo), ...reports]);
 
@@ -509,5 +568,21 @@ export async function autoSeedIfFresh(): Promise<boolean> {
     return false;
   }
   await loadDemoData();
+  return true;
+}
+
+/**
+ * נתוני הדגמה שנטענו בגרסה שלפני הקורסים — משלים את קורסי ההדגמה פעם אחת,
+ * כדי שהמערכת השבועית והשעות המתוכננות יופיעו גם בלי לטעון את ההדגמה מחדש.
+ */
+export async function ensureDemoCourses(): Promise<boolean> {
+  if (!(await isDemoLoaded())) return false;
+  const courses = await loadCourses();
+  if (courses.some((c) => c.demo)) return false;
+  const reports = (await loadReports()).filter((r) => r.demo);
+  if (reports.length === 0) return false;
+  const firstDate = reports.reduce((m, r) => (r.date < m ? r.date : m), reports[0].date);
+  await saveCourses([...courses, ...demoCourses(`${firstDate.slice(0, 7)}-01`, new Date())]);
+  notify();
   return true;
 }

@@ -56,6 +56,7 @@ function Chrome() {
             name="workplace-form"
             options={{ title: t('nav.workplaceForm') }}
           />
+          <Stack.Screen name="course-form" options={{ title: 'קורס' }} />
           <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
           <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
           <Stack.Screen name="data" options={{ title: t('nav.data') }} />

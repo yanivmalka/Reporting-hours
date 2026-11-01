@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
+import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { useToast } from '../components/Toast';
@@ -31,7 +32,7 @@ export default function SettingsScreen() {
   const [state, setState] = useState<AccumulatedState | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirmReset, setConfirmReset] = useState(false);
+  const confirm = useConfirm();
 
   useFocusEffect(
     useCallback(() => {
@@ -63,18 +64,18 @@ export default function SettingsScreen() {
     }
   }
 
-  async function handleReset() {
-    if (!confirmReset) {
-      setConfirmReset(true);
-      return;
-    }
-    setBusy('reset');
-    const next = await resetAccumulated();
-    setState(next);
-    setConfirmReset(false);
-    setBusy(null);
-    showToast('כל המונים אופסו');
+  function handleReset() {
+    confirm({
+      title: 'לאפס את כל המונים?',
+      message: 'הדקות שנצברו והשעות שנפדו יימחקו בכל הסמינרים. הדיווחים עצמם לא ישתנו.',
+      confirmLabel: 'איפוס המונים',
+      onConfirm: async () => {
+        setState(await resetAccumulated());
+        showToast('כל המונים אופסו');
+      },
+    });
   }
+
 
   if (state === null) {
     return (
@@ -186,12 +187,13 @@ export default function SettingsScreen() {
 
       {total.minutes > 0 || total.redeemedHours > 0 ? (
         <Button
-          label={confirmReset ? 'לחצו שוב לאישור איפוס כל המונים' : 'איפוס כל המונים'}
+          label="איפוס כל המונים"
           variant="danger"
           onPress={handleReset}
           disabled={busy != null}
         />
       ) : null}
+      {confirm.dialog}
     </Screen>
   );
 }

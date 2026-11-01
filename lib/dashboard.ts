@@ -9,6 +9,7 @@
  * המודול טהור — בלי אחסון ובלי React.
  */
 import { ACADEMIC_HOUR_MINUTES } from './academic';
+import { plannedMinutes, type Course } from './courses';
 import { workplacePay } from './pay';
 import type { PayBasis } from './payBasis';
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
@@ -321,8 +322,70 @@ export function roundingStats(reports: readonly WorkReport[]): RoundingStats {
   return stats;
 }
 
+/**
+ * טווח תאריכים לתצוגה, למשל "10/10–09/11". עטוף בבידוד כיווניות משמאל
+ * לימין (LRI…PDI), אחרת בטקסט עברי סדר התאריכים מתהפך.
+ */
+export function dateRange(startIso: string, endIso: string, long = false): string {
+  const f = (v: string) => {
+    const [y, m, d] = v.split('-');
+    return long ? `${d}/${m}/${y}` : `${d}/${m}`;
+  };
+  return `\u2066${f(startIso)}–${f(endIso)}\u2069`;
+}
+
 /** "DD/MM" מתוך "YYYY-MM-DD". */
 export function shortDate(iso: string): string {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
+}
+
+// ───────────────────────── החודש מול מתוכנן / ממוצע ─────────────────────────
+
+export type WorkplaceMonthStats = {
+  period: PayPeriod;
+  /** שעות אקדמיות שדווחו בחודש הנוכחי (של מקום העבודה) */
+  actual: number;
+  /** שעות אקדמיות מתוכננות לכל החודש — לפי הקורסים הקבועים (0 = אין קורסים) */
+  planned: number;
+  /** מתוכננות עד היום (כולל) — להשוואה הוגנת באמצע החודש */
+  plannedToDate: number;
+  /** ממוצע שעות אקדמיות בחודשים קודמים שבהם דווח (עד 3), או null */
+  average: number | null;
+};
+
+/** סיכום החודש הנוכחי של מקום עבודה מול המתוכנן (קורסים) והממוצע. */
+export function workplaceMonthStats(
+  workplace: Workplace,
+  reports: readonly WorkReport[],
+  courses: readonly Course[],
+  today: Date = new Date(),
+): WorkplaceMonthStats {
+  const mine = reports.filter((r) => r.workplaceId === workplace.id);
+  const hoursIn = (start: string, end: string) =>
+    mine
+      .filter((r) => r.date >= start && r.date <= end)
+      .reduce((s, r) => s + (netMinutes(r) ?? 0), 0) / ACADEMIC_HOUR_MINUTES;
+
+  const period = currentPayPeriod(workplace.payday, today);
+  const todayIso = isoDate(today);
+  const toDate = todayIso < period.end ? todayIso : period.end;
+
+  // עד 3 חודשים קודמים שבהם דווחה עבודה.
+  const past: number[] = [];
+  let cursor = period;
+  for (let i = 0; i < 6 && past.length < 3; i++) {
+    const [y, m, d] = cursor.start.split('-').map(Number);
+    cursor = currentPayPeriod(workplace.payday, new Date(y, m - 1, d - 1));
+    const h = hoursIn(cursor.start, cursor.end);
+    if (h > 0) past.push(h);
+  }
+
+  return {
+    period,
+    actual: hoursIn(period.start, period.end),
+    planned: plannedMinutes(courses, workplace.id, period.start, period.end) / ACADEMIC_HOUR_MINUTES,
+    plannedToDate: plannedMinutes(courses, workplace.id, period.start, toDate) / ACADEMIC_HOUR_MINUTES,
+    average: past.length ? past.reduce((a, b) => a + b, 0) / past.length : null,
+  };
 }

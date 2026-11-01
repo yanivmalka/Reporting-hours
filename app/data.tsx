@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
+import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { isDemoLoaded, loadDemoData, removeDemoData, resetAllData } from '../lib/demo';
@@ -26,7 +27,7 @@ export default function DataScreen() {
   const { setLang } = useI18n();
   const { setBasis } = usePayBasis();
   const [stats, setStats] = useState<Stats | null>(null);
-  const [confirm, setConfirm] = useState<Action | null>(null);
+  const confirm = useConfirm();
   const [busy, setBusy] = useState<Action | null>(null);
 
   const refresh = useCallback(async () => {
@@ -45,18 +46,36 @@ export default function DataScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setConfirm(null);
       void refresh();
     }, [refresh]),
   );
 
-  /** לחיצה ראשונה — בקשת אישור; לחיצה שנייה — ביצוע. */
-  async function run(action: Action) {
-    if (confirm !== action) {
-      setConfirm(action);
-      return;
-    }
-    setConfirm(null);
+  const CONFIRM: Record<Action, { title: string; message: string; confirmLabel: string; destructive: boolean }> = {
+    load: {
+      title: 'לטעון נתוני הדגמה?',
+      message: 'דיווחי הדגמה קודמים יוחלפו בחדשים. נתונים שהזנתם בעצמכם לא ייפגעו.',
+      confirmLabel: 'טעינה',
+      destructive: false,
+    },
+    removeDemo: {
+      title: 'לאפס את נתוני ההדגמה?',
+      message: 'דיווחי ההדגמה והדקות שהוסיפו למונים יימחקו. מקומות העבודה, ההעדפות והדיווחים שלכם נשמרים.',
+      confirmLabel: 'איפוס נתוני הדגמה',
+      destructive: true,
+    },
+    resetAll: {
+      title: 'למחוק את כל המידע?',
+      message: 'כל הדיווחים, מקומות העבודה (כולל האשפה), המונים וההעדפות יימחקו. לא ניתן לשחזר.',
+      confirmLabel: 'מחיקת הכול',
+      destructive: true,
+    },
+  };
+
+  function run(action: Action) {
+    confirm({ ...CONFIRM[action], onConfirm: () => execute(action) });
+  }
+
+  async function execute(action: Action) {
     setBusy(action);
     try {
       if (action === 'load') {
@@ -79,8 +98,7 @@ export default function DataScreen() {
     }
   }
 
-  const label = (action: Action, text: string) =>
-    confirm === action ? 'לחצו שוב לאישור' : text;
+  const label = (_action: Action, text: string) => text;
 
   return (
     <Screen>
@@ -145,6 +163,7 @@ export default function DataScreen() {
           disabled={busy != null}
         />
       </View>
+      {confirm.dialog}
     </Screen>
   );
 }

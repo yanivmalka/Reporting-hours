@@ -15,16 +15,24 @@ export function StatTile({
   value,
   sub,
   accent,
+  onPress,
 }: {
   label: string;
   value: string;
   sub?: string;
   /** אריח מודגש (רקע צבע המותג) */
   accent?: boolean;
+  /** לחיצה — מעבר לפירוט */
+  onPress?: () => void;
 }) {
   const styles = useStyles(makeStyles);
   return (
-    <View style={[styles.tile, accent && styles.tileAccent]}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [styles.tile, accent && styles.tileAccent, pressed && styles.pressed]}
+      accessibilityRole={onPress ? 'button' : undefined}
+    >
       <Text style={[styles.tileLabel, accent && styles.onAccent]} numberOfLines={1}>
         {label}
       </Text>
@@ -36,7 +44,7 @@ export function StatTile({
           {sub}
         </Text>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -58,10 +66,13 @@ export function BarChart({
   data,
   format,
   height = 150,
+  onOpen,
 }: {
   data: BarDatum[];
   format: (value: number) => string;
   height?: number;
+  /** קישור "לפירוט" לעמודה הנבחרת */
+  onOpen?: (key: string) => void;
 }) {
   const styles = useStyles(makeStyles);
   const [selected, setSelected] = useState<string | null>(null);
@@ -73,9 +84,16 @@ export function BarChart({
   return (
     <View style={styles.chart}>
       {active ? (
-        <Text style={styles.chartReadout}>
-          {active.label}: <Text style={styles.chartReadoutValue}>{format(active.value)}</Text>
-        </Text>
+        <View style={styles.readoutRow}>
+          <Text style={styles.chartReadout}>
+            {active.label}: <Text style={styles.chartReadoutValue}>{format(active.value)}</Text>
+          </Text>
+          {onOpen ? (
+            <Pressable onPress={() => onOpen(active.key)} hitSlop={8}>
+              <Text style={styles.link}>לפירוט ←</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
       <View style={[styles.bars, { height }]}>
         {data.map((d) => {
@@ -117,15 +135,21 @@ export function ShareRow({
   value,
   fraction,
   sub,
+  onPress,
 }: {
   label: string;
   value: string;
   fraction: number;
   sub?: string;
+  onPress?: () => void;
 }) {
   const styles = useStyles(makeStyles);
   return (
-    <View style={styles.shareRow}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [styles.shareRow, pressed && styles.pressed]}
+    >
       <View style={styles.shareHead}>
         <Text style={styles.shareLabel} numberOfLines={1}>
           {label}
@@ -134,7 +158,7 @@ export function ShareRow({
       </View>
       <ProgressBar fraction={fraction} />
       {sub ? <Text style={styles.shareSub}>{sub}</Text> : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -218,6 +242,20 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     },
     chart: {
       gap: spacing.sm,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    readoutRow: {
+      flexDirection: layout.rowStart,
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    link: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: c.brand,
     },
     chartReadout: {
       fontSize: 13,

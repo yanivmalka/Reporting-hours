@@ -1,8 +1,15 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SelectField } from '../components/SelectField';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
-import { monthName, totalsFor } from '../lib/dashboard';
+import {
+  currentPayPeriod,
+  monthName,
+  previousPayPeriod,
+  dateRange,
+  totalsFor,
+} from '../lib/dashboard';
 import { Button } from '../components/Button';
 import { ReportCard } from '../components/ReportCard';
 import { Screen } from '../components/Screen';
@@ -28,19 +35,38 @@ export default function ReportsScreen() {
   const { basis } = usePayBasis();
   const [reports, setReports] = useState<WorkReport[] | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
-  /** סינון: מזהה מקום עבודה / חודש "YYYY-MM"; null = הכול */
-  const [wpFilter, setWpFilter] = useState<string | null>(null);
-  const [monthFilter, setMonthFilter] = useState<string | null>(null);
+  // סינון התחלתי יכול להגיע מלוח הבקרה: ?wp=<מזהה>&when=current|previous|YYYY-MM
+  const params = useLocalSearchParams<{ wp?: string; when?: string }>();
+  /** סינון: מזהה מקום עבודה; null = הכול */
+  const [wpFilter, setWpFilter] = useState<string | null>(params.wp || null);
+  /**
+   * סינון זמן: null = הכול · 'current' / 'previous' = החודש הנוכחי / הקודם של
+   * כל מקום עבודה (לפי יום התשלום שלו) · "YYYY-MM" = חודש קלנדרי.
+   */
+  const [monthFilter, setMonthFilter] = useState<string | null>(params.when || null);
 
-  const filtered = useMemo(
-    () =>
-      (reports ?? []).filter(
-        (r) =>
-          (wpFilter == null || r.workplaceId === wpFilter) &&
-          (monthFilter == null || r.date.startsWith(monthFilter)),
-      ),
-    [reports, wpFilter, monthFilter],
-  );
+  // כשנכנסים שוב מלוח הבקרה עם סינון אחר — מעדכנים.
+  useEffect(() => {
+    if (params.wp !== undefined) setWpFilter(params.wp || null);
+    if (params.when !== undefined) setMonthFilter(params.when || null);
+  }, [params.wp, params.when]);
+
+  const filtered = useMemo(() => {
+    const inTime = (r: WorkReport) => {
+      if (monthFilter == null) return true;
+      if (monthFilter === 'current' || monthFilter === 'previous') {
+        const w = workplaces.find((x) => x.id === r.workplaceId);
+        if (!w) return false;
+        const p =
+          monthFilter === 'current' ? currentPayPeriod(w.payday) : previousPayPeriod(w.payday);
+        return r.date >= p.start && r.date <= p.end;
+      }
+      return r.date.startsWith(monthFilter);
+    };
+    return (reports ?? []).filter(
+      (r) => (wpFilter == null || r.workplaceId === wpFilter) && inTime(r),
+    );
+  }, [reports, workplaces, wpFilter, monthFilter]);
   const months = useMemo(
     () => [...new Set((reports ?? []).map((r) => r.date.slice(0, 7)))].sort((a, b) => b.localeCompare(a)),
     [reports],
@@ -86,32 +112,56 @@ export default function ReportsScreen() {
     basis,
   );
   const isFiltered = wpFilter != null || monthFilter != null;
+  const selectedWp = wpFilter ? workplaces.find((w) => w.id === wpFilter) : undefined;
+  const periodHint =
+    selectedWp && (monthFilter === 'current' || monthFilter === 'previous')
+      ? (() => {
+          const p =
+            monthFilter === 'current'
+              ? currentPayPeriod(selectedWp.payday)
+              : previousPayPeriod(selectedWp.payday);
+          return dateRange(p.start, p.end);
+        })()
+      : null;
 
   return (
     <Screen>
-      <FilterRow
-        options={[
-          { key: null, label: 'כל מקומות העבודה' },
-          ...usedWorkplaces.map((w) => ({ key: w.id, label: w.name })),
-        ]}
-        value={wpFilter}
-        onChange={setWpFilter}
-        styles={styles}
-      />
-      <FilterRow
-        options={[
-          { key: null, label: 'כל החודשים' },
-          ...months.map((m) => ({ key: m, label: monthName(m) })),
-        ]}
-        value={monthFilter}
-        onChange={setMonthFilter}
-        styles={styles}
-      />
+      <View style={styles.filters}>
+        <SelectField<string | null>
+          label="מקום עבודה:"
+          title="סינון לפי מקום עבודה"
+          value={wpFilter}
+          active={wpFilter != null}
+          onChange={setWpFilter}
+          options={[
+            { value: null, label: 'הכול' },
+            ...usedWorkplaces.map((w) => ({ value: w.id, label: w.name })),
+          ]}
+        />
+        <SelectField<string | null>
+          label="חודש:"
+          title="סינון לפי חודש"
+          value={monthFilter}
+          active={monthFilter != null}
+          onChange={setMonthFilter}
+          options={[
+            { value: null, label: 'הכול' },
+            {
+              value: 'current',
+              label: 'חודש נוכחי',
+              sub: 'לכל מקום עבודה — מיום התשלום שלו',
+            },
+            { value: 'previous', label: 'חודש קודם', sub: 'לכל מקום עבודה — מיום התשלום שלו' },
+            ...months.map((m) => ({ value: m, label: monthName(m) })),
+          ]}
+        />
+      </View>
 
       <View style={styles.summary}>
         <Text style={styles.summaryTitle}>
           {filtered.length} דיווחים · {totals.days} ימי עבודה
         </Text>
+        {periodHint ? <Text style={styles.summaryLine}>{periodHint}</Text> : null}
         <Text style={styles.summaryLine}>
           {Math.round((totals.netMinutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳ אקדמיות · שכר{' '}
           {formatShekels(Math.round(totals.pay))}
@@ -157,43 +207,6 @@ export default function ReportsScreen() {
   );
 }
 
-/** שורת סינון — כפתורים בגלילה אופקית, בחירה אחת. */
-function FilterRow({
-  options,
-  value,
-  onChange,
-  styles,
-}: {
-  options: { key: string | null; label: string }[];
-  value: string | null;
-  onChange: (key: string | null) => void;
-  styles: ReturnType<typeof makeStyles>;
-}) {
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={{ flexGrow: 0 }}
-      contentContainerStyle={styles.chips}
-    >
-      {options.map((o) => {
-        const on = o.key === value;
-        return (
-          <Pressable
-            key={o.key ?? 'all'}
-            onPress={() => onChange(o.key)}
-            style={[styles.chip, on && styles.chipOn]}
-          >
-            <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
-}
-
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
   center: {
@@ -219,9 +232,8 @@ const makeStyles = (colors: AppColors) =>
   list: {
     gap: spacing.md,
   },
-  chips: {
+  filters: {
     gap: spacing.sm,
-    paddingVertical: 2,
   },
   chip: {
     height: 36,

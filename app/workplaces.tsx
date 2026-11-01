@@ -4,13 +4,11 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { WorkplaceCard } from '../components/WorkplaceCard';
-import { payBreakdown, type WorkplacePay } from '../lib/pay';
-import { PAY_BASIS_LABELS, usePayBasis } from '../lib/payBasis';
+import { loadCourses, type Course } from '../lib/courses';
+import { workplaceMonthStats } from '../lib/dashboard';
 import { loadReports, type WorkReport } from '../lib/reports';
-import { travelBreakdown, type WorkplaceTravelCost } from '../lib/travel';
 import {
   loadWorkplaces,
-  trashWorkplace,
   type Workplace,
 } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
@@ -21,7 +19,7 @@ export default function WorkplacesScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
-  const { basis } = usePayBasis();
+  const [courses, setCourses] = useState<Course[]>([]);
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
   const [reports, setReports] = useState<WorkReport[]>([]);
 
@@ -29,8 +27,9 @@ export default function WorkplacesScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([loadWorkplaces(), loadReports()]).then(([list, r]) => {
+      Promise.all([loadWorkplaces(), loadReports(), loadCourses()]).then(([list, r, c]) => {
         if (!active) return;
+        setCourses(c);
         setWorkplaces(list);
         setReports(r);
       });
@@ -40,26 +39,7 @@ export default function WorkplacesScreen() {
     }, []),
   );
 
-  // עלות נסיעות מחושבת לכל מקום עבודה (שלב 5), לפי הימים שדווחו לו.
-  const travelByWorkplace = new Map<string, WorkplaceTravelCost>(
-    travelBreakdown(workplaces ?? [], reports).perWorkplace.map((row) => [
-      row.workplaceId,
-      row,
-    ]),
-  );
 
-  // שכר מחושב מצטבר לכל מקום עבודה (שלב 4), לפי בסיס החישוב הנבחר.
-  const payByWorkplace = new Map<string, WorkplacePay>(
-    payBreakdown(workplaces ?? [], reports, basis).perWorkplace.map((row) => [
-      row.workplaceId,
-      row,
-    ]),
-  );
-
-  async function handleTrash(id: string) {
-    const next = await trashWorkplace(id);
-    setWorkplaces(next);
-  }
 
   if (workplaces === null) {
     return (
@@ -76,9 +56,8 @@ export default function WorkplacesScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>מקומות העבודה שלי</Text>
         <Text style={styles.subtitle}>
-          לכל מוסד: תעריף, סוג תשלום, יום קבלת השכר ונתוני נסיעה. כשיש
-          דיווחים מוצגים גם השכר המחושב ועלות הנסיעות המצטברת. אפשר לערוך
-          ולהוסיף בכל עת.
+          שעות החודש בכל מקום עבודה מול המתוכנן בקורסים הקבועים (או מול הממוצע).
+          לחיצה על מקום עבודה — תעריף, תנאי תשלום, נסיעות וקורסים.
         </Text>
       </View>
 
@@ -88,35 +67,21 @@ export default function WorkplacesScreen() {
         </View>
       ) : (
         <View style={styles.list}>
-          {workplaces.map((workplace) => {
-            const travel = travelByWorkplace.get(workplace.id);
-            const pay = payByWorkplace.get(workplace.id);
-            // מציגים שכר רק כשדווח לפחות יום עבודה אחד למקום הזה.
-            const showPay = pay != null && pay.days > 0;
-            return (
-              <WorkplaceCard
-                key={workplace.id}
-                workplace={workplace}
-                travelCost={travel?.total}
-                travelDays={travel?.days}
-                pay={showPay ? pay.total : undefined}
-                payHours={showPay ? pay.hours : undefined}
-                payBasisLabel={PAY_BASIS_LABELS[basis]}
-                onPress={() =>
-                  router.push({
-                    pathname: '/workplace-form',
-                    params: { id: workplace.id },
-                  })
-                }
-                onTrash={() => handleTrash(workplace.id)}
-              />
-            );
-          })}
+          {workplaces.map((workplace) => (
+            <WorkplaceCard
+              key={workplace.id}
+              workplace={workplace}
+              stats={workplaceMonthStats(workplace, reports, courses)}
+              onPress={() =>
+                router.push({ pathname: '/workplace-form', params: { id: workplace.id } })
+              }
+            />
+          ))}
         </View>
       )}
 
       <Text style={styles.hint}>
-        מחיקת אריח מעבירה אותו לאשפה שבתפריט ההמבורגר. משם אפשר לשחזר אותו תוך 30 יום.
+        העברה לאשפה — מתוך מסך העריכה. מהאשפה שבתפריט אפשר לשחזר תוך 30 יום.
       </Text>
 
       <View style={styles.action}>

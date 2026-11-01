@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { BarChart, Panel, ProgressBar, ShareRow, StatTile, TileGrid } from '../components/Charts';
 import { Screen } from '../components/Screen';
@@ -12,6 +12,7 @@ import {
   monthName,
   monthlyTrend,
   roundingStats,
+  dateRange,
   shortDate,
   sumTotals,
   weekdayProfile,
@@ -63,6 +64,10 @@ export default function DashboardScreen() {
   } | null>(null);
   const [which, setWhich] = useState<PeriodChoice>('current');
   const [metric, setMetric] = useState<Metric>('pay');
+
+  /** מעבר ל"הדיווחים שלי" עם סינון מוכן. */
+  const openReports = (filter: { wp?: string; when?: string }) =>
+    router.push({ pathname: '/reports', params: { wp: filter.wp ?? '', when: filter.when ?? '' } });
 
   useFocusEffect(
     useCallback(() => {
@@ -154,14 +159,14 @@ export default function DashboardScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>לוח בקרה</Text>
         <Text style={styles.subtitle}>
-          "החודש" של כל מקום עבודה נמדד מיום התשלום שלו ועד יום התשלום הבא.
+          "החודש" של כל מקום עבודה נמדד מיום התשלום שלו ועד יום התשלום הבא. הקישו על נתון לפירוט.
         </Text>
       </View>
 
       <SegmentedControl<PeriodChoice>
         options={[
-          { value: 'current', label: 'תקופה נוכחית' },
-          { value: 'previous', label: 'תקופה קודמת' },
+          { value: 'current', label: 'חודש נוכחי' },
+          { value: 'previous', label: 'חודש קודם' },
         ]}
         value={which}
         onChange={setWhich}
@@ -169,28 +174,33 @@ export default function DashboardScreen() {
 
       <TileGrid>
         <StatTile
+          onPress={() => openReports({ when: which })}
           accent
-          label={which === 'current' ? 'סכום עד כה' : 'סכום התקופה'}
+          label={which === 'current' ? 'סכום עד כה' : 'סכום החודש'}
           value={money(totals.pay)}
           sub={`כולל ${data.workplaces.filter((w) => w.paymentType === 'monthly').length} משכורות חודשיות קבועות`}
         />
         <StatTile
+          onPress={() => openReports({ when: which })}
           label="שעות אקדמיות"
           value={hoursText(academicHours(totals.netMinutes))}
           sub={`${hoursText(regularHours(totals.netMinutes))} שעות רגילות`}
         />
         <StatTile
+          onPress={() => openReports({ when: which })}
           label="ימי עבודה"
           value={String(view.uniqueDays)}
           sub={`${totals.reports} דיווחים · ${hoursText(regularHours(totals.breakMinutes))} שע׳ הפסקות`}
         />
-        <StatTile label="נסיעות" value={money(totals.travel)} sub="תחבורה ציבורית בלבד" />
+         <StatTile onPress={() => openReports({ when: which })} label="נסיעות" value={money(totals.travel)} sub="תחבורה ציבורית בלבד" />
         <StatTile
+          onPress={() => router.push('/settings')}
           label="דקות מצטברות"
           value={String(accumulated.minutes)}
           sub={`בכל הסמינרים · ${data.redeemable} שע׳ זמינות לפדיון · ${accumulated.redeemedHours} נפדו`}
         />
         <StatTile
+          onPress={() => openReports({ when: which })}
           label="ממוצע ליום עבודה"
           value={view.uniqueDays ? money(totals.pay / view.uniqueDays) : '—'}
           sub={
@@ -206,11 +216,15 @@ export default function DashboardScreen() {
         subtitle={
           which === 'current'
             ? 'הסכום שנצבר בכל מקום עבודה עד עכשיו, ומתי ישולם לפי תנאי התשלום (שוטף +)'
-            : 'מה ששולם (או ישולם) עבור התקופה שהסתיימה'
+            : 'מה ששולם (או ישולם) עבור החודש הקודם'
         }
       >
         {view.periods.map(({ workplace, period, totals: t, expectedPayment, daysToExpected }) => (
-          <View key={workplace.id} style={styles.payRow}>
+          <Pressable
+            key={workplace.id}
+            style={({ pressed }) => [styles.payRow, pressed && styles.pressed]}
+            onPress={() => openReports({ wp: workplace.id, when: which })}
+          >
             <View style={styles.payHead}>
               <Text style={styles.payName} numberOfLines={1}>
                 {workplace.name}
@@ -218,7 +232,7 @@ export default function DashboardScreen() {
               <Text style={styles.payAmount}>{money(t.pay)}</Text>
             </View>
             <Text style={styles.payMeta}>
-              {shortDate(period.start)}–{shortDate(period.end)} ·{' '}
+              {dateRange(period.start, period.end)} ·{' '}
               {`תשלום צפוי ${shortDate(expectedPayment)} (${paymentTermsLabel(workplace)}${
                 daysToExpected >= 0 ? `, ${daysText(daysToExpected)}` : ', עבר'
               })`}
@@ -228,7 +242,7 @@ export default function DashboardScreen() {
               {t.travel > 0 ? ` · נסיעות ${formatShekels(t.travel)}` : ''}
             </Text>
             {which === 'current' ? <ProgressBar fraction={period.elapsed} thin /> : null}
-          </View>
+          </Pressable>
         ))}
       </Panel>
 
@@ -248,6 +262,7 @@ export default function DashboardScreen() {
         <BarChart
           data={view.trend.map((p) => ({ key: p.key, label: p.label, value: metricOf(p.totals) }))}
           format={metricFormat}
+          onOpen={(key) => openReports({ when: key })}
         />
       </Panel>
 
@@ -255,6 +270,7 @@ export default function DashboardScreen() {
         {view.shares.map((s) => (
           <ShareRow
             key={s.workplace.id}
+            onPress={() => openReports({ wp: s.workplace.id })}
             label={s.workplace.name}
             value={`${money(s.totals.pay)} · ${Math.round(s.share * 100)}%`}
             fraction={s.share / (view.shares[0]?.share || 1)}
@@ -333,6 +349,9 @@ const makeStyles = (colors: AppColors) =>
       lineHeight: 21,
       color: colors.textMuted,
       textAlign: 'right',
+    },
+    pressed: {
+      opacity: 0.7,
     },
     payRow: {
       gap: 4,

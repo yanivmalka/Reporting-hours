@@ -6,8 +6,9 @@
  *   מעבר לשדה הבא (`onOverflow` / `onComplete`). ספרת שעה ראשונה 3–9 משלימה
  *   "0" ועוברת מיד (‎"9" → 09), וכך גם ספרת דקות ראשונה 6–9.
  * - עמיד להקלדה מהירה: ספרות שמגיעות לשדה שכבר מלא (כי המעבר עוד לא הושלם)
- *   מועברות הלאה לשדה הבא במקום ללכת לאיבוד, והקלדה בשדה מלא שנכנסים אליו
- *   מחליפה את תוכנו.
+ *   מועברות הלאה לשדה הבא במקום ללכת לאיבוד.
+ * - כניסה לשדה מלא מנקה אותו (בלי בחירת טקסט); הערך הקודם מוצג כרמז אפור
+ *   ומוחזר אם יוצאים בלי להקליד.
  * - הערך החיצוני הוא "HH:MM" כששני החלקים מלאים, אחרת מחרוזת ריקה.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
@@ -49,15 +50,7 @@ function take(d: string, maxFirst: number): [string, string] {
 }
 
 export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function TimeInput(
-  {
-    value,
-    onChange,
-    onComplete,
-    onOverflow,
-    invalid,
-    hourPlaceholder = 'שש',
-    minutePlaceholder = 'דד',
-  },
+  { value, onChange, onComplete, onOverflow, invalid, hourPlaceholder = '00', minutePlaceholder = '00' },
   ref,
 ) {
   const styles = useThemedStyles(makeStyles);
@@ -68,8 +61,20 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
   // הערכים העדכניים, מתעדכנים מיד (לא מחכים לרינדור) — בהקלדה מהירה אירוע
   // אחד עלול להגיע לפני שהקודם הגיע ל־state.
   const partsRef = useRef<[string, string]>([hh, mm]);
-  // אחרי כניסה לשדה מלא — ההקלדה הבאה מחליפה את תוכנו.
-  const replaceNext = useRef<{ h: boolean; m: boolean }>({ h: false, m: false });
+  // ערך קודם של שדה שנוקה בכניסה אליו — מוצג כרמז, ומוחזר אם יצאו בלי להקליד.
+  const [saved, setSaved] = useState<[string, string]>(['', '']);
+  const savedRef = useRef<[string, string]>(['', '']);
+  // מעבר שדה שהקוד יזם (וכבר ניקה) — אירוע ה־focus שיגיע אחריו לא ינקה שוב,
+  // כי ייתכן שבינתיים כבר הוזנו בו ספרות.
+  const programmatic = useRef<[boolean, boolean]>([false, false]);
+
+  function onFieldFocus(i: 0 | 1) {
+    if (programmatic.current[i]) {
+      programmatic.current[i] = false;
+      return;
+    }
+    clearForTyping(i);
+  }
 
   // סנכרון רק כשהערך הוחלף מבחוץ (ולא כהד של מה שהשדה עצמו שלח).
   const lastEmitted = useRef(value);
@@ -90,16 +95,47 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     onChange(next);
   }
 
+  function setSavedPart(i: 0 | 1, v: string) {
+    const next: [string, string] = [...savedRef.current];
+    next[i] = v;
+    savedRef.current = next;
+    setSaved(next);
+  }
+
+  /**
+   * ניקוי שדה מלא לפני הקלדה חדשה — בלי בחירת טקסט (באנדרואיד בחירה כזו
+   * מתחדשת אחרי כל שינוי, והספרה הבאה "מחליפה" את הקודמת: 13 → 3).
+   */
+  function clearForTyping(i: 0 | 1) {
+    const current = partsRef.current[i];
+    if (current.length !== 2) return;
+    setSavedPart(i, current);
+    emit(i === 0 ? '' : partsRef.current[0], i === 1 ? '' : partsRef.current[1]);
+  }
+
+  function restoreIfEmpty(i: 0 | 1) {
+    programmatic.current[i] = false;
+    const prev = savedRef.current[i];
+    if (prev && partsRef.current[i] === '') {
+      emit(i === 0 ? prev : partsRef.current[0], i === 1 ? prev : partsRef.current[1]);
+    }
+    setSavedPart(i, '');
+  }
+
+  function focusMinutes() {
+    clearForTyping(1);
+    programmatic.current[1] = true;
+    minuteRef.current?.focus();
+  }
+
   /** מזין ספרות לשדה הדקות; שארית — לשדה הבא. */
   function feedMinutes(d: string) {
     const [m, rest] = take(d, 5);
     emit(partsRef.current[0], m);
     if (m.length === 2) {
-      replaceNext.current.m = false;
+      setSavedPart(1, '');
       if (rest && onOverflow) onOverflow(rest);
       else onComplete?.();
-    } else {
-      minuteRef.current?.focus();
     }
   }
 
@@ -109,26 +145,18 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     if (h.length === 2 && Number(h) > 23) h = '23';
     emit(h, partsRef.current[1]);
     if (h.length === 2) {
-      replaceNext.current.m = partsRef.current[1] !== '';
-      minuteRef.current?.focus();
+      setSavedPart(0, '');
+      focusMinutes();
       if (rest) feedMinutes(rest);
     }
   }
 
-  /** מה שהוקלד בפועל: בשדה שסומן להחלפה — רק התווים החדשים. */
-  function typed(text: string, prev: string, replace: boolean): string {
-    const d = onlyDigits(text);
-    if (replace && d.length > prev.length && d.startsWith(prev)) return d.slice(prev.length);
-    return d;
-  }
-
   function onHour(text: string) {
     const prev = partsRef.current[0];
-    const replace = replaceNext.current.h;
-    replaceNext.current.h = false;
-    let d = typed(text, prev, replace);
+    const d = onlyDigits(text);
     // שדה מלא שקיבל עוד ספרות (המעבר לדקות עוד לא הושלם) — הספרות לדקות.
-    if (!replace && prev.length === 2 && d.length > 2 && d.startsWith(prev)) {
+    if (prev.length === 2 && d.length > 2 && d.startsWith(prev)) {
+      focusMinutes();
       feedMinutes(d.slice(2));
       return;
     }
@@ -137,10 +165,8 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
 
   function onMinute(text: string) {
     const prev = partsRef.current[1];
-    const replace = replaceNext.current.m;
-    replaceNext.current.m = false;
-    const d = typed(text, prev, replace);
-    if (!replace && prev.length === 2 && d.length > 2 && d.startsWith(prev)) {
+    const d = onlyDigits(text);
+    if (prev.length === 2 && d.length > 2 && d.startsWith(prev)) {
       if (onOverflow) onOverflow(d.slice(2));
       return;
     }
@@ -151,11 +177,13 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     ref,
     () => ({
       focus: () => {
-        replaceNext.current.h = partsRef.current[0] !== '';
+        clearForTyping(0);
+        programmatic.current[0] = true;
         hourRef.current?.focus();
       },
       feed: (d: string) => {
-        replaceNext.current.h = false;
+        clearForTyping(0);
+        programmatic.current[0] = true;
         hourRef.current?.focus();
         feedHours(d);
       },
@@ -168,7 +196,6 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     keyboardType: 'number-pad' as const,
     inputMode: 'numeric' as const,
     maxLength: 4,
-    selectTextOnFocus: true,
     placeholderTextColor: colors.textMuted,
     style: [styles.part, invalid && styles.invalid],
   };
@@ -179,13 +206,12 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         ref={hourRef}
         value={hh}
         onChangeText={onHour}
-        onFocus={() => {
-          replaceNext.current.h = partsRef.current[0] !== '';
-        }}
-        placeholder={hourPlaceholder}
+        onFocus={() => onFieldFocus(0)}
+        onBlur={() => restoreIfEmpty(0)}
+        placeholder={saved[0] || hourPlaceholder}
         accessibilityLabel="שעות"
         returnKeyType="next"
-        onSubmitEditing={() => minuteRef.current?.focus()}
+        onSubmitEditing={focusMinutes}
         {...common}
       />
       <Text style={styles.colon}>:</Text>
@@ -193,10 +219,9 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         ref={minuteRef}
         value={mm}
         onChangeText={onMinute}
-        onFocus={() => {
-          replaceNext.current.m = partsRef.current[1] !== '';
-        }}
-        placeholder={minutePlaceholder}
+        onFocus={() => onFieldFocus(1)}
+        onBlur={() => restoreIfEmpty(1)}
+        placeholder={saved[1] || minutePlaceholder}
         accessibilityLabel="דקות"
         returnKeyType="next"
         onSubmitEditing={() => onComplete?.()}

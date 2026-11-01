@@ -15,7 +15,7 @@ type ScreenProps = {
 };
 
 /** גובה מינימלי לפוטר בכל מסך (מעבר לשוליים הבטוחים של המערכת). */
-const FOOTER_MIN = 56;
+const FOOTER_MIN = 12;
 
 /** גובה המקלדת האחרון שנמדד — משמש לפוטר הקבוע גם כשהמקלדת סגורה. */
 let lastKeyboardHeight = 0;
@@ -51,8 +51,9 @@ export function Screen({ children, scroll = true, keyboardFooter = false }: Scre
   // פוטר בכל מסך: מרווח מעל סרגל הניווט של המערכת, כדי שכפתורים בתחתית
   // לא יוסתרו. בטופס: פוטר קבוע בגובה המקלדת (או ~40% מהמסך לפני שנמדדה).
   const base = insets.bottom + FOOTER_MIN;
+  // הפוטר הקבוע בטפסים: חמישית מגובה המקלדת; כשהמקלדת פתוחה — בגובה המלא שלה.
   const footer = keyboardFooter
-    ? Math.max(keyboard, lastKeyboardHeight || Math.round(windowHeight * 0.4), base)
+    ? Math.max(keyboard, Math.round((lastKeyboardHeight || windowHeight * 0.4) / 5), base)
     : Math.max(keyboard, base);
   const inner = (
     <View style={styles.content}>

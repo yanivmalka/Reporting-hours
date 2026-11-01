@@ -32,6 +32,14 @@ export function longDate(value: string): string {
   return `יום ${WEEKDAYS[d.getDay()]} · ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+/** "15/10/2026" — לשדות צרים */
+function shortLabel(value: string): string {
+  const d = parse(value);
+  if (!d) return value;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
 function chipLabel(value: string): string {
   const d = parse(value);
   if (!d) return value;
@@ -112,6 +120,46 @@ export function DatePicker({ value, onChange, workedDates, invalid }: DatePicker
         />
       ) : null}
     </View>
+  );
+}
+
+/** שדה תאריך פשוט: תצוגת התאריך + תאריכון בלחיצה (בלי כפתורים מהירים). */
+export function DateField({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  invalid?: boolean;
+}) {
+  const styles = useStyles(makeStyles);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Pressable
+        style={[styles.display, invalid && styles.invalid]}
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="פתיחת תאריכון"
+      >
+        <Text style={styles.displayText} numberOfLines={1}>
+          {shortLabel(value)}
+        </Text>
+        <Text style={styles.calendarIcon}>📅</Text>
+      </Pressable>
+      {open ? (
+        <CalendarModal
+          value={value}
+          worked={new Set()}
+          onPick={(d) => {
+            onChange(d);
+            setOpen(false);
+          }}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }
 

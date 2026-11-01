@@ -15,6 +15,7 @@ import { addAccumulatedMinutes, entryOf } from '../lib/accumulated';
 import { formatHours, payableHours, reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
 import { addReport, loadReports, makeBreakId, type WorkReport } from '../lib/reports';
+import { coursesOn, loadCourses, type Course } from '../lib/courses';
 import { formatShekels, hasTravelCost } from '../lib/travel';
 import { formatDuration, isValidISODate, parseTime, todayISO } from '../lib/time';
 import { ARRIVAL_MODE_LABELS, loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -57,6 +58,7 @@ export default function ReportScreen() {
   const { basis } = usePayBasis();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
   const [existing, setExisting] = useState<WorkReport[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [touched, setTouched] = useState(false);
   /** 'saved' / 'cancelled' — יציאה מכוונת, בלי אזהרה */
@@ -78,8 +80,9 @@ export default function ReportScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([loadWorkplaces(), loadReports()]).then(([list, reports]) => {
+      Promise.all([loadWorkplaces(), loadReports(), loadCourses()]).then(([list, reports, crs]) => {
         if (!active) return;
+        setCourses(crs);
         setWorkplaces(list);
         setExisting(reports);
         setWorkplaceId((current) => {
@@ -253,6 +256,21 @@ export default function ReportScreen() {
       ? workplace.travelCostPerDirection * workplace.tripsPerDay
       : 0;
   const workedDates = existing.map((r) => r.date);
+  // קורסים קבועים שמתקיימים בתאריך שנבחר (במקום העבודה שנבחר, או בכולם).
+  const todaysCourses = coursesOn(courses, date, workplaceId ?? undefined).filter((c) =>
+    workplaces.some((w) => w.id === c.workplaceId),
+  );
+
+  function applyCourse(c: Course) {
+    setWorkplaceId(c.workplaceId);
+    setPickerOpen(false);
+    setStart(c.start);
+    setEnd(c.end);
+    setBreaks(c.breakMinutes > 0 ? [{ id: makeBreakId(), minutes: String(c.breakMinutes) }] : []);
+    setNote(c.name);
+    setTouched(true);
+    setErrors({});
+  }
   const visibleWorkplaces = pickerOpen || !workplace ? workplaces : [workplace];
 
   return (
@@ -308,6 +326,32 @@ export default function ReportScreen() {
           invalid={Boolean(errors.date)}
         />
       </FormField>
+
+      {todaysCourses.length > 0 ? (
+        <FormField label="מהמערכת השבועית" hint="בחירת קורס ממלאת שעות, הפסקה ונושא">
+          <View style={styles.choices}>
+            {todaysCourses.map((c) => {
+              const on = workplaceId === c.workplaceId && start === c.start && end === c.end;
+              return (
+                <Pressable
+                  key={c.id}
+                  onPress={() => applyCourse(c)}
+                  style={[styles.courseChip, on && styles.choiceSelected]}
+                >
+                  <Text style={[styles.choiceText, on && styles.choiceTextSelected]}>
+                    {c.name}
+                  </Text>
+                  <Text style={[styles.choiceSub, on && styles.choiceSubSelected]}>
+                    {c.start}–{c.end}
+                    {c.breakMinutes > 0 ? ` · הפסקה ${c.breakMinutes} דק׳` : ''}
+                    {workplaceId ? '' : ` · ${workplaces.find((w) => w.id === c.workplaceId)?.name ?? ''}`}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </FormField>
+      ) : null}
 
       <View style={styles.timesRow}>
         <View style={styles.timeCol}>
@@ -533,6 +577,15 @@ const makeStyles = (colors: AppColors) =>
   },
   choiceTextSelected: {
     color: colors.textOnBrand,
+  },
+  courseChip: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.brandLight,
+    borderWidth: 1,
+    borderColor: colors.brandLight,
+    borderRadius: radius.md,
+    gap: 2,
   },
   choiceBody: {
     flex: 1,

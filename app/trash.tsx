@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
 import {
   TRASH_RETENTION_DAYS,
@@ -25,7 +26,7 @@ export default function TrashScreen() {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const [items, setItems] = useState<Workplace[] | null>(null);
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   useFocusEffect(
     useCallback(() => {
@@ -42,18 +43,18 @@ export default function TrashScreen() {
   async function handleRestore(id: string) {
     const next = await restoreWorkplace(id);
     setItems(next);
-    setConfirmingId(null);
   }
 
-  async function handleDeleteForever(id: string) {
-    if (confirmingId !== id) {
-      setConfirmingId(id);
-      return;
-    }
-    const next = await deleteWorkplace(id);
-    setItems(next);
-    setConfirmingId(null);
+  function handleDeleteForever(id: string) {
+    const name = items?.find((w) => w.id === id)?.name ?? '';
+    confirm({
+      title: 'למחוק לצמיתות?',
+      message: `"${name}" יימחק לצמיתות. לא ניתן יהיה לשחזר אותו.`,
+      confirmLabel: 'מחיקה לצמיתות',
+      onConfirm: async () => setItems(await deleteWorkplace(id)),
+    });
   }
+
 
   if (items === null) {
     return (
@@ -112,11 +113,7 @@ export default function TrashScreen() {
                       pressed && styles.pressed,
                     ]}
                   >
-                    <Text style={styles.deleteText}>
-                      {confirmingId === item.id
-                        ? 'לחצו שוב למחיקה סופית'
-                        : 'מחיקה לצמיתות'}
-                    </Text>
+                    <Text style={styles.deleteText}>מחיקה לצמיתות</Text>
                   </Pressable>
                 </View>
               </View>
@@ -124,6 +121,7 @@ export default function TrashScreen() {
           })}
         </View>
       )}
+      {confirm.dialog}
     </Screen>
   );
 }

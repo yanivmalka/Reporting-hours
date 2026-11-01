@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
+import { courseScheduleLabel, loadCourses, type Course } from '../lib/courses';
+import { dateRange } from '../lib/dashboard';
 import { FormField } from '../components/FormField';
+import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
@@ -34,6 +37,9 @@ type FormState = {
 };
 
 type Errors = Partial<Record<keyof FormState, string>>;
+
+/** אפשרויות "שוטף +" לבחירה (בלי הקלדה חופשית). */
+const TERMS_OPTIONS = [0, 15, 30, 45, 60, 90];
 
 const PAYMENT_OPTIONS = (Object.keys(PAYMENT_TYPE_LABELS) as PaymentType[]).map(
   (value) => ({ value, label: PAYMENT_TYPE_LABELS[value] }),
@@ -72,7 +78,22 @@ export default function WorkplaceFormScreen() {
   );
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const confirm = useConfirm();
+  const [courses, setCourses] = useState<Course[]>([]);
+
+  // הקורסים של מקום העבודה — נטען מחדש בחזרה מטופס הקורס.
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      let active = true;
+      loadCourses().then((all) => {
+        if (active) setCourses(all.filter((c) => c.workplaceId === id).sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start)));
+      });
+      return () => {
+        active = false;
+      };
+    }, [id]),
+  );
 
   useEffect(() => {
     if (!id) return;
@@ -152,16 +173,20 @@ export default function WorkplaceFormScreen() {
     router.back();
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!id) return;
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
-    setSaving(true);
-    await trashWorkplace(id);
-    router.back();
+    confirm({
+      title: 'להעביר לאשפה?',
+      message: `"${form?.name ?? ''}" יועבר לאשפה. אפשר לשחזר אותו משם תוך 30 יום.`,
+      confirmLabel: 'העברה לאשפה',
+      onConfirm: async () => {
+        setSaving(true);
+        await trashWorkplace(id);
+        router.back();
+      },
+    });
   }
+
 
   const title = isEdit ? 'עריכת מקום עבודה' : 'מקום עבודה חדש';
 
@@ -225,31 +250,27 @@ export default function WorkplaceFormScreen() {
       </FormField>
 
       <FormField
-        label="תנאי תשלום — שוטף +"
+        label="תנאי תשלום"
         hint="מספר הימים מסוף החודש ועד שהתשלום מתקבל בפועל (ברירת מחדל: שוטף + 30)"
         error={errors.paymentTermsDays}
       >
         <View style={styles.termsRow}>
-          <Text style={styles.termsPrefix}>שוטף +</Text>
-          <View style={styles.termsInput}>
-            <TextField
-              value={form.paymentTermsDays}
-              onChangeText={(t) => set('paymentTermsDays', t.replace(/\D/g, ''))}
-              numeric
-              invalid={Boolean(errors.paymentTermsDays)}
-            />
-          </View>
-          {['0', '30', '45', '60', '90'].map((n) => (
-            <Pressable
-              key={n}
-              onPress={() => set('paymentTermsDays', n)}
-              style={[styles.termsChip, form.paymentTermsDays === n && styles.termsChipOn]}
-            >
-              <Text style={[styles.termsChipText, form.paymentTermsDays === n && styles.termsChipTextOn]}>
-                {n}
-              </Text>
-            </Pressable>
-          ))}
+          {TERMS_OPTIONS.map((n) => {
+            const on = form.paymentTermsDays === String(n);
+            return (
+              <Pressable
+                key={n}
+                onPress={() => set('paymentTermsDays', String(n))}
+                style={[styles.termsChip, on && styles.termsChipOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.termsChipText, on && styles.termsChipTextOn]}>
+                  {n === 0 ? 'שוטף' : `שוטף + ${n}`}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       </FormField>
 
@@ -290,6 +311,35 @@ export default function WorkplaceFormScreen() {
         </>
       ) : null}
 
+      <FormField
+        label="קורסים קבועים"
+        hint="קורס מחזורי: יום בשבוע ושעות קבועות לתקופה. משמש למילוי מהיר של דיווח ולשעות המתוכננות לחודש."
+      >
+        {isEdit ? (
+          <View style={styles.courses}>
+            {courses.map((c) => (
+              <Pressable
+                key={c.id}
+                onPress={() => router.push({ pathname: '/course-form', params: { id: c.id } })}
+                style={({ pressed }) => [styles.course, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={styles.courseName}>{c.name}</Text>
+                <Text style={styles.courseMeta}>
+                  {courseScheduleLabel(c)} · {dateRange(c.from, c.to, true)}
+                </Text>
+              </Pressable>
+            ))}
+            <Button
+              label="הוספת קורס"
+              variant="secondary"
+              onPress={() => router.push({ pathname: '/course-form', params: { workplaceId: id } })}
+            />
+          </View>
+        ) : (
+          <Text style={styles.courseMeta}>אפשר להוסיף קורסים אחרי שמירת מקום העבודה.</Text>
+        )}
+      </FormField>
+
       <View style={styles.actions}>
         <Button
           label={isEdit ? 'שמירת שינויים' : 'הוספה'}
@@ -298,36 +348,47 @@ export default function WorkplaceFormScreen() {
         />
         {isEdit ? (
           <Button
-            label={
-              confirmingDelete
-                ? 'לחצו שוב להעברה לאשפה'
-                : 'העברת מקום העבודה לאשפה'
-            }
+            label="העברת מקום העבודה לאשפה"
             variant="danger"
             onPress={handleDelete}
             disabled={saving}
           />
         ) : null}
       </View>
+      {confirm.dialog}
     </Screen>
   );
 }
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+  courses: {
+    gap: spacing.sm,
+  },
+  course: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: 2,
+  },
+  courseName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'right',
+  },
+  courseMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: 'right',
+  },
   termsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     flexWrap: 'wrap',
-  },
-  termsPrefix: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  termsInput: {
-    width: 72,
   },
   termsChip: {
     minWidth: 40,
