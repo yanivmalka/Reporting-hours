@@ -11,7 +11,7 @@ import {
   type PayrollItem,
 } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
-import { formatISODate } from '../lib/time';
+import { formatDateWithHebrew } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
 import { useTheme } from '../theme/ThemeContext';
@@ -86,7 +86,7 @@ export default function PayrollScreen() {
         {periodTitle(item.period)} · {dateRange(item.period.start, item.period.end)} · {item.reports}{' '}
         דיווחים
         {kind === 'sent' && item.status.sentAt
-          ? ` · נשלח ${formatISODate(new Date(item.status.sentAt).toISOString().slice(0, 10))}`
+          ? ` · נשלח ${formatDateWithHebrew(new Date(item.status.sentAt).toISOString().slice(0, 10), false)}`
           : ''}
         {kind === 'current' ? ` · נסגר בעוד ${item.period.daysToPayday} ימים` : ''}
       </Text>

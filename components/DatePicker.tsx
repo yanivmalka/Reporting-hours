@@ -7,6 +7,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { hebrewDate, hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useI18n } from '../lib/i18n';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
@@ -24,12 +25,18 @@ function parse(value: string): Date | null {
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
 }
 
-/** "יום ד׳ · 28/10/2026" */
-export function longDate(value: string): string {
+/** "יום ד׳ · 28/10/2026" — לועזי בלבד */
+export function gregorianLong(value: string): string {
   const d = parse(value);
   if (!d) return value;
   const p = (n: number) => String(n).padStart(2, '0');
   return `יום ${WEEKDAYS[d.getDay()]} · ${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+/** "יום ד׳ · 28/10/2026 · י״ז חשון" — לועזי ועברי */
+export function longDate(value: string): string {
+  if (!parse(value)) return value;
+  return `${gregorianLong(value)} · ${hebrewDate(value, false)}`;
 }
 
 /** "15/10/2026" — לשדות צרים */
@@ -43,7 +50,7 @@ function shortLabel(value: string): string {
 function chipLabel(value: string): string {
   const d = parse(value);
   if (!d) return value;
-  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1} · ${hebrewDate(value, false)}`;
 }
 
 type DatePickerProps = {
@@ -83,7 +90,10 @@ export function DatePicker({ value, onChange, workedDates, invalid }: DatePicker
         accessibilityRole="button"
         accessibilityLabel="פתיחת תאריכון"
       >
-        <Text style={styles.displayText}>{longDate(value)}</Text>
+        <View style={styles.displayTexts}>
+          <Text style={styles.displayText}>{gregorianLong(value)}</Text>
+          {parse(value) ? <Text style={styles.displayHeb}>{hebrewDate(value)}</Text> : null}
+        </View>
         <Text style={styles.calendarIcon}>📅</Text>
       </Pressable>
 
@@ -143,9 +153,16 @@ export function DateField({
         accessibilityRole="button"
         accessibilityLabel="פתיחת תאריכון"
       >
-        <Text style={styles.displayText} numberOfLines={1}>
-          {shortLabel(value)}
-        </Text>
+        <View style={styles.displayTexts}>
+          <Text style={styles.displayText} numberOfLines={1}>
+            {shortLabel(value)}
+          </Text>
+          {parse(value) ? (
+            <Text style={styles.displayHeb} numberOfLines={1}>
+              {hebrewDate(value)}
+            </Text>
+          ) : null}
+        </View>
         <Text style={styles.calendarIcon}>📅</Text>
       </Pressable>
       {open ? (
@@ -200,9 +217,14 @@ function CalendarModal({
             <Pressable onPress={() => move(-1)} style={styles.navBtn} accessibilityLabel="חודש קודם">
               <Text style={styles.navText}>{isRTL ? '→' : '←'}</Text>
             </Pressable>
-            <Text style={styles.monthTitle}>
-              {MONTHS[cursor.getMonth()]} {cursor.getFullYear()}
-            </Text>
+            <View style={styles.monthTitleBox}>
+              <Text style={styles.monthTitle}>
+                {MONTHS[cursor.getMonth()]} {cursor.getFullYear()}
+              </Text>
+              <Text style={styles.monthHeb}>
+                {hebrewMonthSpan(cursor.getFullYear(), cursor.getMonth())}
+              </Text>
+            </View>
             <Pressable onPress={() => move(1)} style={styles.navBtn} accessibilityLabel="חודש הבא">
               <Text style={styles.navText}>{isRTL ? '←' : '→'}</Text>
             </Pressable>
@@ -237,6 +259,9 @@ function CalendarModal({
                   >
                     <Text style={[styles.dayText, selected && styles.dayTextSelected]}>
                       {Number(cell.slice(8))}
+                    </Text>
+                    <Text style={[styles.dayHeb, selected && styles.dayTextSelected]}>
+                      {hebrewDay(cell)}
                     </Text>
                   </View>
                   <View style={[styles.dot, worked.has(cell) && styles.dotOn]} />
@@ -279,10 +304,32 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     invalid: {
       borderColor: c.danger,
     },
+    displayTexts: {
+      flex: 1,
+      gap: 1,
+    },
+    displayHeb: {
+      fontSize: 12,
+      color: c.textMuted,
+      textAlign: layout.textStart,
+    },
+    monthTitleBox: {
+      alignItems: 'center',
+    },
+    monthHeb: {
+      fontSize: 12,
+      color: c.textMuted,
+    },
+    dayHeb: {
+      fontSize: 9,
+      color: c.textMuted,
+      marginTop: -2,
+    },
     displayText: {
       fontSize: 16,
       fontWeight: '600',
       color: c.text,
+      textAlign: layout.textStart,
     },
     calendarIcon: {
       fontSize: 20,
@@ -368,9 +415,9 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       paddingVertical: 2,
     },
     day: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
+      width: 40,
+      height: 42,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
     },

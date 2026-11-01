@@ -1,3 +1,5 @@
+import { hebrewDate } from './hebrewDate';
+
 /**
  * עזרי זמן ותאריך משותפים למסכי הדיווח.
  * זמנים מיוצגים כמחרוזת "HH:MM" ותאריכים כמחרוזת ISO "YYYY-MM-DD".
@@ -29,6 +31,12 @@ export function formatISODate(value: string): string {
   if (!m) return value;
   const [, y, mo, day] = m;
   return `${day}/${mo}/${y}`;
+}
+
+/** "29/10/2026 · י״ח חשון תשפ״ז" — לועזי ועברי */
+export function formatDateWithHebrew(value: string, withHebrewYear = true): string {
+  if (!/^(\d{4})-(\d{2})-(\d{2})$/.test(value.trim())) return value;
+  return `${formatISODate(value)} · ${hebrewDate(value, withHebrewYear)}`;
 }
 
 /** המרת "HH:MM" למספר דקות מתחילת היום, או null אם אינו תקין. */

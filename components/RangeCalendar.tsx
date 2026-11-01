@@ -7,6 +7,7 @@
  * ימים שיש בהם דיווחים מסומנים במספר הדיווחים.
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useI18n } from '../lib/i18n';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
@@ -64,9 +65,12 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
         <Pressable onPress={() => onMonthChange(shiftMonth(month, -1))} style={styles.nav} accessibilityLabel="חודש קודם">
           <Text style={styles.navText}>{isRTL ? '→' : '←'}</Text>
         </Pressable>
-        <Text style={styles.title}>
-          {MONTHS[m - 1]} {y}
-        </Text>
+        <View style={styles.titleBox}>
+          <Text style={styles.title}>
+            {MONTHS[m - 1]} {y}
+          </Text>
+          <Text style={styles.titleHeb}>{hebrewMonthSpan(y, m - 1)}</Text>
+        </View>
         <Pressable onPress={() => onMonthChange(shiftMonth(month, 1))} style={styles.nav} accessibilityLabel="חודש הבא">
           <Text style={styles.navText}>{isRTL ? '←' : '→'}</Text>
         </Pressable>
@@ -99,6 +103,7 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
                 <Text style={[styles.dayText, isEdge && styles.dayTextEdge, count === 0 && styles.dayTextEmpty]}>
                   {Number(cell.slice(8))}
                 </Text>
+                <Text style={[styles.dayHeb, isEdge && styles.dayTextEdge]}>{hebrewDay(cell)}</Text>
               </View>
               <Text style={[styles.count, count === 0 && styles.countHidden]}>{count || '·'}</Text>
             </Pressable>
@@ -135,6 +140,18 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       fontWeight: '700',
       color: c.brand,
     },
+    titleBox: {
+      alignItems: 'center',
+    },
+    titleHeb: {
+      fontSize: 12,
+      color: c.textMuted,
+    },
+    dayHeb: {
+      fontSize: 9,
+      color: c.textMuted,
+      marginTop: -2,
+    },
     title: {
       fontSize: 16,
       fontWeight: '800',
@@ -160,9 +177,9 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       paddingVertical: 2,
     },
     day: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 40,
+      height: 42,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
     },

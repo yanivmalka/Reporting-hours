@@ -11,7 +11,7 @@ import {
   trashDaysLeft,
   type Workplace,
 } from '../lib/workplaces';
-import { formatISODate } from '../lib/time';
+import { formatDateWithHebrew } from '../lib/time';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -89,7 +89,7 @@ export default function TrashScreen() {
               <View key={item.id} style={styles.card}>
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.meta}>
-                  נמחק ב־{formatISODate(deletedDateISO(item.deletedAt as number))}
+                  נמחק ב־{formatDateWithHebrew(deletedDateISO(item.deletedAt as number), false)}
                   {' · '}
                   {daysLeft > 0
                     ? `נותרו ${daysLeft} ימים לשחזור`

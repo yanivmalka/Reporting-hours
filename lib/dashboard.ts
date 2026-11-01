@@ -9,6 +9,7 @@
  * המודול טהור — בלי אחסון ובלי React.
  */
 import { ACADEMIC_HOUR_MINUTES } from './academic';
+import { hebrewDate, hebrewRange } from './hebrewDate';
 import { plannedMinutes, type Course } from './courses';
 import { workplacePay } from './pay';
 import type { PayBasis } from './payBasis';
@@ -331,13 +332,13 @@ export function dateRange(startIso: string, endIso: string, long = false): strin
     const [y, m, d] = v.split('-');
     return long ? `${d}/${m}/${y}` : `${d}/${m}`;
   };
-  return `\u2066${f(startIso)}–${f(endIso)}\u2069`;
+  return `\u2066${f(startIso)}–${f(endIso)}\u2069 (${hebrewRange(startIso, endIso)})`;
 }
 
-/** "DD/MM" מתוך "YYYY-MM-DD". */
+/** "DD/MM (י״ז חשון)" מתוך "YYYY-MM-DD". */
 export function shortDate(iso: string): string {
   const [, m, d] = iso.split('-');
-  return `${d}/${m}`;
+  return `${d}/${m} (${hebrewDate(iso, false)})`;
 }
 
 // ───────────────────────── החודש מול מתוכנן / ממוצע ─────────────────────────

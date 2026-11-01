@@ -13,6 +13,7 @@ import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import { formatShekels, hasTravelCost } from './travel';
 import { parseTime } from './time';
+import { hebrewDate, hebrewRange } from './hebrewDate';
 import type { Workplace } from './workplaces';
 
 // ───────────────────────── מצב הדוחות ─────────────────────────
@@ -214,7 +215,7 @@ const ddmmyyyy = (iso: string) => {
 };
 const dayLabel = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
-  return `יום ${WEEKDAYS[new Date(y, m - 1, d).getDay()]} ${ddmmyyyy(iso)}`;
+  return `יום ${WEEKDAYS[new Date(y, m - 1, d).getDay()]} ${ddmmyyyy(iso)} (${hebrewDate(iso, false)})`;
 };
 const hm = (minutes: number) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
 const academic = (minutes: number) => {
@@ -240,7 +241,7 @@ export function payrollBody(report: PayrollReport): string {
   lines.push('שלום,');
   lines.push('');
   lines.push(
-    `מצורף דיווח שעות העבודה שלי ב${workplace.name} לחודש ${periodTitle(period)} (${ddmmyyyy(period.start)}–${ddmmyyyy(period.end)}).`,
+    `מצורף דיווח שעות העבודה שלי ב${workplace.name} לחודש ${periodTitle(period)} (${ddmmyyyy(period.start)}–${ddmmyyyy(period.end)} · ${hebrewRange(period.start, period.end)} ${hebrewDate(period.end).split(' ').pop()}).`,
   );
   for (const g of report.groups) {
     lines.push('');

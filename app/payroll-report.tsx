@@ -22,7 +22,8 @@ import {
 } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
 import { formatShekels, hasTravelCost } from '../lib/travel';
-import { formatISODate } from '../lib/time';
+import { formatDateWithHebrew, formatISODate } from '../lib/time';
+import { hebrewDate } from '../lib/hebrewDate';
 import { loadWorkplaces } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
 import { useTheme } from '../theme/ThemeContext';
@@ -142,7 +143,7 @@ export default function PayrollReportScreen() {
           ]}
         >
           {status.sentAt
-            ? `✓ נשלח ב־${formatISODate(new Date(status.sentAt).toISOString().slice(0, 10))}`
+            ? `✓ נשלח ב־${formatDateWithHebrew(new Date(status.sentAt).toISOString().slice(0, 10), false)}`
             : status.generatedAt
               ? 'נוצר מייל — טרם סומן כנשלח'
               : closed
@@ -182,9 +183,12 @@ export default function PayrollReportScreen() {
             </Text>
             {g.sessions.map((s) => (
               <View key={`${s.date}${s.start}`} style={styles.session}>
-                <Text style={styles.sessionDate}>
-                  {weekday(s.date)} {formatISODate(s.date).slice(0, 5)}
-                </Text>
+                <View style={styles.sessionDateBox}>
+                  <Text style={styles.sessionDate}>
+                    {weekday(s.date)} {formatISODate(s.date).slice(0, 5)}
+                  </Text>
+                  <Text style={styles.sessionHeb}>{hebrewDate(s.date, false)}</Text>
+                </View>
                 <Text style={styles.sessionTime}>
                   {`⁦${s.start}–${s.end}⁩`}
                   {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
@@ -260,7 +264,9 @@ const makeStyles = (colors: AppColors) =>
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
     },
-    sessionDate: { width: 70, fontSize: 13, fontWeight: '600', color: colors.text, textAlign: TEXT_RIGHT },
+    sessionDateBox: { width: 84 },
+    sessionHeb: { fontSize: 11, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    sessionDate: { fontSize: 13, fontWeight: '600', color: colors.text, textAlign: TEXT_RIGHT },
     sessionTime: { flex: 1, fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
     sessionHours: { fontSize: 13, fontWeight: '700', color: colors.brandDark },
     totals: {

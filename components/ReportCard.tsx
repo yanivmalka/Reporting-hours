@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { academicOf, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
+import { hebrewDate } from '../lib/hebrewDate';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -37,7 +38,10 @@ export function ReportCard({ report, workplaceName, pay }: ReportCardProps) {
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.name}>{workplaceName}</Text>
-        <Text style={styles.date}>{formatISODate(report.date)}</Text>
+        <View style={styles.dateBox}>
+          <Text style={styles.date}>{formatISODate(report.date)}</Text>
+          <Text style={styles.dateHeb}>{hebrewDate(report.date, false)}</Text>
+        </View>
       </View>
       {report.note ? <Text style={styles.note}>{report.note}</Text> : null}
       <Text style={styles.line}>
@@ -84,6 +88,13 @@ const makeStyles = (colors: AppColors) =>
       color: colors.text,
       textAlign: TEXT_RIGHT,
       flex: 1,
+    },
+    dateBox: {
+      alignItems: 'center',
+    },
+    dateHeb: {
+      fontSize: 11,
+      color: colors.textMuted,
     },
     date: {
       fontSize: 13,
