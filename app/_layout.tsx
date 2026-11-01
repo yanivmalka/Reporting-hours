@@ -4,7 +4,7 @@ import { Fragment, type ReactNode } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { DrawerProvider, HeaderStart } from '../components/AppDrawer';
+import { DrawerProvider, HeaderEnd, HeaderStart } from '../components/AppDrawer';
 import { ExitGuard } from '../components/ExitGuard';
 import { ToastProvider } from '../components/Toast';
 import { UpdateProvider } from '../components/UpdateChecker';
@@ -58,11 +58,15 @@ function Chrome() {
             headerTitleStyle: { fontWeight: '700' },
             headerBackTitle: t('common.back'),
             contentStyle: { backgroundColor: colors.background },
-            // בעברית תחילת הכותרת (headerLeft) מוצגת מימין: ☰ ואחריו חץ חזרה.
+            // דפוס אנדרואיד/Google בעברית: headerLeft מוצג מימין — ☰ במסך הראשי,
+            // חץ חזרה במסכים פנימיים; headerRight מוצג משמאל — ⋮ במסכים פנימיים.
             headerLeft: (props) => (
               <HeaderStart canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? colors.textOnBrand)} />
             ),
             headerBackVisible: false,
+            headerRight: (props) => (
+              <HeaderEnd canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? colors.textOnBrand)} />
+            ),
           }}
         >
           <Stack.Screen name="index" options={{ title: t('nav.home') }} />

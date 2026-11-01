@@ -65,29 +65,42 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onEdit,
           {report.carriedMinutes} דק׳ הועברו למונה "דקות עבודה מצטברות"
         </Text>
       ) : null}
-      {typeof pay === 'number' ? (
-        <Text style={styles.pay}>שכר: {formatShekels(pay)}</Text>
-      ) : pay === null ? (
-        <Text style={styles.carried}>שכר חודשי קבוע — נספר בסיכום החודשי</Text>
-      ) : null}
-      {typeof travel === 'number' && travel > 0 ? (
-        <Text style={styles.travel}>נסיעות: {formatShekels(travel)}</Text>
-      ) : travel === null ? (
-        <Text style={styles.carried}>נסיעות היום נספרו בדיווח אחר של אותו מקום</Text>
-      ) : null}
-      {onEdit || onLocked ? (
-        <View style={styles.actions}>
-          {locked ? (
-            <Pressable onPress={onLocked} style={[styles.actionBtn, styles.lockedBtn]} accessibilityRole="button">
-              <Text style={styles.lockedText}>🔒 נשלח לשכר — לביטול הדוח</Text>
+      {/* שורת שכר ונסיעות, ומשמאלה כפתור אייקון לעריכה (בגובה שתי השורות) */}
+      <View style={styles.bottomRow}>
+        <View style={styles.bottomTexts}>
+          {typeof pay === 'number' ? (
+            <Text style={styles.pay}>שכר: {formatShekels(pay)}</Text>
+          ) : pay === null ? (
+            <Text style={styles.carried}>שכר חודשי קבוע — נספר בסיכום החודשי</Text>
+          ) : null}
+          {typeof travel === 'number' && travel > 0 ? (
+            <Text style={styles.travel}>נסיעות: {formatShekels(travel)}</Text>
+          ) : travel === null ? (
+            <Text style={styles.carried}>נסיעות היום נספרו בדיווח אחר</Text>
+          ) : null}
+        </View>
+        {onEdit || onLocked ? (
+          locked ? (
+            <Pressable
+              onPress={onLocked}
+              style={[styles.iconBtn, styles.iconBtnLocked]}
+              accessibilityRole="button"
+              accessibilityLabel="הדוח לשכר נשלח — מעבר לביטול הדוח"
+            >
+              <Text style={styles.iconText}>🔒</Text>
             </Pressable>
           ) : (
-            <Pressable onPress={onEdit} style={styles.actionBtn} accessibilityRole="button">
-              <Text style={styles.actionText}>✎ עריכת הדיווח</Text>
+            <Pressable
+              onPress={onEdit}
+              style={styles.iconBtn}
+              accessibilityRole="button"
+              accessibilityLabel="עריכת הדיווח"
+            >
+              <Text style={[styles.iconText, styles.iconEdit]}>✎</Text>
             </Pressable>
-          )}
-        </View>
-      ) : null}
+          )
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -99,6 +112,35 @@ const makeStyles = (colors: AppColors) =>
       fontWeight: '600',
       color: colors.brandDark,
       textAlign: TEXT_RIGHT,
+    },
+    bottomRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    bottomTexts: {
+      flex: 1,
+      gap: spacing.xs,
+    },
+    iconBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.brand,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    iconBtnLocked: {
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    iconText: {
+      fontSize: 20,
+    },
+    iconEdit: {
+      color: colors.brand,
+      fontWeight: '700',
     },
     actions: {
       flexDirection: 'row',

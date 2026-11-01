@@ -86,29 +86,128 @@ export function DrawerToggle() {
 }
 
 /**
- * תחילת הכותרת (בעברית — צד ימין): כפתור התפריט ☰, ואחריו חץ חזרה כשיש
- * לאן לחזור. מחליף את headerLeft של המחסנית.
+ * תחילת הכותרת (בעברית — צד ימין), לפי הדפוס הסטנדרטי של אנדרואיד/Google:
+ * במסך הראשי — כפתור התפריט ☰; במסכים פנימיים (צלילה) — חץ חזרה בלבד.
  */
 export function HeaderStart({ canGoBack, tintColor }: { canGoBack?: boolean; tintColor?: string }) {
   const router = useRouter();
   const { isRTL } = useI18n();
+  if (!canGoBack) return <DrawerToggle />;
   return (
-    <View style={styles.headerStart}>
-      <DrawerToggle />
-      {canGoBack ? (
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="חזרה"
-          style={styles.back}
-        >
-          <Text style={[styles.backText, { color: tintColor }]}>{isRTL ? '→' : '←'}</Text>
-        </Pressable>
-      ) : null}
-    </View>
+    <Pressable
+      onPress={() => router.back()}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel="חזרה"
+      style={styles.back}
+    >
+      <Text style={[styles.backText, { color: tintColor }]}>{isRTL ? '→' : '←'}</Text>
+    </Pressable>
   );
 }
+
+/**
+ * סוף הכותרת (בעברית — צד שמאל): במסכים פנימיים — תפריט ⋮ שמשכפל את
+ * הניווט של תפריט ☰ (כמו ביומן Google). במסך הראשי — ריק.
+ */
+export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintColor?: string }) {
+  const router = useRouter();
+  const { t } = useI18n();
+  const { open: openDrawer } = useDrawer();
+  const menuStyles = useStyles(makeOverflowStyles);
+  const [open, setOpen] = useState(false);
+  if (!canGoBack) return null;
+
+  function go(href: Href) {
+    setOpen(false);
+    if (href === '/') router.dismissTo('/');
+    else router.push(href);
+  }
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="תפריט נוסף"
+        style={styles.overflowBtn}
+      >
+        <View style={[styles.dot, { backgroundColor: tintColor }]} />
+        <View style={[styles.dot, { backgroundColor: tintColor }]} />
+        <View style={[styles.dot, { backgroundColor: tintColor }]} />
+      </Pressable>
+      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={menuStyles.backdrop} onPress={() => setOpen(false)}>
+          <View style={menuStyles.menu}>
+            <ScrollView style={{ flexGrow: 0 }}>
+              {NAV_LINKS.map((link) => (
+                <Pressable
+                  key={String(link.href)}
+                  onPress={() => go(link.href)}
+                  style={({ pressed }) => [menuStyles.item, pressed && menuStyles.itemPressed]}
+                >
+                  <Text style={menuStyles.itemText}>{t(link.key)}</Text>
+                </Pressable>
+              ))}
+              <View style={menuStyles.divider} />
+              <Pressable
+                onPress={() => {
+                  setOpen(false);
+                  openDrawer();
+                }}
+                style={({ pressed }) => [menuStyles.item, pressed && menuStyles.itemPressed]}
+              >
+                <Text style={menuStyles.itemText}>הגדרות תצוגה ועדכונים…</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
+
+const makeOverflowStyles = (c: ColorScheme, layout: StyleLayout) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.15)',
+    },
+    // צמוד לפינה השמאלית־עליונה (סוף הכותרת בעברית), כמו תפריט ⋮ באנדרואיד.
+    menu: {
+      position: 'absolute',
+      top: Platform.OS === 'web' ? 52 : 44,
+      [layout.isRTL ? 'left' : 'right']: 8,
+      minWidth: 220,
+      maxHeight: '80%',
+      backgroundColor: c.surface,
+      borderRadius: radius.md,
+      paddingVertical: spacing.xs,
+      elevation: 8,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+    },
+    item: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: 12,
+    },
+    itemPressed: {
+      backgroundColor: c.brandLight,
+    },
+    itemText: {
+      fontSize: 15,
+      color: c.text,
+      textAlign: layout.textStart,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.border,
+      marginVertical: spacing.xs,
+    },
+  });
 
 const ANIM_MS = 220;
 
@@ -450,10 +549,17 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   });
 
 const styles = StyleSheet.create({
-  headerStart: {
-    flexDirection: 'row',
+  overflowBtn: {
+    width: 28,
+    height: 32,
     alignItems: 'center',
-    gap: 18,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
   back: {
     paddingHorizontal: 4,
