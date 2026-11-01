@@ -299,7 +299,19 @@ export default function ReportsScreen() {
       )}
 
       <View style={styles.action}>
-        <Button label="דיווח יום עבודה" onPress={() => router.push('/report')} />
+        <Button
+          label="דיווח יום עבודה"
+          onPress={() =>
+            // מסונן למקום עבודה / ליום אחד — האשף נפתח עם אותו מקום ותאריך.
+            router.push({
+              pathname: '/report',
+              params: {
+                wp: wpFilter ?? '',
+                date: range && range.from === range.to ? range.from : '',
+              },
+            })
+          }
+        />
       </View>
     </Screen>
   );

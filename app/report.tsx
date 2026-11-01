@@ -86,7 +86,13 @@ export default function ReportScreen() {
   const { showToast } = useToast();
   const navigation = useNavigation();
   /** עריכת דיווח קיים: ?id=<מזהה הדיווח> */
-  const { id: editId } = useLocalSearchParams<{ id?: string }>();
+  const {
+    id: editId,
+    wp: presetWp,
+    date: presetDate,
+  } = useLocalSearchParams<{ id?: string; wp?: string; date?: string }>();
+  // מקום עבודה / תאריך שנבחרו מראש (למשל מ"הדיווחים שלי" המסונן) — פעם אחת.
+  const presetApplied = useRef(false);
   /** הדיווח המקורי בעריכה (לתיקון המונה ולמחיקה) */
   const [editing, setEditing] = useState<WorkReport | null>(null);
   /** בעריכה: הדוח לשכר של החודש נשלח — הדיווח נעול */
@@ -168,6 +174,12 @@ export default function ReportScreen() {
             setStep('times');
           }
           return;
+        }
+        if (!presetApplied.current) {
+          presetApplied.current = true;
+          if (presetWp && list.some((w) => w.id === presetWp)) setWorkplaceId(presetWp);
+          if (presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)) setDate(presetDate);
+          if (presetWp && list.some((w) => w.id === presetWp)) return;
         }
         setWorkplaceId((current) => {
           if (current && list.some((w) => w.id === current)) return current;
@@ -394,8 +406,10 @@ export default function ReportScreen() {
   const travel = workplace && !travelCounted ? travelCostForDay(workplace, date) : 0;
   const workedDates = existing.map((r) => r.date);
   // קורסים קבועים שמתקיימים בתאריך שנבחר (במקום העבודה שנבחר, או בכולם).
-  const activeCourses = coursesOn(courses, date).filter((c) =>
-    workplaces.some((w) => w.id === c.workplaceId),
+  // נבחר מקום עבודה מראש — רק הקורסים שלו.
+  const lockWp = presetWp && workplaces.some((w) => w.id === presetWp) ? presetWp : null;
+  const activeCourses = coursesOn(courses, date).filter(
+    (c) => workplaces.some((w) => w.id === c.workplaceId) && (!lockWp || c.workplaceId === lockWp),
   );
 
   /**
@@ -419,8 +433,18 @@ export default function ReportScreen() {
     setBreaks(c.breakMinutes > 0 ? [{ id: makeBreakId(), minutes: String(c.breakMinutes) }] : []);
   }
   // קורסים שכבר דווחו באותו יום (אותו מקום עבודה ואותו נושא) — מסומנים ✓.
-  const reportedCourse = (c: Course) =>
-    existing.some((r) => r.date === date && r.workplaceId === c.workplaceId && r.note === c.name);
+  // קורס "דווח" — יש באותו יום דיווח לאותו מקום שחופף בשעות לקורס (או שנושאו שם הקורס).
+  const reportedCourse = (c: Course) => {
+    const cs = parseTime(c.start) ?? 0;
+    const ce = parseTime(c.end) ?? 0;
+    return existing.some((r) => {
+      if (r.date !== date || r.workplaceId !== c.workplaceId || r.id === editing?.id) return false;
+      if (r.note === c.name) return true;
+      const rs = parseTime(r.start) ?? 0;
+      const re = parseTime(r.end) ?? 0;
+      return rs < ce && re > cs;
+    });
+  };
   const workplaceName = (id: string | null) => workplaces.find((w) => w.id === id)?.name ?? '';
   const selectedCourse = courses.find((c) => c.id === courseId) ?? null;
 
@@ -430,7 +454,14 @@ export default function ReportScreen() {
         setErrors({ date: 'תאריך לא תקין' });
         return;
       }
-      setStep(activeCourses.length > 0 ? 'course' : 'workplace');
+      if (activeCourses.length > 0) setStep('course');
+      else if (lockWp) {
+        // מקום העבודה כבר נבחר ואין לו קורסים ביום זה — ישר לשעות.
+        setWorkplaceId(lockWp);
+        setCourseId(null);
+        setViaCourse(false);
+        setStep('times');
+      } else setStep('workplace');
       return;
     }
     if (step === 'times') {
@@ -448,7 +479,8 @@ export default function ReportScreen() {
     if (step === 'course' || step === 'workplace') {
       if (step === 'workplace' && activeCourses.length > 0) setStep('course');
       else setStep('date');
-    } else if (step === 'times') setStep(viaCourse ? 'course' : 'workplace');
+    } else if (step === 'times')
+      setStep(viaCourse ? 'course' : lockWp && activeCourses.length === 0 ? 'date' : 'workplace');
     else if (step === 'summary') setStep('times');
   }
 
