@@ -52,6 +52,7 @@ export default function ReportScreen() {
 
   const [workplaceId, setWorkplaceId] = useState<string | null>(null);
   const [date, setDate] = useState(todayISO());
+  const [note, setNote] = useState('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [breaks, setBreaks] = useState<BreakRow[]>([]);
@@ -143,6 +144,7 @@ export default function ReportScreen() {
         .map((row) => ({ id: row.id, minutes: parseNum(row.minutes) }))
         .filter((b) => b.minutes > 0),
       carriedMinutes: carried,
+      ...(note.trim() ? { note: note.trim() } : {}),
     });
 
     if (carried > 0) {
@@ -228,6 +230,10 @@ export default function ReportScreen() {
 
       <FormField label="תאריך" hint="פורמט YYYY-MM-DD" error={errors.date}>
         <TextField value={date} onChangeText={setDate} invalid={Boolean(errors.date)} />
+      </FormField>
+
+      <FormField label="נושא / הערה" hint="רשות — למשל נושא ההרצאה או ההגשה">
+        <TextField value={note} onChangeText={setNote} placeholder="תולדות האדריכלות — שיעור 4" />
       </FormField>
 
       <View style={styles.timesRow}>

@@ -38,6 +38,7 @@ export function ReportCard({ report, workplaceName, pay }: ReportCardProps) {
         <Text style={styles.name}>{workplaceName}</Text>
         <Text style={styles.date}>{formatISODate(report.date)}</Text>
       </View>
+      {report.note ? <Text style={styles.note}>{report.note}</Text> : null}
       <Text style={styles.line}>
         {report.start}–{report.end}
         {breakTotal > 0 ? ` · הפסקות ${formatDuration(breakTotal)}` : ''}
@@ -86,6 +87,11 @@ const makeStyles = (colors: AppColors) =>
     date: {
       fontSize: 13,
       color: colors.textMuted,
+    },
+    note: {
+      fontSize: 14,
+      color: colors.text,
+      textAlign: 'right',
     },
     line: {
       fontSize: 13,

@@ -32,12 +32,16 @@ export type WorkReport = {
    * הדקות העודפות בדיווח עצמו.
    */
   carriedMinutes: number;
+  /** הערה חופשית — נושא ההרצאה / הגשה / קבוצה (רשות) */
+  note?: string;
+  /** דיווח שנוצר כנתוני הדגמה (lib/demo.ts) — נמחק ב"איפוס נתוני הדגמה" */
+  demo?: boolean;
   /** חותמת יצירה (מילישניות) — לסידור דיווחים באותו תאריך */
   createdAt: number;
 };
 
 /** נתוני טופס לפני שמירה — בלי שדות שנוצרים אוטומטית. */
-export type WorkReportDraft = Omit<WorkReport, 'id' | 'createdAt'>;
+export type WorkReportDraft = Omit<WorkReport, 'id' | 'createdAt' | 'demo'>;
 
 const STORAGE_KEY = 'reporting-hours/reports/v1';
 

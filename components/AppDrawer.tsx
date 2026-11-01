@@ -103,6 +103,7 @@ const NAV_LINKS: { href: Href; key: string }[] = [
   { href: '/workplaces', key: 'nav.workplaces' },
   { href: '/settings', key: 'nav.settings' },
   { href: '/trash', key: 'nav.trash' },
+  { href: '/data', key: 'nav.data' },
 ];
 
 function AppDrawer() {

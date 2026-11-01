@@ -67,3 +67,11 @@ export function formatDuration(
   if (minutes > 0 || hours === 0) parts.push(`${minutes} ${labels.minutesShort}`);
   return parts.join(labels.join);
 }
+
+/** דקות מתחילת היום → "HH:MM" (ההפך מ־parseTime). */
+export function formatTime(totalMinutes: number): string {
+  const safe = Math.max(0, Math.min(23 * 60 + 59, Math.round(totalMinutes)));
+  const h = String(Math.floor(safe / 60)).padStart(2, '0');
+  const m = String(safe % 60).padStart(2, '0');
+  return `${h}:${m}`;
+}

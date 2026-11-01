@@ -27,10 +27,12 @@ export type Workplace = {
    * מוצג ברשימות הרגילות. אחרי {@link TRASH_RETENTION_DAYS} ימים הוא נמחק לצמיתות.
    */
   deletedAt?: number;
+  /** מקום עבודה שנוצר כנתוני הדגמה (lib/demo.ts) */
+  demo?: boolean;
 };
 
 /** נתוני טופס לפני שמירה — כמו Workplace אך בלי מזהה ובלי שדות מערכת. */
-export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt'>;
+export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'demo'>;
 
 const STORAGE_KEY = 'reporting-hours/workplaces/v1';
 

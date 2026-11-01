@@ -40,6 +40,11 @@ export default function HomeScreen() {
           subtitle="בסיס חישוב השכר, מונה הדקות המצטברות, וסיכומי החודש"
           onPress={() => router.push('/settings')}
         />
+        <NavCard
+          title="ניהול נתונים"
+          subtitle="נתוני הדגמה, איפוס דיווחים או איפוס מלא"
+          onPress={() => router.push('/data')}
+        />
       </View>
 
       <Text style={styles.footnote}>

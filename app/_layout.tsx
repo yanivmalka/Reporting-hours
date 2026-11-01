@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DrawerProvider, DrawerToggle } from '../components/AppDrawer';
 import { ToastProvider } from '../components/Toast';
 import { UpdateChecker } from '../components/UpdateChecker';
+import { DemoSeeder } from '../components/DemoSeeder';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -35,6 +36,7 @@ function Chrome() {
     <DrawerProvider>
       <StatusBar style="light" />
       <UpdateChecker />
+      <DemoSeeder />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.brand },
@@ -55,6 +57,7 @@ function Chrome() {
         />
         <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
         <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
+        <Stack.Screen name="data" options={{ title: t('nav.data') }} />
       </Stack>
     </DrawerProvider>
   );

@@ -39,6 +39,7 @@ const he = {
     workplaceForm: 'מקום עבודה',
     trash: 'אשפה',
     settings: 'דקות מצטברות',
+    data: 'ניהול נתונים',
   },
   home: {
     welcome: 'ברוך הבא 👋',
@@ -191,6 +192,7 @@ const en: StringTree = {
     workplaceForm: 'Workplace',
     trash: 'Trash',
     settings: 'Accumulated Minutes',
+    data: 'Data management',
   },
   home: {
     welcome: 'Welcome 👋',
