@@ -25,6 +25,9 @@ export default function PayrollScreen() {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const [items, setItems] = useState<PayrollItem[] | null>(null);
+  // קבוצות מתקפלות: ממתינים והחודש הנוכחי פתוחים, נשלחו — סגור.
+  const [open, setOpen] = useState({ pending: true, current: true, sent: false });
+  const toggle = (k: keyof typeof open) => setOpen((o) => ({ ...o, [k]: !o[k] }));
 
   useFocusEffect(
     useCallback(() => {
@@ -55,14 +58,14 @@ export default function PayrollScreen() {
     .sort((a, b) => (b.status.sentAt ?? 0) - (a.status.sentAt ?? 0))
     .slice(0, 12);
 
-  const open = (i: PayrollItem) =>
+  const openItem = (i: PayrollItem) =>
     router.push({
       pathname: '/payroll-report',
       params: { wp: i.workplace.id, start: i.period.start },
     });
 
   const Row = ({ item, kind }: { item: PayrollItem; kind: 'pending' | 'current' | 'sent' }) => (
-    <Pressable onPress={() => open(item)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+    <Pressable onPress={() => openItem(item)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       <View style={styles.rowHead}>
         <Text style={styles.rowName} numberOfLines={2}>
           {item.workplace.name}
@@ -107,10 +110,13 @@ export default function PayrollScreen() {
         </Text>
       </View>
 
-      <Text style={styles.section}>
-        ממתינים לשליחה {pending.length > 0 ? `(${pending.length})` : ''}
-      </Text>
-      {pending.length === 0 ? (
+      <SectionHeader
+        title={`ממתינים לשליחה${pending.length > 0 ? ` (${pending.length})` : ''}`}
+        open={open.pending}
+        onToggle={() => toggle('pending')}
+        styles={styles}
+      />
+      {!open.pending ? null : pending.length === 0 ? (
         <Text style={styles.empty}>אין דוחות שממתינים לשליחה 🎉</Text>
       ) : (
         <View style={styles.list}>
@@ -120,24 +126,57 @@ export default function PayrollScreen() {
         </View>
       )}
 
-      <Text style={styles.section}>החודש הנוכחי — בהכנה</Text>
-      <View style={styles.list}>
-        {current.map((i) => (
-          <Row key={`${i.workplace.id}|${i.period.start}`} item={i} kind="current" />
-        ))}
-      </View>
+      <SectionHeader
+        title={`החודש הנוכחי — בהכנה (${current.length})`}
+        open={open.current}
+        onToggle={() => toggle('current')}
+        styles={styles}
+      />
+      {open.current ? (
+        <View style={styles.list}>
+          {current.map((i) => (
+            <Row key={`${i.workplace.id}|${i.period.start}`} item={i} kind="current" />
+          ))}
+        </View>
+      ) : null}
 
       {sent.length > 0 ? (
         <>
-          <Text style={styles.section}>נשלחו לאחרונה</Text>
-          <View style={styles.list}>
-            {sent.map((i) => (
-              <Row key={`${i.workplace.id}|${i.period.start}`} item={i} kind="sent" />
-            ))}
-          </View>
+          <SectionHeader
+            title={`נשלחו לאחרונה (${sent.length})`}
+            open={open.sent}
+            onToggle={() => toggle('sent')}
+            styles={styles}
+          />
+          {open.sent ? (
+            <View style={styles.list}>
+              {sent.map((i) => (
+                <Row key={`${i.workplace.id}|${i.period.start}`} item={i} kind="sent" />
+              ))}
+            </View>
+          ) : null}
         </>
       ) : null}
     </Screen>
+  );
+}
+
+function SectionHeader({
+  title,
+  open,
+  onToggle,
+  styles,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  return (
+    <Pressable onPress={onToggle} style={styles.sectionHead} accessibilityRole="button">
+      <Text style={styles.section}>{title}</Text>
+      <Text style={styles.sectionChevron}>{open ? '▾' : '◂'}</Text>
+    </Pressable>
   );
 }
 
@@ -147,12 +186,19 @@ const makeStyles = (colors: AppColors) =>
     intro: { gap: spacing.sm },
     title: { fontSize: 22, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     subtitle: { fontSize: 14, lineHeight: 21, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    sectionHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.xs,
+      marginTop: spacing.sm,
+    },
+    sectionChevron: { fontSize: 16, fontWeight: '800', color: colors.textMuted },
     section: {
       fontSize: 15,
       fontWeight: '800',
       color: colors.text,
       textAlign: TEXT_RIGHT,
-      marginTop: spacing.sm,
     },
     empty: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
     list: { gap: spacing.sm },

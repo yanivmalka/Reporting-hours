@@ -16,7 +16,7 @@ import { loadReports, saveReports, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import { formatTime } from './time';
 import { loadCourses, saveCourses, type Course } from './courses';
-import { loadPayrollStatus, payrollItems, savePayrollStatus, statusKey } from './payroll';
+import { expectedPayment, loadPayrollStatus, payrollItems, savePayrollStatus, statusKey } from './payroll';
 import { saveWorkplaces, type Workplace } from './workplaces';
 
 const KEY_PREFIX = 'reporting-hours/';
@@ -494,9 +494,11 @@ export async function loadDemoData(): Promise<number> {
   const fromMonth = `${firstDate.slice(0, 7)}-01`;
   const userCourses = (await loadCourses()).filter((c) => !c.demo);
   await saveCourses([...userCourses, ...demoCourses(fromMonth, now)]);
-  await seedDemoPayroll(demoWps, reports);
   const current = await loadReports();
   await saveReports([...current.filter((r) => !r.demo), ...reports]);
+  // אחרי שמירת הדיווחים — מצב דוחות השכר, תשלומים, מס ותיאום מס.
+  await seedDemoPayroll(demoWps, reports);
+  await seedDemoExtras();
 
   // מונה מצטבר לכל סמינר: רוב הדקות כבר נפדו; בחלק מהסמינרים נשארה שעה
   // אחת זמינה לפדיון, ובאחרים רק יתרה קטנה.
@@ -643,6 +645,77 @@ export async function ensureDemoPayroll(): Promise<boolean> {
   await saveWorkplaces(updated);
   const reports = (await loadReports()).filter((r) => r.demo);
   await seedDemoPayroll(updated.filter((w) => w.demo && !w.deletedAt), reports);
+  notify();
+  return true;
+}
+
+/** אחוזי מס לסמינרי ההדגמה */
+const DEMO_TAX: Record<string, number> = {
+  demo_wp_1: 15,
+  demo_wp_2: 20,
+  demo_wp_3: 10,
+  demo_wp_4: 25,
+  demo_wp_5: 15,
+  demo_wp_6: 20,
+  demo_wp_7: 10,
+  demo_wp_8: 31,
+};
+
+/**
+ * תוספות הדגמה: אחוז מס, תיאום מס לשנה הנוכחית (שני סמינרים לא נכללו),
+ * ותשלומים — דוחות שנשלחו ומועד התשלום שלהם עבר סומנו כשולמו, חוץ מאחד
+ * שנשאר "באיחור" — כדי שהתזכורות יופיעו.
+ */
+async function seedDemoExtras(): Promise<void> {
+  const all = await readJSON<Workplace[]>(WORKPLACES_KEY, []);
+  const year = String(new Date().getFullYear());
+  const updated = all.map((w, i) =>
+    w.demo && DEMO_TAX[w.id] != null
+      ? {
+          ...w,
+          taxPercent: DEMO_TAX[w.id],
+          employeeNumber: w.employeeNumber ?? String(41000 + i * 137),
+          taxCoordination:
+            w.id === 'demo_wp_3' || w.id === 'demo_wp_8'
+              ? {}
+              : { [year]: `${year}-01-${String(5 + i).padStart(2, '0')}` },
+        }
+      : w,
+  );
+  await saveWorkplaces(updated);
+
+  const reports = (await loadReports()).filter((r) => r.demo);
+  const statuses = await loadPayrollStatus();
+  const demoWps = updated.filter((w) => w.demo && !w.deletedAt);
+  const today = new Date().toISOString().slice(0, 10);
+  let leftOverdue = false;
+  for (const item of payrollItems(demoWps, reports, statuses)) {
+    if (!item.status.sentAt) continue;
+    const due = expectedPayment(item.workplace, item.period);
+    if (due >= today) continue;
+    if (!leftOverdue && item.workplace.id === 'demo_wp_6') {
+      leftOverdue = true; // נשאר באיחור
+      continue;
+    }
+    const n = reports.filter(
+      (r) => r.workplaceId === item.workplace.id && r.date >= item.period.start && r.date <= item.period.end,
+    ).length;
+    statuses[statusKey(item.workplace.id, item.period.start)] = {
+      ...item.status,
+      paidAt: due,
+      paidAmount: Math.round(n * 600 * (1 - (DEMO_TAX[item.workplace.id] ?? 0) / 100)),
+    };
+  }
+  await savePayrollStatus(statuses);
+}
+
+/** הדגמה שנטענה לפני מעקב התשלומים ותיאום המס — משלימה פעם אחת. */
+export async function ensureDemoExtras(): Promise<boolean> {
+  if (!(await isDemoLoaded())) return false;
+  const all = await readJSON<Workplace[]>(WORKPLACES_KEY, []);
+  const demoWps = all.filter((w) => w.demo && !w.deletedAt);
+  if (demoWps.length === 0 || demoWps.some((w) => w.taxPercent != null)) return false;
+  await seedDemoExtras();
   notify();
   return true;
 }

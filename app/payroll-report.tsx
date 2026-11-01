@@ -1,7 +1,12 @@
 import { useCallback, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Linking, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, Share, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
+import { PaymentDialog } from '../components/PaymentDialog';
+import { TextField } from '../components/TextField';
+import { usePayBasis } from '../lib/payBasis';
+import { loadProfile, type Profile } from '../lib/profile';
+import { taxPercentOf, workplaceAt } from '../lib/workplaces';
 import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
@@ -9,6 +14,9 @@ import { loadCourses } from '../lib/courses';
 import { dateRange } from '../lib/dashboard';
 import {
   buildPayrollReport,
+  expectedPayment,
+  grossAmount,
+  netAmount,
   loadPayrollStatus,
   payrollBody,
   payrollMailto,
@@ -48,27 +56,40 @@ export default function PayrollReportScreen() {
   const [report, setReport] = useState<PayrollReport | null>(null);
   const [status, setStatus] = useState<PayrollStatus>({});
   const [missing, setMissing] = useState(false);
+  const { basis } = usePayBasis();
+  const [profile, setProfile] = useState<Profile | undefined>(undefined);
+  /** דיאלוג ביטול דוח שנשלח — עם סיבה */
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [payOpen, setPayOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([loadWorkplaces(), loadReports(), loadCourses(), loadPayrollStatus()]).then(
-        ([workplaces, reports, courses, st]) => {
+      Promise.all([
+        loadWorkplaces(),
+        loadReports(),
+        loadCourses(),
+        loadPayrollStatus(),
+        loadProfile(),
+      ]).then(
+        ([workplaces, reports, courses, st, prof]) => {
           if (!active) return;
+          setProfile(prof);
           const w = workplaces.find((x) => x.id === params.wp);
           if (!w || !params.start) {
             setMissing(true);
             return;
           }
           const period = periodStartingAt(w, params.start);
-          setReport(buildPayrollReport(w, period, reports, courses));
+          setReport(buildPayrollReport(w, period, reports, courses, basis));
           setStatus(st[statusKey(w.id, period.start)] ?? {});
         },
       );
       return () => {
         active = false;
       };
-    }, [params.wp, params.start]),
+    }, [params.wp, params.start, basis]),
   );
 
   if (missing) {
@@ -92,17 +113,43 @@ export default function PayrollReportScreen() {
   const closed = period.end < new Date().toISOString().slice(0, 10);
 
   async function setSent(sent: boolean) {
-    const map = await updatePayrollStatus(
-      workplace.id,
-      period.start,
-      sent ? { sentAt: Date.now() } : { sentAt: undefined },
-    );
+    const map = await updatePayrollStatus(workplace.id, period.start, { sentAt: Date.now() });
     setStatus(map[statusKey(workplace.id, period.start)] ?? {});
-    showToast(sent ? 'הדוח סומן כנשלח' : 'הסימון בוטל');
+    if (sent) showToast('הדוח סומן כנשלח — הדיווחים בחודש זה נעולים לעריכה');
+  }
+
+  /** ביטול דוח שנשלח — חובה לציין סיבה; פותח את הדיווחים לעריכה. */
+  async function cancelSent() {
+    const reason = cancelReason.trim();
+    if (!reason) return;
+    const map = await updatePayrollStatus(workplace.id, period.start, {
+      sentAt: undefined,
+      cancellations: [...(status.cancellations ?? []), { at: Date.now(), reason }],
+    });
+    setStatus(map[statusKey(workplace.id, period.start)] ?? {});
+    setCancelOpen(false);
+    setCancelReason('');
+    showToast('הדוח בוטל — אפשר לערוך את הדיווחים ולשלוח מחדש');
+  }
+
+  async function savePayment(date: string, amount: number) {
+    const map = await updatePayrollStatus(workplace.id, period.start, { paidAt: date, paidAmount: amount });
+    setStatus(map[statusKey(workplace.id, period.start)] ?? {});
+    setPayOpen(false);
+    showToast('התשלום עודכן');
+  }
+
+  async function clearPayment() {
+    const map = await updatePayrollStatus(workplace.id, period.start, {
+      paidAt: undefined,
+      paidAmount: undefined,
+    });
+    setStatus(map[statusKey(workplace.id, period.start)] ?? {});
+    setPayOpen(false);
   }
 
   async function createEmail() {
-    const url = payrollMailto(report as PayrollReport);
+    const url = payrollMailto(report as PayrollReport, profile);
     try {
       await Linking.openURL(url);
       const map = await updatePayrollStatus(workplace.id, period.start, { generatedAt: Date.now() });
@@ -116,7 +163,7 @@ export default function PayrollReportScreen() {
     try {
       await Share.share({
         title: payrollSubject(report as PayrollReport),
-        message: `${payrollSubject(report as PayrollReport)}\n\n${payrollBody(report as PayrollReport)}`,
+        message: `${payrollSubject(report as PayrollReport)}\n\n${payrollBody(report as PayrollReport, profile)}`,
       });
       const map = await updatePayrollStatus(workplace.id, period.start, { generatedAt: Date.now() });
       setStatus(map[statusKey(workplace.id, period.start)] ?? {});
@@ -126,6 +173,15 @@ export default function PayrollReportScreen() {
   }
 
   const empty = report.groups.length === 0;
+  const termsNow = workplaceAt(workplace, period.end);
+  const tax = taxPercentOf(termsNow);
+  const expected = expectedPayment(workplace, period);
+  const rateText =
+    report.paymentType === 'monthly'
+      ? `משכורת חודשית ${report.rates.map((r) => formatShekels(r)).join(' / ')}`
+      : `${report.rates.map((r) => formatShekels(r)).join(' / ')} לשעה${
+          basis === 'academic' ? ' אקדמית' : ''
+        }`;
 
   return (
     <Screen>
@@ -214,26 +270,118 @@ export default function PayrollReportScreen() {
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>סה״כ נסיעות</Text>
           <Text style={styles.totalValue}>
-            {hasTravelCost(workplace)
-              ? `${formatShekels(report.travel)} (${report.days} × ${workplace.tripsPerDay} × ${formatShekels(workplace.travelCostPerDirection)})`
-              : 'אין'}
+            {report.travel > 0 || hasTravelCost(termsNow) ? formatShekels(report.travel) : 'אין'}
           </Text>
         </View>
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>תעריף</Text>
+          <Text style={styles.totalValue}>{rateText}</Text>
+        </View>
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>שכר</Text>
+          <Text style={styles.totalValue}>{formatShekels(Math.round(report.pay))}</Text>
+        </View>
+        <View style={styles.totalRow}>
+          <Text style={styles.totalBig}>סכום לתשלום</Text>
+          <Text style={styles.totalBig}>{formatShekels(grossAmount(report))}</Text>
+        </View>
+        {tax > 0 ? (
+          <Text style={styles.totalNote}>
+            בניכוי מס {tax}% ≈ {formatShekels(netAmount(report))} · התעריף לא מופיע במייל
+          </Text>
+        ) : (
+          <Text style={styles.totalNote}>התעריף לא מופיע במייל הנשלח</Text>
+        )}
       </View>
+
+      {status.sentAt ? (
+        <View style={styles.card}>
+          <Text style={styles.label}>תשלום</Text>
+          <Text style={[styles.email, status.paidAt ? styles.statusSent : null]}>
+            {status.paidAt
+              ? `✓ שולם ${formatShekels(status.paidAmount ?? 0)} ב־${formatDateWithHebrew(status.paidAt, false)}`
+              : `טרם שולם · צפוי עד ${formatDateWithHebrew(expected, false)}`}
+          </Text>
+          <Button
+            label={status.paidAt ? 'עריכת התשלום' : 'סימון כשולם'}
+            variant="secondary"
+            onPress={() => setPayOpen(true)}
+          />
+        </View>
+      ) : null}
+
+      {status.cancellations?.length ? (
+        <View style={styles.card}>
+          <Text style={styles.label}>ביטולים קודמים</Text>
+          {status.cancellations.map((c) => (
+            <Text key={c.at} style={styles.cc}>
+              {formatDateWithHebrew(new Date(c.at).toISOString().slice(0, 10), false)} — {c.reason}
+            </Text>
+          ))}
+        </View>
+      ) : null}
 
       <Button label="יצירת מייל לשליחה" onPress={createEmail} disabled={empty} />
       <Button label="שיתוף / העתקה" variant="secondary" onPress={share} disabled={empty} />
       {status.sentAt ? (
-        <Button label="ביטול סימון 'נשלח'" variant="secondary" onPress={() => setSent(false)} />
+        <Button label="ביטול הדוח שנשלח (לתיקון)" variant="danger" onPress={() => setCancelOpen(true)} />
       ) : (
         <Button label="סימון כנשלח" variant="secondary" onPress={() => setSent(true)} disabled={empty} />
       )}
+
+      <PaymentDialog
+        visible={payOpen}
+        title={`תשלום — ${periodTitle(period)}`}
+        gross={grossAmount(report)}
+        net={netAmount(report)}
+        taxPercent={tax}
+        initialDate={status.paidAt}
+        initialAmount={status.paidAmount}
+        onSave={savePayment}
+        onClear={status.paidAt ? clearPayment : undefined}
+        onClose={() => setPayOpen(false)}
+      />
+
+      <Modal transparent animationType="fade" visible={cancelOpen} onRequestClose={() => setCancelOpen(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.dialog}>
+            <Text style={styles.title}>ביטול הדוח שנשלח</Text>
+            <Text style={styles.subtitle}>
+              הדיווחים בחודש זה ייפתחו לעריכה, והדוח יחזור ל"ממתינים לשליחה". הסיבה נשמרת בהיסטוריה.
+            </Text>
+            <TextField
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              placeholder="למשל: תיקון שעות ביום 12/10"
+            />
+            <Button label="ביטול הדוח" variant="danger" onPress={cancelSent} disabled={!cancelReason.trim()} />
+            <Button label="חזרה" variant="secondary" onPress={() => setCancelOpen(false)} />
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    totalBig: { fontSize: 17, fontWeight: '800', color: colors.brandDark, textAlign: TEXT_RIGHT },
+    totalNote: { fontSize: 12, color: colors.brandDark, textAlign: TEXT_RIGHT },
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.lg,
+    },
+    dialog: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: colors.surface,
+      borderRadius: radius.md,
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     header: { gap: 4 },
     title: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },

@@ -1,5 +1,5 @@
 import type { WorkReport } from './reports';
-import type { Workplace } from './workplaces';
+import { workplaceAt, type Workplace } from './workplaces';
 
 /**
  * חישוב נסיעות (שלב 5 ב־WISHLIST, סעיף 5 — "חישוב נסיעות").
@@ -54,11 +54,19 @@ export function travelCostForWorkplace(
   workplace: Workplace,
   reports: readonly WorkReport[],
 ): number {
-  if (!hasTravelCost(workplace)) return 0;
-  const perDirection = nonNegative(workplace.travelCostPerDirection);
-  const tripsPerDay = nonNegative(workplace.tripsPerDay);
-  const days = reportedWorkdays(reports, workplace.id);
-  return perDirection * tripsPerDay * days;
+  // לכל יום עבודה — לפי התנאים שחלו באותו יום (היסטוריית תנאים).
+  const dates = new Set<string>();
+  for (const r of reports) if (r.workplaceId === workplace.id && r.date) dates.add(r.date);
+  let total = 0;
+  for (const date of dates) total += travelCostForDay(workplace, date);
+  return total;
+}
+
+/** עלות הנסיעות ליום עבודה אחד במקום עבודה, לפי התנאים שחלו באותו יום. */
+export function travelCostForDay(workplace: Workplace, date?: string): number {
+  const w = workplaceAt(workplace, date);
+  if (!hasTravelCost(w)) return 0;
+  return nonNegative(w.travelCostPerDirection) * nonNegative(w.tripsPerDay);
 }
 
 /** פירוט עלות הנסיעות של מקום עבודה אחד — לתצוגה בכרטיס או בסיכום. */
@@ -101,7 +109,7 @@ export function travelBreakdown(
       days,
       tripsPerDay,
       costPerDirection,
-      total: applies ? costPerDirection * tripsPerDay * days : 0,
+      total: travelCostForWorkplace(workplace, reports),
     };
   });
   const total = perWorkplace.reduce((sum, row) => sum + row.total, 0);

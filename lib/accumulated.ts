@@ -125,6 +125,18 @@ export async function addAccumulatedMinutes(
   );
 }
 
+/**
+ * תיקון המונה של מקום עבודה בעריכה/מחיקה של דיווח: delta יכול להיות שלילי
+ * (הדקות שהדיווח הישן העביר מוחזרות). המונה לא יורד מתחת ל־0.
+ */
+export async function adjustAccumulated(workplaceId: string, delta: number): Promise<AccumulatedState> {
+  const current = await loadAccumulated();
+  if (!Number.isFinite(delta) || delta === 0) return current;
+  return saveAccumulated(
+    withEntry(current, workplaceId, (e) => ({ ...e, minutes: Math.max(0, e.minutes + Math.round(delta)) })),
+  );
+}
+
 /** כמה שעות אקדמיות שלמות אפשר לפדות ממונה. */
 export function redeemableHours(entry: AccumulatedEntry): number {
   return Math.floor(entry.minutes / ACADEMIC_HOUR_MINUTES);

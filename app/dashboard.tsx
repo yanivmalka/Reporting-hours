@@ -21,6 +21,7 @@ import {
   workplaceShares,
 } from '../lib/dashboard';
 import { usePayBasis } from '../lib/payBasis';
+import { todayISO } from '../lib/time';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, paymentTermsLabel, type Workplace } from '../lib/workplaces';
@@ -69,8 +70,18 @@ export default function DashboardScreen() {
   const [metric, setMetric] = useState<Metric>('pay');
 
   /** מעבר ל"הדיווחים שלי" עם סינון מוכן. */
-  const openReports = (filter: { wp?: string; when?: string }) =>
-    router.push({ pathname: '/reports', params: { wp: filter.wp ?? '', when: filter.when ?? '' } });
+  // n — מזהה ייחודי לכל מעבר, כדי שהסינון יוחל גם כשנכנסים שוב עם אותם ערכים.
+  const openReports = (filter: { wp?: string; when?: string; from?: string; to?: string }) =>
+    router.push({
+      pathname: '/reports',
+      params: {
+        wp: filter.wp ?? '',
+        when: filter.when ?? '',
+        from: filter.from ?? '',
+        to: filter.to ?? '',
+        n: String(Date.now()),
+      },
+    });
 
   useFocusEffect(
     useCallback(() => {
@@ -275,7 +286,9 @@ export default function DashboardScreen() {
         {view.shares.map((s) => (
           <ShareRow
             key={s.workplace.id}
-            onPress={() => openReports({ wp: s.workplace.id })}
+            onPress={() =>
+              openReports({ wp: s.workplace.id, from: `${view.firstMonth}-01`, to: todayISO() })
+            }
             label={s.workplace.name}
             value={`${money(s.totals.pay)} · ${Math.round(s.share * 100)}%`}
             fraction={s.share / (view.shares[0]?.share || 1)}

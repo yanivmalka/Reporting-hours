@@ -11,10 +11,15 @@ import { occursOn, type Course } from './courses';
 import { currentPayPeriod, type PayPeriod } from './dashboard';
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
-import { formatShekels, hasTravelCost } from './travel';
+import { formatShekels, hasTravelCost, travelCostForWorkplace } from './travel';
 import { parseTime } from './time';
 import { hebrewDate, hebrewRange } from './hebrewDate';
-import type { Workplace } from './workplaces';
+import { workplaceAt, taxPercentOf, type Workplace } from './workplaces';
+import { workplacePay } from './pay';
+import type { PayBasis } from './payBasis';
+import { expectedPaymentDate } from './dashboard';
+import { paymentTermsOf } from './workplaces';
+import { signatureLines, type Profile } from './profile';
 
 // ───────────────────────── מצב הדוחות ─────────────────────────
 
@@ -23,7 +28,16 @@ export type PayrollStatus = {
   generatedAt?: number;
   /** מתי סומן כנשלח */
   sentAt?: number;
+  /** ביטולי דוח שנשלח (כדי לתקן דיווחים) — מתי ולמה */
+  cancellations?: { at: number; reason: string }[];
+  /** תאריך קבלת התשלום ("YYYY-MM-DD") */
+  paidAt?: string;
+  /** הסכום שהתקבל בפועל (₪) */
+  paidAmount?: number;
 };
+
+/** האם הדוח נעול לעריכה (נשלח לשכר ולא בוטל). */
+export const isLocked = (st: PayrollStatus | undefined) => Boolean(st?.sentAt);
 
 type StatusMap = Record<string, PayrollStatus>;
 
@@ -144,6 +158,11 @@ export type PayrollReport = {
   netMinutes: number;
   days: number;
   travel: number;
+  /** שכר מחושב (ברוטו, לפי התעריפים שחלו בכל תאריך) */
+  pay: number;
+  /** התעריפים שחלו בתקופה (לשעה או חודשי) — לתצוגה באפליקציה בלבד */
+  rates: number[];
+  paymentType: 'hourly' | 'monthly';
 };
 
 export const NO_COURSE = 'עבודה שלא במסגרת קורס קבוע';
@@ -168,6 +187,7 @@ export function buildPayrollReport(
   period: PayPeriod,
   reports: readonly WorkReport[],
   courses: readonly Course[],
+  basis: PayBasis = 'academic',
 ): PayrollReport {
   const mine = reports
     .filter((r) => r.workplaceId === workplace.id && r.date >= period.start && r.date <= period.end)
@@ -189,10 +209,14 @@ export function buildPayrollReport(
     groups.set(name, g);
   }
   const days = new Set(mine.map((r) => r.date)).size;
-  const travel = hasTravelCost(workplace)
-    ? workplace.travelCostPerDirection * workplace.tripsPerDay * days
-    : 0;
+  const travel = travelCostForWorkplace(workplace, mine);
+  const rates = [...new Set(mine.map((r) => workplaceAt(workplace, r.date).rate))];
+  const last = mine[mine.length - 1];
+  const paymentType = workplaceAt(workplace, last?.date).paymentType;
   return {
+    pay: workplacePay(workplace, mine, basis),
+    rates: rates.length ? rates : [workplace.rate],
+    paymentType,
     workplace,
     period,
     groups: [...groups.values()].sort((a, b) =>
@@ -234,8 +258,14 @@ export function payrollSubject(report: PayrollReport): string {
   return `דיווח שעות — ${periodTitle(report.period)} — ${report.workplace.name}`;
 }
 
-/** גוף המייל (טקסט פשוט): פירוט לפי קורס, סה״כ שעות וסה״כ נסיעות. */
-export function payrollBody(report: PayrollReport): string {
+/** ריפוד טקסט לרוחב קבוע — לטבלה בטקסט פשוט. */
+const pad = (t: string, n: number) => t + ' '.repeat(Math.max(0, n - t.length));
+
+/**
+ * גוף המייל (טקסט פשוט): טבלת מפגשים לכל קורס (תאריך, יום, שעות, שעות
+ * אקדמיות — בלי הפסקות), סה״כ שעות, נסיעות וסכום לתשלום. בלי תעריף לשעה.
+ */
+export function payrollBody(report: PayrollReport, profile?: Profile): string {
   const { workplace, period } = report;
   const lines: string[] = [];
   lines.push('שלום,');
@@ -243,15 +273,22 @@ export function payrollBody(report: PayrollReport): string {
   lines.push(
     `מצורף דיווח שעות העבודה שלי ב${workplace.name} לחודש ${periodTitle(period)} (${ddmmyyyy(period.start)}–${ddmmyyyy(period.end)} · ${hebrewRange(period.start, period.end)} ${hebrewDate(period.end).split(' ').pop()}).`,
   );
+  const W = [10, 5, 11, 9];
+  const header = ['תאריך', 'יום', 'שעות', 'שע׳ אקד׳'];
   for (const g of report.groups) {
     lines.push('');
-    lines.push(`■ ${g.name}`);
-    lines.push(
-      `  ${g.sessions.length} מפגשים · ${academic(g.netMinutes)} שעות אקדמיות (${hm(g.netMinutes)} שעות נטו)`,
-    );
+    lines.push(`■ ${g.name} — ${g.sessions.length} מפגשים · ${academic(g.netMinutes)} שעות אקדמיות`);
+    lines.push(header.map((h, k) => pad(h, W[k])).join(' | '));
+    lines.push(W.map((w) => '-'.repeat(w)).join('-+-'));
     for (const s of g.sessions) {
-      const brk = s.breakMinutes > 0 ? ` (הפסקה ${s.breakMinutes} דק׳)` : '';
-      lines.push(`  • ${dayLabel(s.date)} · ${s.start}–${s.end}${brk} · ${academic(s.netMinutes)} שע׳ אקד׳`);
+      const [y, m, d] = s.date.split('-').map(Number);
+      const row = [
+        ddmmyyyy(s.date),
+        WEEKDAYS[new Date(y, m - 1, d).getDay()],
+        `${s.start}-${s.end}`,
+        academic(s.netMinutes),
+      ];
+      lines.push(row.map((c, k) => pad(c, W[k])).join(' | '));
     }
   }
   lines.push('');
@@ -259,25 +296,53 @@ export function payrollBody(report: PayrollReport): string {
   lines.push(
     `סה״כ שעות: ${academic(report.netMinutes)} שעות אקדמיות (${hm(report.netMinutes)} שעות נטו) · ${report.days} ימי עבודה`,
   );
-  if (hasTravelCost(workplace)) {
-    lines.push(
-      `סה״כ נסיעות: ${formatShekels(report.travel)} (${report.days} ימים × ${workplace.tripsPerDay} נסיעות × ${formatShekels(workplace.travelCostPerDirection)})`,
-    );
-  } else {
-    lines.push('סה״כ נסיעות: אין (הגעה ללא תחבורה ציבורית)');
-  }
+  const travelW = workplaceAt(workplace, period.end);
+  lines.push(
+    hasTravelCost(travelW) || report.travel > 0
+      ? `סה״כ נסיעות: ${formatShekels(report.travel)} (${report.days} ימי עבודה)`
+      : 'סה״כ נסיעות: אין (הגעה ללא תחבורה ציבורית)',
+  );
+  lines.push(
+    report.paymentType === 'monthly'
+      ? `סכום לתשלום: ${formatShekels(Math.round(report.pay))} (משכורת חודשית) + נסיעות ${formatShekels(report.travel)}`
+      : `סכום לתשלום: ${formatShekels(Math.round(report.pay + report.travel))} (שכר ${formatShekels(Math.round(report.pay))} + נסיעות ${formatShekels(report.travel)})`,
+  );
   lines.push('');
   lines.push('בברכה,');
+  if (profile) lines.push(...signatureLines(profile, workplace.employeeNumber));
   return lines.join('\n');
 }
 
 /** קישור mailto: — פותח טיוטה מוכנה בתוכנת המייל של המכשיר. */
-export function payrollMailto(report: PayrollReport): string {
+export function payrollMailto(report: PayrollReport, profile?: Profile): string {
   const to = report.workplace.payrollEmail ?? '';
   const params: string[] = [];
   const cc = (report.workplace.ccEmails ?? []).join(',');
   if (cc) params.push(`cc=${encodeURIComponent(cc)}`);
   params.push(`subject=${encodeURIComponent(payrollSubject(report))}`);
-  params.push(`body=${encodeURIComponent(payrollBody(report))}`);
+  params.push(`body=${encodeURIComponent(payrollBody(report, profile))}`);
   return `mailto:${encodeURIComponent(to).replace(/%40/g, '@')}?${params.join('&')}`;
+}
+
+// ───────────────────────── מעקב תשלומים ─────────────────────────
+
+/** סכום ברוטו לתשלום (שכר + נסיעות) */
+export const grossAmount = (r: PayrollReport) => Math.round(r.pay + r.travel);
+
+/** סכום נטו משוער: ברוטו פחות אחוז המס של מקום העבודה */
+export function netAmount(r: PayrollReport): number {
+  const tax = taxPercentOf(workplaceAt(r.workplace, r.period.end));
+  return Math.round(grossAmount(r) * (1 - tax / 100));
+}
+
+/** מועד התשלום הצפוי לפי "שוטף +" */
+export const expectedPayment = (w: Workplace, period: PayPeriod) =>
+  expectedPaymentDate(period.end, paymentTermsOf(w));
+
+/** דוחות שנשלחו, שמועד התשלום הצפוי שלהם עבר, וטרם סומנו כשולמו. */
+export function overduePayments(items: readonly PayrollItem[], today: Date = new Date()): PayrollItem[] {
+  const t = isoDate(today);
+  return items.filter(
+    (i) => i.status.sentAt && !i.status.paidAt && expectedPayment(i.workplace, i.period) < t,
+  );
 }

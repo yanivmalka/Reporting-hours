@@ -10,6 +10,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useI18n } from '../lib/i18n';
+import { useSwipe } from './useSwipe';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -43,6 +44,10 @@ type Props = {
 export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts }: Props) {
   const styles = useStyles(makeStyles);
   const { isRTL } = useI18n();
+  const swipe = useSwipe(
+    () => onMonthChange(shiftMonth(month, 1)),
+    () => onMonthChange(shiftMonth(month, -1)),
+  );
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y, m - 1, 1).getDay();
   const days = new Date(y, m, 0).getDate();
@@ -61,7 +66,7 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} {...swipe}>
       <View style={styles.head}>
         <Pressable onPress={() => onMonthChange(shiftMonth(month, -1))} style={styles.nav} accessibilityLabel="חודש קודם">
           <Text style={styles.navText}>{isRTL ? '→' : '←'}</Text>

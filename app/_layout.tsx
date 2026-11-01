@@ -3,7 +3,8 @@ import '../lib/rtl';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { DrawerProvider, DrawerToggle } from '../components/AppDrawer';
+import { DrawerProvider, HeaderStart } from '../components/AppDrawer';
+import { ExitGuard } from '../components/ExitGuard';
 import { ToastProvider } from '../components/Toast';
 import { UpdateProvider } from '../components/UpdateChecker';
 import { DemoSeeder } from '../components/DemoSeeder';
@@ -37,6 +38,7 @@ function Chrome() {
       <DrawerProvider>
         <StatusBar style="light" />
         <DemoSeeder />
+        <ExitGuard />
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: colors.brand },
@@ -44,7 +46,11 @@ function Chrome() {
             headerTitleStyle: { fontWeight: '700' },
             headerBackTitle: t('common.back'),
             contentStyle: { backgroundColor: colors.background },
-            headerRight: () => <DrawerToggle />,
+            // בעברית תחילת הכותרת (headerLeft) מוצגת מימין: ☰ ואחריו חץ חזרה.
+            headerLeft: (props) => (
+              <HeaderStart canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? colors.textOnBrand)} />
+            ),
+            headerBackVisible: false,
           }}
         >
           <Stack.Screen name="index" options={{ title: t('nav.home') }} />
@@ -56,6 +62,9 @@ function Chrome() {
             name="workplace-form"
             options={{ title: t('nav.workplaceForm') }}
           />
+          <Stack.Screen name="payments" options={{ title: t('nav.payments') }} />
+          <Stack.Screen name="tax" options={{ title: t('nav.tax') }} />
+          <Stack.Screen name="profile" options={{ title: t('nav.profile') }} />
           <Stack.Screen name="payroll" options={{ title: t('nav.payroll') }} />
           <Stack.Screen name="payroll-report" options={{ title: 'דוח שכר' }} />
           <Stack.Screen name="course-form" options={{ title: 'קורס' }} />

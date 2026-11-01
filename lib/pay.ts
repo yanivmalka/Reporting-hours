@@ -19,7 +19,7 @@ import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { netMinutes, type WorkReport } from './reports';
 import { reportedWorkdays } from './travel';
 import type { PayBasis } from './payBasis';
-import type { PaymentType, Workplace } from './workplaces';
+import { workplaceAt, type PaymentType, type Workplace } from './workplaces';
 
 const REGULAR_HOUR_MINUTES = 60;
 
@@ -33,7 +33,10 @@ function nonNegative(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-type PayReport = Pick<WorkReport, 'start' | 'end' | 'breaks' | 'carriedMinutes'>;
+type PayReport = Pick<WorkReport, 'start' | 'end' | 'breaks' | 'carriedMinutes'> & {
+  /** תאריך הדיווח — לבחירת התנאים שחלו אז (היסטוריית תנאים) */
+  date?: string;
+};
 
 /**
  * מספר השעות שהתעריף השעתי מוכפל בהן עבור דיווח בודד, לפי בסיס החישוב.
@@ -55,11 +58,12 @@ export function payableHours(report: PayReport, basis: PayBasis): number {
  */
 export function reportPay(
   report: PayReport,
-  workplace: Pick<Workplace, 'rate' | 'paymentType'>,
+  workplace: Pick<Workplace, 'rate' | 'paymentType'> & Partial<Workplace>,
   basis: PayBasis,
 ): number | null {
-  if (workplace.paymentType === 'monthly') return null;
-  return nonNegative(workplace.rate) * payableHours(report, basis);
+  const w = workplaceAt(workplace as Workplace, report.date);
+  if (w.paymentType === 'monthly') return null;
+  return nonNegative(w.rate) * payableHours(report, basis);
 }
 
 /**
@@ -72,10 +76,14 @@ export function workplacePay(
   reports: readonly WorkReport[],
   basis: PayBasis,
 ): number {
-  if (workplace.paymentType === 'monthly') {
-    return reportedWorkdays(reports, workplace.id) > 0
-      ? nonNegative(workplace.rate)
-      : 0;
+  const mine = reports.filter((r) => r.workplaceId === workplace.id);
+  if (mine.length > 0) {
+    // חודשי: הסכום שחל בתאריך הדיווח האחרון בטווח.
+    const last = mine.reduce((m, r) => (r.date > m ? r.date : m), mine[0].date);
+    const w = workplaceAt(workplace, last);
+    if (w.paymentType === 'monthly') return nonNegative(w.rate);
+  } else if (workplace.paymentType === 'monthly') {
+    return 0;
   }
   return reports
     .filter((report) => report.workplaceId === workplace.id)

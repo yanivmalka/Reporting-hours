@@ -84,6 +84,31 @@ export function DrawerToggle() {
   );
 }
 
+/**
+ * תחילת הכותרת (בעברית — צד ימין): כפתור התפריט ☰, ואחריו חץ חזרה כשיש
+ * לאן לחזור. מחליף את headerLeft של המחסנית.
+ */
+export function HeaderStart({ canGoBack, tintColor }: { canGoBack?: boolean; tintColor?: string }) {
+  const router = useRouter();
+  const { isRTL } = useI18n();
+  return (
+    <View style={styles.headerStart}>
+      <DrawerToggle />
+      {canGoBack ? (
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="חזרה"
+          style={styles.back}
+        >
+          <Text style={[styles.backText, { color: tintColor }]}>{isRTL ? '→' : '←'}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const ANIM_MS = 220;
 
 /** קישורי הניווט בתפריט; התוויות מתורגמות דרך t('nav.*'). */
@@ -93,9 +118,12 @@ const NAV_LINKS: { href: Href; key: string }[] = [
   { href: '/report', key: 'nav.report' },
   { href: '/reports', key: 'nav.reports' },
   { href: '/payroll', key: 'nav.payroll' },
+  { href: '/payments', key: 'nav.payments' },
+  { href: '/tax', key: 'nav.tax' },
   { href: '/workplaces', key: 'nav.workplaces' },
   { href: '/settings', key: 'nav.settings' },
   { href: '/trash', key: 'nav.trash' },
+  { href: '/profile', key: 'nav.profile' },
   { href: '/data', key: 'nav.data' },
 ];
 
@@ -419,6 +447,18 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   });
 
 const styles = StyleSheet.create({
+  headerStart: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  back: {
+    paddingHorizontal: 4,
+  },
+  backText: {
+    fontSize: 24,
+    fontWeight: '600',
+  },
   fill: { flex: 1 },
   backdrop: {
     position: 'absolute',

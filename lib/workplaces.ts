@@ -26,6 +26,18 @@ export type Workplace = {
   payrollEmail?: string;
   /** כתובות להעתק (CC) בשליחת הדוח */
   ccEmails?: string[];
+  /** אחוז מס (ניכוי במקור) — לחישוב הסכום נטו לתשלום */
+  taxPercent?: number;
+  /** מספר עובד במקום העבודה — מופיע בדוחות ובמיילים */
+  employeeNumber?: string;
+  /** תיאום מס: לכל שנה לועזית — תאריך שבו נשלח ("YYYY-MM-DD") */
+  taxCoordination?: Record<string, string>;
+  /**
+   * היסטוריית תנאים: גרסאות קודמות של התעריף / סוג התשלום / הנסיעות / המס.
+   * כל גרסה חלה על תאריכים שלפני `until`. התנאים בשדות הרגילים — הנוכחיים.
+   * כך שינוי תנאים לא משנה חישובים של דיווחים קודמים.
+   */
+  termsHistory?: TermsVersion[];
   arrivalMode: ArrivalMode;
   /** עלות נסיעה לכיוון בתחבורה ציבורית, ב־₪ */
   travelCostPerDirection: number;
@@ -40,8 +52,67 @@ export type Workplace = {
   demo?: boolean;
 };
 
+/** התנאים הכספיים של מקום עבודה — אלה שמשתנים לאורך זמן ונשמרים בהיסטוריה. */
+export type WorkplaceTerms = {
+  rate: number;
+  paymentType: PaymentType;
+  arrivalMode: ArrivalMode;
+  travelCostPerDirection: number;
+  tripsPerDay: number;
+  taxPercent?: number;
+};
+
+/** גרסת תנאים קודמת — חלה על תאריכים שלפני `until` ("YYYY-MM-DD"). */
+export type TermsVersion = WorkplaceTerms & { until: string };
+
+const TERM_KEYS: (keyof WorkplaceTerms)[] = [
+  'rate',
+  'paymentType',
+  'arrivalMode',
+  'travelCostPerDirection',
+  'tripsPerDay',
+  'taxPercent',
+];
+
+export function termsOf(w: WorkplaceTerms): WorkplaceTerms {
+  return {
+    rate: w.rate,
+    paymentType: w.paymentType,
+    arrivalMode: w.arrivalMode,
+    travelCostPerDirection: w.travelCostPerDirection,
+    tripsPerDay: w.tripsPerDay,
+    taxPercent: w.taxPercent ?? 0,
+  };
+}
+
+export function termsChanged(a: WorkplaceTerms, b: WorkplaceTerms): boolean {
+  const x = termsOf(a);
+  const y = termsOf(b);
+  return TERM_KEYS.some((k) => x[k] !== y[k]);
+}
+
+/**
+ * מקום העבודה עם התנאים שחלו בתאריך נתון — לחישוב שכר ונסיעות של דיווח.
+ * בלי תאריך, או כשאין היסטוריה — התנאים הנוכחיים.
+ */
+export function workplaceAt<W extends Workplace>(workplace: W, date?: string): W {
+  if (!date || !workplace.termsHistory?.length) return workplace;
+  const version = [...workplace.termsHistory]
+    .sort((a, b) => a.until.localeCompare(b.until))
+    .find((v) => date < v.until);
+  if (!version) return workplace;
+  const { until: _until, ...terms } = version;
+  return { ...workplace, ...terms };
+}
+
+/** אחוז המס של מקום העבודה (0 כשלא הוגדר). */
+export function taxPercentOf(w: Pick<Workplace, 'taxPercent'>): number {
+  const n = w.taxPercent;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 /** נתוני טופס לפני שמירה — כמו Workplace אך בלי מזהה ובלי שדות מערכת. */
-export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'demo'>;
+export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'demo' | 'termsHistory'>;
 
 const STORAGE_KEY = 'reporting-hours/workplaces/v1';
 
@@ -139,11 +210,25 @@ function makeId(): string {
  */
 export async function upsertWorkplace(
   draft: WorkplaceDraft & { id?: string },
+  /** כשהתנאים הכספיים השתנו — מאיזה תאריך השינוי חל (ברירת מחדל: היום) */
+  effectiveFrom?: string,
 ): Promise<Workplace[]> {
   // עובדים על הרשימה המלאה כדי לא לדרוס פריטים שנמצאים באשפה.
   const all = await loadAllPruned();
   const next = draft.id
-    ? all.map((w) => (w.id === draft.id ? { ...w, ...draft, id: w.id } : w))
+    ? all.map((w) => {
+        if (w.id !== draft.id) return w;
+        let termsHistory = w.termsHistory ?? [];
+        if (termsChanged(w, draft as WorkplaceTerms) && effectiveFrom) {
+          // התנאים הקודמים נשמרים כגרסה שחלה עד תאריך התחולה; גרסאות
+          // מאוחרות מתאריך התחולה מתבטלות (הוחלפו בתנאים החדשים).
+          termsHistory = termsHistory
+            .filter((v) => v.until <= effectiveFrom)
+            .concat([{ ...termsOf(w), until: effectiveFrom }])
+            .sort((a, b) => a.until.localeCompare(b.until));
+        }
+        return { ...w, ...draft, id: w.id, termsHistory };
+      })
     : [...all, { ...draft, id: makeId() }];
   await saveWorkplaces(next);
   return next.filter((w) => w.deletedAt == null);
@@ -178,4 +263,27 @@ export async function deleteWorkplace(id: string): Promise<Workplace[]> {
   const next = all.filter((w) => w.id !== id);
   await saveWorkplaces(next);
   return next.filter((w) => w.deletedAt != null);
+}
+
+/** עדכון תיאום מס לשנה לועזית: תאריך שליחה, או null לביטול. */
+export async function setTaxCoordination(
+  workplaceId: string,
+  year: string,
+  date: string | null,
+): Promise<Workplace[]> {
+  const all = await loadAllPruned();
+  const next = all.map((w) => {
+    if (w.id !== workplaceId) return w;
+    const map = { ...(w.taxCoordination ?? {}) };
+    if (date) map[year] = date;
+    else delete map[year];
+    return { ...w, taxCoordination: map };
+  });
+  await saveWorkplaces(next);
+  return next.filter((w) => w.deletedAt == null);
+}
+
+/** מקומות עבודה פעילים שלא נכללו בתיאום המס של השנה. */
+export function missingTaxCoordination(workplaces: readonly Workplace[], year: string): Workplace[] {
+  return workplaces.filter((w) => !w.taxCoordination?.[year]);
 }

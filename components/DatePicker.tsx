@@ -10,6 +10,7 @@ import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from './Pressable';
 import { hebrewDate, hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useI18n } from '../lib/i18n';
+import { useSwipe } from './useSwipe';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -209,11 +210,15 @@ function CalendarModal({
 
   const move = (delta: number) =>
     setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1));
+  const swipe = useSwipe(
+    () => move(1),
+    () => move(-1),
+  );
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
+        <Pressable style={styles.sheet} onPress={() => {}} {...swipe}>
           <View style={styles.monthRow}>
             <Pressable onPress={() => move(-1)} style={styles.navBtn} accessibilityLabel="חודש קודם">
               <Text style={styles.navText}>{isRTL ? '→' : '←'}</Text>

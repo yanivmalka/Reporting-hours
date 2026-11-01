@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { courseScheduleLabel, loadCourses, type Course } from '../lib/courses';
 import { dateRange } from '../lib/dashboard';
+import { formatISODate, todayISO } from '../lib/time';
+import { DateField } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
 import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
@@ -15,6 +17,8 @@ import {
   PAYMENT_TYPE_LABELS,
   emptyDraft,
   paymentTermsOf,
+  termsChanged,
+  type Workplace,
   loadWorkplaces,
   trashWorkplace,
   upsertWorkplace,
@@ -35,6 +39,8 @@ type FormState = {
   paymentTermsDays: string;
   payrollEmail: string;
   ccEmails: string;
+  taxPercent: string;
+  employeeNumber: string;
   arrivalMode: ArrivalMode;
   travelCostPerDirection: string;
   tripsPerDay: string;
@@ -60,6 +66,8 @@ function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
     payday: String(d.payday),
     paymentTermsDays: String(paymentTermsOf(d)),
     payrollEmail: d.payrollEmail ?? '',
+    taxPercent: String(d.taxPercent ?? 0),
+    employeeNumber: d.employeeNumber ?? '',
     ccEmails: (d.ccEmails ?? []).join(', '),
     arrivalMode: d.arrivalMode,
     travelCostPerDirection: String(d.travelCostPerDirection),
@@ -91,6 +99,10 @@ export default function WorkplaceFormScreen() {
   );
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  /** מקום העבודה כפי שנטען — להשוואת תנאים ולהיסטוריה */
+  const [original, setOriginal] = useState<Workplace | null>(null);
+  /** מאיזה תאריך חל שינוי בתנאים הכספיים */
+  const [effectiveFrom, setEffectiveFrom] = useState(todayISO());
   const confirm = useConfirm();
   const [courses, setCourses] = useState<Course[]>([]);
 
@@ -114,6 +126,7 @@ export default function WorkplaceFormScreen() {
     loadWorkplaces().then((list) => {
       if (!active) return;
       const found = list.find((w) => w.id === id);
+      setOriginal(found ?? null);
       setForm(found ? draftToForm(found) : draftToForm(emptyDraft()));
     });
     return () => {
@@ -147,6 +160,8 @@ export default function WorkplaceFormScreen() {
     if (splitEmails(state.ccEmails).some((e) => !isEmail(e))) {
       next.ccEmails = 'אחת הכתובות אינה תקינה (מפרידים בפסיק)';
     }
+    const tax = parseNum(state.taxPercent);
+    if (!Number.isFinite(tax) || tax < 0 || tax > 60) next.taxPercent = 'אחוז בין 0 ל־60';
     const terms = parseNum(state.paymentTermsDays);
     if (!Number.isInteger(terms) || terms < 0 || terms > 365) {
       next.paymentTermsDays = 'מספר ימים שלם בין 0 ל־365';
@@ -181,6 +196,8 @@ export default function WorkplaceFormScreen() {
       paymentTermsDays: parseNum(form.paymentTermsDays),
       payrollEmail: form.payrollEmail.trim(),
       ccEmails: splitEmails(form.ccEmails),
+      taxPercent: parseNum(form.taxPercent) || 0,
+      employeeNumber: form.employeeNumber.trim(),
       arrivalMode: form.arrivalMode,
       travelCostPerDirection:
         form.arrivalMode === 'public_transport'
@@ -190,7 +207,8 @@ export default function WorkplaceFormScreen() {
         form.arrivalMode === 'public_transport'
           ? parseNum(form.tripsPerDay)
           : 0,
-    });
+      // שינוי תנאים כספיים חל מתאריך התחולה; דיווחים קודמים נשארים בתנאים הישנים.
+    }, effectiveFrom);
     router.back();
   }
 
@@ -223,6 +241,17 @@ export default function WorkplaceFormScreen() {
   }
 
   const isPublicTransport = form.arrivalMode === 'public_transport';
+  // האם שונו התנאים הכספיים (בעריכה) — אז שואלים מאיזה תאריך השינוי חל.
+  const termsDirty =
+    original != null &&
+    termsChanged(original, {
+      rate: parseNum(form.rate),
+      paymentType: form.paymentType,
+      arrivalMode: form.arrivalMode,
+      travelCostPerDirection: isPublicTransport ? parseNum(form.travelCostPerDirection) : 0,
+      tripsPerDay: isPublicTransport ? parseNum(form.tripsPerDay) : 0,
+      taxPercent: parseNum(form.taxPercent) || 0,
+    });
 
   return (
     <Screen keyboardFooter>
@@ -275,7 +304,12 @@ export default function WorkplaceFormScreen() {
         hint="מספר הימים מסוף החודש ועד שהתשלום מתקבל בפועל (ברירת מחדל: שוטף + 30)"
         error={errors.paymentTermsDays}
       >
-        <View style={styles.termsRow}>
+        <ScrollView
+          horizontal
+          style={{ flexGrow: 0 }}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.termsRow}
+        >
           {TERMS_OPTIONS.map((n) => {
             const on = form.paymentTermsDays === String(n);
             return (
@@ -292,7 +326,7 @@ export default function WorkplaceFormScreen() {
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
       </FormField>
 
       <FormField label="אופן הגעה">
@@ -331,6 +365,55 @@ export default function WorkplaceFormScreen() {
           </FormField>
         </>
       ) : null}
+
+      <FormField
+        label="אחוז מס (ניכוי במקור)"
+        hint="לחישוב הסכום נטו במעקב התשלומים"
+        error={errors.taxPercent}
+      >
+        <TextField
+          value={form.taxPercent}
+          onChangeText={(t) => set('taxPercent', t)}
+          numeric
+          invalid={Boolean(errors.taxPercent)}
+        />
+      </FormField>
+
+      {termsDirty ? (
+        <FormField
+          label="השינוי בתנאים חל מתאריך"
+          hint="דיווחים לפני תאריך זה יחושבו לפי התנאים הקודמים"
+        >
+          <DateField value={effectiveFrom} onChange={setEffectiveFrom} />
+        </FormField>
+      ) : null}
+
+      {original?.termsHistory?.length ? (
+        <FormField label="היסטוריית תנאים">
+          <View style={styles.courses}>
+            {[...original.termsHistory].reverse().map((v) => (
+              <Text key={v.until} style={styles.courseMeta}>
+                עד {formatISODate(v.until)}:{' '}
+                {v.paymentType === 'monthly' ? `חודשי ${v.rate} ₪` : `${v.rate} ₪ לשעה`}
+                {' · '}
+                {ARRIVAL_MODE_LABELS[v.arrivalMode]}
+                {v.arrivalMode === 'public_transport'
+                  ? ` ${v.travelCostPerDirection} ₪ × ${v.tripsPerDay}`
+                  : ''}
+                {v.taxPercent ? ` · מס ${v.taxPercent}%` : ''}
+              </Text>
+            ))}
+          </View>
+        </FormField>
+      ) : null}
+
+      <FormField label="מספר עובד" hint="רשות — יופיע בדוחות ובמיילים לשכר">
+        <TextField
+          value={form.employeeNumber}
+          onChangeText={(t) => set('employeeNumber', t)}
+          numeric
+        />
+      </FormField>
 
       <FormField
         label="מייל לשכר"
@@ -433,7 +516,7 @@ const makeStyles = (colors: AppColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    flexWrap: 'wrap',
+    paddingVertical: 2,
   },
   termsChip: {
     minWidth: 40,

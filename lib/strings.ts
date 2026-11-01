@@ -42,6 +42,9 @@ const he = {
     data: 'ניהול נתונים',
     dashboard: 'לוח בקרה',
     payroll: 'דוחות שכר',
+    payments: 'מעקב תשלומים',
+    tax: 'תיאום מס',
+    profile: 'פרטים אישיים',
   },
   home: {
     welcome: 'ברוך הבא 👋',
@@ -204,6 +207,9 @@ const en: StringTree = {
     data: 'Data management',
     dashboard: 'Dashboard',
     payroll: 'Payroll reports',
+    payments: 'Payments',
+    tax: 'Tax coordination',
+    profile: 'Personal details',
   },
   home: {
     welcome: 'Welcome 👋',

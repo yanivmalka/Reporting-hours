@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import { ActivityIndicator, Keyboard, Modal, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Keyboard,
+  Modal,
+  PanResponder,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
+import { useConfirm } from '../components/ConfirmDialog';
 import { DatePicker, longDate } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
@@ -12,14 +22,30 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { useToast } from '../components/Toast';
 import { toAcademic } from '../lib/academic';
-import { addAccumulatedMinutes, entryOf } from '../lib/accumulated';
+import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../lib/accumulated';
 import { formatHours, payableHours, reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
-import { addReport, loadReports, makeBreakId, type WorkReport } from '../lib/reports';
+import {
+  addReport,
+  deleteReport,
+  loadReports,
+  makeBreakId,
+  updateReport,
+  type WorkReport,
+} from '../lib/reports';
 import { coursesOn, loadCourses, timeRange, type Course } from '../lib/courses';
-import { formatShekels, hasTravelCost } from '../lib/travel';
+import { currentPayPeriod } from '../lib/dashboard';
+import { isLocked, loadPayrollStatus, statusKey } from '../lib/payroll';
+import { formatShekels, hasTravelCost, travelCostForDay } from '../lib/travel';
 import { formatDuration, isValidISODate, parseTime, todayISO } from '../lib/time';
-import { ARRIVAL_MODE_LABELS, loadWorkplaces, type Workplace } from '../lib/workplaces';
+import {
+  ARRIVAL_MODE_LABELS,
+  loadWorkplaces,
+  paymentTermsLabel,
+  taxPercentOf,
+  workplaceAt,
+  type Workplace,
+} from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -59,6 +85,13 @@ export default function ReportScreen() {
   const { colors } = useTheme();
   const { showToast } = useToast();
   const navigation = useNavigation();
+  /** עריכת דיווח קיים: ?id=<מזהה הדיווח> */
+  const { id: editId } = useLocalSearchParams<{ id?: string }>();
+  /** הדיווח המקורי בעריכה (לתיקון המונה ולמחיקה) */
+  const [editing, setEditing] = useState<WorkReport | null>(null);
+  /** בעריכה: הדוח לשכר של החודש נשלח — הדיווח נעול */
+  const [lockedStart, setLockedStart] = useState<string | null>(null);
+  const confirm = useConfirm();
   const { basis } = usePayBasis();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
   const [existing, setExisting] = useState<WorkReport[]>([]);
@@ -77,6 +110,21 @@ export default function ReportScreen() {
   const [pendingLeave, setPendingLeave] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const endRef = useRef<TimeInputHandle>(null);
 
+  // ── החלקה בין שלבים ──
+  // בעברית השלב הבא נמצא משמאל: החלקה ימינה (כמו דפדוף בספר) — קדימה,
+  // החלקה שמאלה — אחורה. הפונקציות מתעדכנות בכל רינדור דרך ref.
+  const swipeRef = useRef<{ next: () => void; back: () => void }>({ next: () => {}, back: () => {} });
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onPanResponderRelease: (_e, g) => {
+        if (Math.abs(g.dx) < 60 || Math.abs(g.dx) < Math.abs(g.dy) * 1.5) return;
+        if (g.dx > 0) swipeRef.current.next();
+        else swipeRef.current.back();
+      },
+    }),
+  ).current;
+
   const [workplaceId, setWorkplaceId] = useState<string | null>(null);
   const [date, setDate] = useState(todayISO());
   const [note, setNote] = useState('');
@@ -91,11 +139,36 @@ export default function ReportScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([loadWorkplaces(), loadReports(), loadCourses()]).then(([list, reports, crs]) => {
+      Promise.all([loadWorkplaces(), loadReports(), loadCourses(), loadPayrollStatus()]).then(([list, reports, crs, st]) => {
         if (!active) return;
         setCourses(crs);
         setWorkplaces(list);
         setExisting(reports);
+        // מצב עריכה — טעינת הדיווח פעם אחת ומילוי הטופס.
+        if (editId && !editing) {
+          const r = reports.find((x) => x.id === editId);
+          if (r) {
+            const w = list.find((x) => x.id === r.workplaceId);
+            if (w) {
+              const [y, m, d] = r.date.split('-').map(Number);
+              const p = currentPayPeriod(w.payday, new Date(y, m - 1, d));
+              if (isLocked(st[statusKey(w.id, p.start)])) setLockedStart(p.start);
+            }
+            setEditing(r);
+            setWorkplaceId(r.workplaceId);
+            setDate(r.date);
+            setStart(r.start);
+            setEnd(r.end);
+            setBreaks(r.breaks.map((b) => ({ id: b.id, minutes: String(b.minutes) })));
+            setNote(r.note ?? '');
+            setLeftoverChoice(r.carriedMinutes > 0 ? 'carry' : 'include');
+            const c = crs.find((x) => x.workplaceId === r.workplaceId && x.name === r.note);
+            setCourseId(c?.id ?? null);
+            setViaCourse(Boolean(c));
+            setStep('times');
+          }
+          return;
+        }
         setWorkplaceId((current) => {
           if (current && list.some((w) => w.id === current)) return current;
           return list.length === 1 ? list[0].id : null;
@@ -104,22 +177,30 @@ export default function ReportScreen() {
       return () => {
         active = false;
       };
-    }, []),
+    }, [editId, editing]),
   );
 
   // האם הוזן משהו שעדיין לא נשמר.
-  const dirty =
-    touched || start !== '' || end !== '' || note.trim() !== '' || breaks.length > 0;
+  const dirty = editing
+    ? touched ||
+      start !== editing.start ||
+      end !== editing.end ||
+      note.trim() !== (editing.note ?? '') ||
+      breaks.length !== editing.breaks.length
+    : touched || start !== '' || end !== '' || note.trim() !== '' || breaks.length > 0;
 
   // אזהרה לפני יציאה מהמסך (חזרה, תפריט, כפתור אחורה של אנדרואיד) בלי שמירה או ביטול.
   usePreventRemove(dirty && exitReason == null, ({ data }) => setPendingLeave(data.action));
 
+  // יציאה מכוונת (ביטול / מחיקה) — פעם אחת בלבד. בלי השמירה הזו האפקט
+  // עלול לרוץ שוב לפני שהמסך נסגר, וה"חזרה" השנייה יוצאת מהאפליקציה.
+  const exitedRef = useRef(false);
   useEffect(() => {
-    if (exitReason === 'cancelled') {
-      if (router.canGoBack()) router.back();
-      else router.replace('/');
-    }
-  }, [exitReason, router]);
+    if (exitReason !== 'cancelled' || exitedRef.current) return;
+    exitedRef.current = true;
+    if (navigation.canGoBack()) navigation.goBack();
+    else router.replace('/');
+  }, [exitReason, navigation, router]);
 
   function addBreak() {
     setBreaks((prev) => [...prev, { id: makeBreakId(), minutes: '' }]);
@@ -188,7 +269,7 @@ export default function ReportScreen() {
 
     setSaving(true);
     const id = workplaceId as string;
-    const saved = await addReport({
+    const draftReport = {
       workplaceId: id,
       date: date.trim(),
       start: start.trim(),
@@ -198,11 +279,18 @@ export default function ReportScreen() {
         .filter((b) => b.minutes > 0),
       carriedMinutes: carried,
       ...(note.trim() ? { note: note.trim() } : {}),
-    });
+    };
+    const saved = editing
+      ? await updateReport(editing.id, draftReport)
+      : await addReport(draftReport);
     setExisting(saved);
 
     let toast: string | null = null;
     const name = workplaces?.find((w) => w.id === id)?.name ?? '';
+    // בעריכה: הדקות שהדיווח הישן העביר למונה מוחזרות לפני הוספת החדשות.
+    if (editing && editing.carriedMinutes > 0) {
+      await adjustAccumulated(editing.workplaceId, -editing.carriedMinutes);
+    }
     if (carried > 0) {
       const state = await addAccumulatedMinutes(id, carried);
       toast = `${carried} דק׳ נוספו למונה של ${name} · סה״כ ${entryOf(state, id).minutes} דק׳`;
@@ -211,6 +299,7 @@ export default function ReportScreen() {
       text: `${name} · ${longDate(date)} · ${timeRange(start, end)}`,
       toast,
     });
+    if (editing) setEditing({ ...editing, ...draftReport });
     // ניקוי הטופס (התאריך נשמר — לדיווח נוסף באותו יום).
     setStart('');
     setEnd('');
@@ -228,6 +317,30 @@ export default function ReportScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={colors.brand} />
         </View>
+      </Screen>
+    );
+  }
+
+  if (editing && lockedStart) {
+    return (
+      <Screen>
+        <View style={styles.intro}>
+          <Text style={styles.title}>🔒 הדיווח נעול לעריכה</Text>
+          <Text style={styles.subtitle}>
+            הדוח לשכר של החודש הזה כבר נשלח. כדי לערוך, יש לבטל קודם את הדוח שנשלח (עם סיבת ביטול)
+            — ואז לשלוח אותו מחדש.
+          </Text>
+        </View>
+        <Button
+          label="לדוח השכר"
+          onPress={() =>
+            router.replace({
+              pathname: '/payroll-report',
+              params: { wp: editing.workplaceId, start: lockedStart },
+            })
+          }
+        />
+        <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
       </Screen>
     );
   }
@@ -265,6 +378,7 @@ export default function ReportScreen() {
   // ── חישוב כספי חי ──
   const workplace = workplaces.find((w) => w.id === workplaceId) ?? null;
   const draft = {
+    date,
     start,
     end,
     breaks: breaks.map((row) => ({ id: row.id, minutes: Math.max(0, parseNum(row.minutes) || 0) })),
@@ -273,13 +387,11 @@ export default function ReportScreen() {
   const pay = workplace && netPreview != null ? reportPay(draft, workplace, basis) : null;
   const hoursForPay = netPreview != null ? payableHours(draft, basis) : 0;
   // נסיעות: רק בתחבורה ציבורית, ורק אם עוד אין דיווח לאותו מקום באותו יום.
+  // בעריכה — הדיווח עצמו לא נחשב "דיווח אחר" באותו יום.
   const travelCounted =
     workplace != null &&
-    existing.some((r) => r.workplaceId === workplace.id && r.date === date);
-  const travel =
-    workplace && hasTravelCost(workplace) && !travelCounted
-      ? workplace.travelCostPerDirection * workplace.tripsPerDay
-      : 0;
+    existing.some((r) => r.workplaceId === workplace.id && r.date === date && r.id !== editing?.id);
+  const travel = workplace && !travelCounted ? travelCostForDay(workplace, date) : 0;
   const workedDates = existing.map((r) => r.date);
   // קורסים קבועים שמתקיימים בתאריך שנבחר (במקום העבודה שנבחר, או בכולם).
   const activeCourses = coursesOn(courses, date).filter((c) =>
@@ -340,6 +452,19 @@ export default function ReportScreen() {
     else if (step === 'summary') setStep('times');
   }
 
+  /** "קדימה" בהחלקה — רק כשאפשר להתקדם מהשלב הנוכחי. */
+  function swipeNext() {
+    if (step === 'date' || step === 'times') goNext();
+    else if (step === 'course' && courseId) setStep('times');
+    else if (step === 'workplace' && workplaceId) setStep('times');
+  }
+  swipeRef.current = {
+    next: swipeNext,
+    back: () => {
+      if (step !== 'date' && step !== 'done') goBack();
+    },
+  };
+
   function chooseCourse(c: Course) {
     applyCourse(c);
     setViaCourse(true);
@@ -372,14 +497,32 @@ export default function ReportScreen() {
   const stepIndex = STEPS.findIndex((x) => x.key.includes(step));
 
   /** שורת הקשר קבועה בראש השלבים המאוחרים: מה כבר נבחר. */
+  // תנאי מקום העבודה שחלו בתאריך הדיווח (היסטוריית תנאים).
+  const wAt = workplace ? workplaceAt(workplace, date) : null;
   const context =
-    step === 'times' || step === 'summary' ? (
+    (step === 'times' || step === 'summary') && wAt ? (
       <View style={styles.context}>
-        <Text style={styles.contextMain}>
-          {workplaceName(workplaceId)}
-          {selectedCourse ? ` · ${selectedCourse.name}` : ''}
-        </Text>
+        <Text style={styles.contextMain}>{wAt.name}</Text>
+        {selectedCourse ? (
+          <Text style={styles.contextCourse}>
+            {selectedCourse.name} · {timeRange(selectedCourse.start, selectedCourse.end)}
+          </Text>
+        ) : null}
         <Text style={styles.contextSub}>{longDate(date)}</Text>
+        <Text style={styles.contextSub}>
+          {wAt.paymentType === 'monthly'
+            ? `משכורת חודשית ${formatShekels(wAt.rate)}`
+            : `${formatShekels(wAt.rate)} לשעה ${basis === 'academic' ? 'אקדמית' : ''}`}
+          {' · '}
+          {hasTravelCost(wAt)
+            ? `נסיעות: תחבורה ציבורית ${formatShekels(wAt.travelCostPerDirection)} × ${wAt.tripsPerDay} ליום`
+            : `נסיעות: ${ARRIVAL_MODE_LABELS[wAt.arrivalMode]} — ללא החזר`}
+        </Text>
+        <Text style={styles.contextSub}>
+          {paymentTermsLabel(wAt)}
+          {taxPercentOf(wAt) > 0 ? ` · מס ${taxPercentOf(wAt)}%` : ''}
+          {wAt.employeeNumber ? ` · מספר עובד ${wAt.employeeNumber}` : ''}
+        </Text>
       </View>
     ) : null;
 
@@ -417,6 +560,8 @@ export default function ReportScreen() {
 
       {context}
 
+      <View {...pan.panHandlers} style={styles.swipeArea}>
+
       {/* ── 1. תאריך ── */}
       {step === 'date' ? (
         <>
@@ -429,11 +574,40 @@ export default function ReportScreen() {
               invalid={Boolean(errors.date)}
             />
           </FormField>
-          <Text style={styles.hint}>
-            {activeCourses.length > 0
-              ? `ביום זה ${activeCourses.length === 1 ? 'קורס אחד' : `${activeCourses.length} קורסים`} במערכת השבועית`
-              : 'אין קורסים קבועים ביום זה — בשלב הבא בוחרים מקום עבודה'}
-          </Text>
+          {activeCourses.length > 0 ? (
+            <View style={styles.dayCourses}>
+              <Text style={styles.dayCoursesTitle}>
+                {activeCourses.length === 1 ? 'קורס אחד' : `${activeCourses.length} קורסים`} ביום זה
+                {' · '}
+                {activeCourses.filter(reportedCourse).length} דווחו
+                {activeCourses.some((c) => !reportedCourse(c))
+                  ? ` · ${activeCourses.filter((c) => !reportedCourse(c)).length} נדרש דיווח`
+                  : ' — הכול דווח ✓'}
+              </Text>
+              <ScrollView style={styles.dayCoursesList} nestedScrollEnabled>
+                {activeCourses.map((c) => {
+                  const done = reportedCourse(c);
+                  return (
+                    <View key={c.id} style={styles.dayCourseRow}>
+                      <Text style={[styles.dayCourseMark, done ? styles.markDone : styles.markTodo]}>
+                        {done ? '✓' : '•'}
+                      </Text>
+                      <View style={styles.dayCourseTexts}>
+                        <Text style={styles.dayCourseName}>
+                          {timeRange(c.start, c.end)} · {c.name}
+                        </Text>
+                        <Text style={styles.dayCourseSub}>
+                          {workplaceName(c.workplaceId)} · {done ? 'דווח' : 'נדרש דיווח'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : (
+            <Text style={styles.hint}>אין קורסים קבועים ביום זה — בשלב הבא בוחרים מקום עבודה</Text>
+          )}
         </>
       ) : null}
 
@@ -641,34 +815,34 @@ export default function ReportScreen() {
 
             <View style={styles.divider} />
 
-            {workplace == null ? null : workplace.paymentType === 'monthly' ? (
+            {wAt == null ? null : wAt.paymentType === 'monthly' ? (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLine}>שכר</Text>
                 <Text style={styles.summaryValue}>
-                  משכורת חודשית קבועה ({formatShekels(workplace.rate)})
+                  משכורת חודשית קבועה ({formatShekels(wAt.rate)})
                 </Text>
               </View>
             ) : (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLine}>
                   שכר · {formatHours(Math.round(hoursForPay * 100) / 100)}{' '}
-                  {basis === 'academic' ? 'שע׳ אקד׳' : 'שע׳'} × {formatShekels(workplace.rate)}
+                  {basis === 'academic' ? 'שע׳ אקד׳' : 'שע׳'} × {formatShekels(wAt.rate)}
                 </Text>
                 <Text style={styles.summaryValue}>{pay == null ? '—' : formatShekels(pay)}</Text>
               </View>
             )}
-            {workplace && hasTravelCost(workplace) ? (
+            {wAt && hasTravelCost(wAt) ? (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLine}>
                   נסיעות
                   {travelCounted
                     ? ' · כבר נספרו ליום זה'
-                    : ` · ${workplace.tripsPerDay} × ${formatShekels(workplace.travelCostPerDirection)}`}
+                    : ` · ${wAt.tripsPerDay} × ${formatShekels(wAt.travelCostPerDirection)}`}
                 </Text>
                 <Text style={styles.summaryValue}>{formatShekels(travel)}</Text>
               </View>
             ) : null}
-            {workplace && workplace.paymentType === 'hourly' ? (
+            {wAt && wAt.paymentType === 'hourly' ? (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryTotalLabel}>סה״כ ליום</Text>
                 <Text style={styles.summaryTotal}>
@@ -678,6 +852,31 @@ export default function ReportScreen() {
             ) : null}
           </View>
           {errors.workplace ? <Text style={styles.error}>{errors.workplace}</Text> : null}
+          {editing ? (
+            <Button
+              label="מחיקת הדיווח"
+              variant="danger"
+              onPress={() =>
+                confirm({
+                  title: 'למחוק את הדיווח?',
+                  message: 'הדיווח יימחק לצמיתות, והדקות שהעביר למונה המצטבר יוחזרו.',
+                  confirmLabel: 'מחיקה',
+                  onConfirm: async () => {
+                    await deleteReport(editing.id);
+                    if (editing.carriedMinutes > 0) {
+                      await adjustAccumulated(editing.workplaceId, -editing.carriedMinutes);
+                    }
+                    setTouched(false);
+                    setStart('');
+                    setEnd('');
+                    setBreaks([]);
+                    setNote('');
+                    setExitReason('cancelled');
+                  },
+                })
+              }
+            />
+          ) : null}
         </>
       ) : null}
 
@@ -685,16 +884,22 @@ export default function ReportScreen() {
       {step === 'done' && lastSaved ? (
         <View style={styles.doneBox}>
           <Text style={styles.doneIcon}>✓</Text>
-          <Text style={styles.doneTitle}>הדיווח נשמר</Text>
+          <Text style={styles.doneTitle}>{editId ? 'הדיווח עודכן' : 'הדיווח נשמר'}</Text>
           <Text style={styles.doneText}>{lastSaved.text}</Text>
           {lastSaved.toast ? <Text style={styles.doneSub}>{lastSaved.toast}</Text> : null}
         </View>
       ) : null}
 
+      </View>
+
       {/* ── ניווט ── */}
       {step === 'done' ? (
         <View style={styles.nav}>
-          <Button label="דיווח נוסף" onPress={anotherReport} />
+          {editId ? (
+            <Button label="חזרה להדיווחים שלי" onPress={() => router.back()} />
+          ) : (
+            <Button label="דיווח נוסף" onPress={anotherReport} />
+          )}
           <Button label="ללוח הבקרה" variant="secondary" onPress={() => router.replace('/dashboard')} />
           <Pressable onPress={() => router.replace('/reports')} style={styles.cancel}>
             <Text style={styles.cancelText}>להדיווחים שלי</Text>
@@ -741,6 +946,7 @@ export default function ReportScreen() {
           </View>
         </View>
       </Modal>
+      {confirm.dialog}
     </Screen>
   );
 }
@@ -858,6 +1064,63 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 14,
     fontWeight: '700',
     color: colors.brandDark,
+    textAlign: TEXT_RIGHT,
+  },
+  swipeArea: {
+    gap: spacing.md,
+  },
+  contextCourse: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.brandDark,
+    textAlign: TEXT_RIGHT,
+  },
+  dayCourses: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  dayCoursesTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+    textAlign: TEXT_RIGHT,
+  },
+  dayCoursesList: {
+    maxHeight: 220,
+  },
+  dayCourseRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: 4,
+  },
+  dayCourseMark: {
+    width: 16,
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  markDone: {
+    color: colors.success,
+  },
+  markTodo: {
+    color: colors.warning,
+  },
+  dayCourseTexts: {
+    flex: 1,
+    gap: 1,
+  },
+  dayCourseName: {
+    fontSize: 14,
+    color: colors.text,
+    textAlign: TEXT_RIGHT,
+  },
+  dayCourseSub: {
+    fontSize: 12,
+    color: colors.textMuted,
     textAlign: TEXT_RIGHT,
   },
   contextSub: {

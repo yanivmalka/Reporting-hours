@@ -109,3 +109,16 @@ export function academicOf(
   if (net == null) return null;
   return toAcademic(Math.max(0, net - (report.carriedMinutes ?? 0)));
 }
+
+/** עדכון דיווח קיים. מחזיר את הרשימה המעודכנת. */
+export async function updateReport(id: string, draft: WorkReportDraft): Promise<WorkReport[]> {
+  const list = await loadReports();
+  const next = list.map((r) => {
+    if (r.id !== id) return r;
+    const { note: _n, ...rest } = r;
+    // note נמחק כשהוסר בטופס — לכן בונים מחדש בלי הישן.
+    return { ...rest, ...draft, id: r.id, createdAt: r.createdAt };
+  });
+  await saveReports(next);
+  return next;
+}

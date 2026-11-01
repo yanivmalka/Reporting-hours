@@ -20,7 +20,8 @@ import { Screen } from '../components/Screen';
 import { reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
 import { loadReports, type WorkReport } from '../lib/reports';
-import { formatShekels } from '../lib/travel';
+import { formatShekels, travelCostForDay } from '../lib/travel';
+import { isLocked, loadPayrollStatus, statusKey, type PayrollStatus } from '../lib/payroll';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -41,7 +42,8 @@ export default function ReportsScreen() {
   const [reports, setReports] = useState<WorkReport[] | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
   // סינון התחלתי יכול להגיע מלוח הבקרה: ?wp=<מזהה>&when=current|previous|YYYY-MM
-  const params = useLocalSearchParams<{ wp?: string; when?: string }>();
+  const params = useLocalSearchParams<{ wp?: string; when?: string; from?: string; to?: string; n?: string }>();
+  const [statuses, setStatuses] = useState<Record<string, PayrollStatus>>({});
   /** סינון: מזהה מקום עבודה; null = הכול */
   const [wpFilter, setWpFilter] = useState<string | null>(params.wp || null);
   /** החודש המוצג בלוח השנה, "YYYY-MM" — ברירת מחדל: החודש הנוכחי */
@@ -77,7 +79,17 @@ export default function ReportsScreen() {
         setPeriodMode(when);
       }
     }
-  }, [params.wp, params.when, workplaces]);
+    // טווח מפורש (למשל "6 החודשים האחרונים" מלוח הבקרה)
+  }, [params.wp, params.when, params.n, workplaces]);
+
+  useEffect(() => {
+    if (params.from && params.to) {
+      setPeriodMode(null);
+      setAllTime(false);
+      setCalMonth(params.to.slice(0, 7));
+      setRange({ from: params.from, to: params.to });
+    }
+  }, [params.from, params.to, params.n]);
 
   const byWorkplace = useMemo(
     () => (reports ?? []).filter((r) => wpFilter == null || r.workplaceId === wpFilter),
@@ -108,8 +120,9 @@ export default function ReportsScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([loadReports(), loadWorkplaces()]).then(([r, w]) => {
+      Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus()]).then(([r, w, st]) => {
         if (!active) return;
+        setStatuses(st);
         setReports([...r].sort(byNewest));
         setWorkplaces(w);
       });
@@ -144,6 +157,28 @@ export default function ReportsScreen() {
     filtered,
     basis,
   );
+  // נסיעות: מוצגות בדיווח הראשון (לפי שעה) של המקום באותו יום.
+  const firstOfDay = new Map<string, string>();
+  for (const r of [...(reports ?? [])].sort((a, b) => a.start.localeCompare(b.start))) {
+    const k = `${r.workplaceId}|${r.date}`;
+    if (!firstOfDay.has(k)) firstOfDay.set(k, r.id);
+  }
+  const travelOf = (r: WorkReport): number | null | undefined => {
+    const w = workplaceOf(r.workplaceId);
+    if (!w) return undefined;
+    const cost = travelCostForDay(w, r.date);
+    if (cost <= 0) return undefined;
+    return firstOfDay.get(`${r.workplaceId}|${r.date}`) === r.id ? cost : null;
+  };
+  /** תחילת החודש (לפי יום התשלום) של הדוח לשכר שנשלח ונועל את הדיווח, או null */
+  const lockOf = (r: WorkReport): string | null => {
+    const w = workplaceOf(r.workplaceId);
+    if (!w) return null;
+    const [y, m, d] = r.date.split('-').map(Number);
+    const p = currentPayPeriod(w.payday, new Date(y, m - 1, d));
+    return isLocked(statuses[statusKey(w.id, p.start)]) ? p.start : null;
+  };
+
   const isFiltered = wpFilter != null || range != null || allTime || periodMode != null;
   const timeLabel = periodMode
     ? periodMode === 'current'
@@ -246,6 +281,18 @@ export default function ReportsScreen() {
               report={report}
               workplaceName={nameOf(report.workplaceId)}
               pay={payOf(report)}
+              travel={travelOf(report)}
+              locked={lockOf(report) != null}
+              onEdit={() => router.push({ pathname: '/report', params: { id: report.id } })}
+              onLocked={() => {
+                const start = lockOf(report);
+                if (start) {
+                  router.push({
+                    pathname: '/payroll-report',
+                    params: { wp: report.workplaceId, start },
+                  });
+                }
+              }}
             />
           ))}
         </View>

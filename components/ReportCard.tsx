@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Pressable } from './Pressable';
 import { academicOf, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { hebrewDate } from '../lib/hebrewDate';
 import { formatDuration, formatISODate } from '../lib/time';
@@ -16,6 +17,13 @@ type ReportCardProps = {
    * עבודה בתשלום חודשי (הסכום קבוע לחודש), ו־undefined כשלא ידוע/לא להצגה.
    */
   pay?: number | null;
+  /** עלות הנסיעות של היום (מוצגת בדיווח הראשון של המקום באותו יום); null = נספרה בדיווח אחר */
+  travel?: number | null;
+  /** הדוח לשכר של החודש נשלח — הדיווח נעול לעריכה */
+  locked?: boolean;
+  onEdit?: () => void;
+  /** בדיווח נעול: מעבר לדוח השכר (שם אפשר לבטל אותו) */
+  onLocked?: () => void;
 };
 
 /** תיאור השעות האקדמיות בדיווח, למשל "6 שע׳ אקדמיות ו־30 דק׳". */
@@ -29,7 +37,7 @@ function academicText(report: WorkReport): string {
 }
 
 /** שורת רשימה לדיווח יום עבודה: מקום, תאריך, טווח שעות, הפסקות, זמן נטו, שעות אקדמיות ושכר. */
-export function ReportCard({ report, workplaceName, pay }: ReportCardProps) {
+export function ReportCard({ report, workplaceName, pay, travel, locked, onEdit, onLocked }: ReportCardProps) {
   const styles = useThemedStyles(makeStyles);
   const breakTotal = totalBreakMinutes(report.breaks);
   const net = netMinutes(report);
@@ -45,7 +53,7 @@ export function ReportCard({ report, workplaceName, pay }: ReportCardProps) {
       </View>
       {report.note ? <Text style={styles.note}>{report.note}</Text> : null}
       <Text style={styles.line}>
-        {report.start}–{report.end}
+        {`\u2066${report.start}–${report.end}\u2069`}
         {breakTotal > 0 ? ` · הפסקות ${formatDuration(breakTotal)}` : ''}
       </Text>
       <Text style={styles.net}>
@@ -62,12 +70,63 @@ export function ReportCard({ report, workplaceName, pay }: ReportCardProps) {
       ) : pay === null ? (
         <Text style={styles.carried}>שכר חודשי קבוע — נספר בסיכום החודשי</Text>
       ) : null}
+      {typeof travel === 'number' && travel > 0 ? (
+        <Text style={styles.travel}>נסיעות: {formatShekels(travel)}</Text>
+      ) : travel === null ? (
+        <Text style={styles.carried}>נסיעות היום נספרו בדיווח אחר של אותו מקום</Text>
+      ) : null}
+      {onEdit || onLocked ? (
+        <View style={styles.actions}>
+          {locked ? (
+            <Pressable onPress={onLocked} style={[styles.actionBtn, styles.lockedBtn]} accessibilityRole="button">
+              <Text style={styles.lockedText}>🔒 נשלח לשכר — לביטול הדוח</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={onEdit} style={styles.actionBtn} accessibilityRole="button">
+              <Text style={styles.actionText}>✎ עריכת הדיווח</Text>
+            </Pressable>
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    travel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.brandDark,
+      textAlign: TEXT_RIGHT,
+    },
+    actions: {
+      flexDirection: 'row',
+      marginTop: spacing.xs,
+    },
+    actionBtn: {
+      flex: 1,
+      minHeight: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.brand,
+    },
+    actionText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.brand,
+    },
+    lockedBtn: {
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    lockedText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textMuted,
+    },
     card: {
       backgroundColor: colors.surface,
       borderWidth: 1,

@@ -102,6 +102,11 @@ export default function HomeScreen() {
           onPress={() => router.push('/payroll')}
         />
         <NavCard
+          title="מעקב תשלומים"
+          subtitle="מתי שולם כל דוח שכר, ובאיזה סכום"
+          onPress={() => router.push('/payments')}
+        />
+        <NavCard
           title="מקומות עבודה"
           subtitle="הגדרת תעריפים, סוג תשלום ונסיעות"
           onPress={() => router.push('/workplaces')}
