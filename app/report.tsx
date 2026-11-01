@@ -1,18 +1,23 @@
-import { useCallback, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
+import { ActivityIndicator, Keyboard, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
+import { DatePicker } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
+import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { useToast } from '../components/Toast';
 import { toAcademic } from '../lib/academic';
 import { addAccumulatedMinutes } from '../lib/accumulated';
-import { formatHours } from '../lib/pay';
-import { addReport, makeBreakId } from '../lib/reports';
+import { formatHours, payableHours, reportPay } from '../lib/pay';
+import { usePayBasis } from '../lib/payBasis';
+import { addReport, loadReports, makeBreakId, type WorkReport } from '../lib/reports';
+import { formatShekels, hasTravelCost } from '../lib/travel';
 import { formatDuration, isValidISODate, parseTime, todayISO } from '../lib/time';
-import { loadWorkplaces, type Workplace } from '../lib/workplaces';
+import { ARRIVAL_MODE_LABELS, loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -48,7 +53,16 @@ export default function ReportScreen() {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const { showToast } = useToast();
+  const navigation = useNavigation();
+  const { basis } = usePayBasis();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
+  const [existing, setExisting] = useState<WorkReport[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [touched, setTouched] = useState(false);
+  /** 'saved' / 'cancelled' — יציאה מכוונת, בלי אזהרה */
+  const [exitReason, setExitReason] = useState<'saved' | 'cancelled' | null>(null);
+  const [pendingLeave, setPendingLeave] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
+  const endRef = useRef<TimeInputHandle>(null);
 
   const [workplaceId, setWorkplaceId] = useState<string | null>(null);
   const [date, setDate] = useState(todayISO());
@@ -64,9 +78,10 @@ export default function ReportScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      loadWorkplaces().then((list) => {
+      Promise.all([loadWorkplaces(), loadReports()]).then(([list, reports]) => {
         if (!active) return;
         setWorkplaces(list);
+        setExisting(reports);
         setWorkplaceId((current) => {
           if (current && list.some((w) => w.id === current)) return current;
           return list.length === 1 ? list[0].id : null;
@@ -78,9 +93,30 @@ export default function ReportScreen() {
     }, []),
   );
 
+  // האם הוזן משהו שעדיין לא נשמר.
+  const dirty =
+    touched || start !== '' || end !== '' || note.trim() !== '' || breaks.length > 0;
+
+  // אזהרה לפני יציאה מהמסך (חזרה, תפריט, כפתור אחורה של אנדרואיד) בלי שמירה או ביטול.
+  usePreventRemove(dirty && exitReason == null, ({ data }) => setPendingLeave(data.action));
+
+  useEffect(() => {
+    if (exitReason === 'saved') router.replace('/reports');
+    if (exitReason === 'cancelled') {
+      if (router.canGoBack()) router.back();
+      else router.replace('/');
+    }
+  }, [exitReason, router]);
+
   function addBreak() {
     setBreaks((prev) => [...prev, { id: makeBreakId(), minutes: '' }]);
     setErrors((prev) => ({ ...prev, breaks: undefined }));
+  }
+
+  function changeDate(next: string) {
+    setDate(next);
+    setTouched(true);
+    setErrors((prev) => ({ ...prev, date: undefined }));
   }
 
   function updateBreak(id: string, minutes: string) {
@@ -153,7 +189,7 @@ export default function ReportScreen() {
         `נוספו ${carried} דק׳ למונה "דקות עבודה מצטברות" · סה״כ ${state.minutes} דק׳`,
       );
     }
-    router.replace('/reports');
+    setExitReason('saved');
   }
 
   if (workplaces === null) {
@@ -196,63 +232,105 @@ export default function ReportScreen() {
         ? academicPreview.wholeHours
         : academicPreview.decimalHours;
 
+  // ── חישוב כספי חי ──
+  const workplace = workplaces.find((w) => w.id === workplaceId) ?? null;
+  const draft = {
+    start,
+    end,
+    breaks: breaks.map((row) => ({ id: row.id, minutes: Math.max(0, parseNum(row.minutes) || 0) })),
+    carriedMinutes: leftoverChoice === 'carry' ? leftoverPreview : 0,
+  };
+  const pay = workplace && netPreview != null ? reportPay(draft, workplace, basis) : null;
+  const hoursForPay = netPreview != null ? payableHours(draft, basis) : 0;
+  // נסיעות: רק בתחבורה ציבורית, ורק אם עוד אין דיווח לאותו מקום באותו יום.
+  const travelCounted =
+    workplace != null &&
+    existing.some((r) => r.workplaceId === workplace.id && r.date === date);
+  const travel =
+    workplace && hasTravelCost(workplace) && !travelCounted
+      ? workplace.travelCostPerDirection * workplace.tripsPerDay
+      : 0;
+  const workedDates = existing.map((r) => r.date);
+  const visibleWorkplaces = pickerOpen || !workplace ? workplaces : [workplace];
+
   return (
     <Screen>
-      <View style={styles.intro}>
-        <Text style={styles.title}>דיווח יום עבודה</Text>
-        <Text style={styles.subtitle}>
-          בחירת מקום עבודה, טווח שעות והפסקות. זמן העבודה נטו והשעות האקדמיות
-          מחושבים אוטומטית.
-        </Text>
-      </View>
-
       <FormField label="מקום עבודה" error={errors.workplace}>
         <View style={styles.choices}>
-          {workplaces.map((workplace) => {
-            const selected = workplace.id === workplaceId;
+          {visibleWorkplaces.map((w) => {
+            const selected = w.id === workplaceId;
+            const collapsed = selected && !pickerOpen;
             return (
               <Pressable
-                key={workplace.id}
+                key={w.id}
                 onPress={() => {
-                  setWorkplaceId(workplace.id);
+                  if (collapsed) {
+                    setPickerOpen(true);
+                    return;
+                  }
+                  setWorkplaceId(w.id);
+                  setPickerOpen(false);
+                  setTouched(true);
                   setErrors((prev) => ({ ...prev, workplace: undefined }));
                 }}
                 style={[styles.choice, selected && styles.choiceSelected]}
+                accessibilityRole="button"
+                accessibilityLabel={collapsed ? `${w.name} — החלפת מקום עבודה` : w.name}
               >
-                <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>
-                  {workplace.name}
-                </Text>
+                <View style={styles.choiceBody}>
+                  <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>
+                    {w.name}
+                  </Text>
+                  <Text style={[styles.choiceSub, selected && styles.choiceSubSelected]}>
+                    {w.paymentType === 'monthly'
+                      ? `משכורת חודשית ${formatShekels(w.rate)}`
+                      : `${formatShekels(w.rate)} לשעה`}
+                    {' · '}
+                    {ARRIVAL_MODE_LABELS[w.arrivalMode]}
+                  </Text>
+                </View>
+                {collapsed && workplaces.length > 1 ? (
+                  <Text style={[styles.chevron, styles.choiceTextSelected]}>▾</Text>
+                ) : null}
               </Pressable>
             );
           })}
         </View>
       </FormField>
 
-      <FormField label="תאריך" hint="פורמט YYYY-MM-DD" error={errors.date}>
-        <TextField value={date} onChangeText={setDate} invalid={Boolean(errors.date)} />
-      </FormField>
-
-      <FormField label="נושא / הערה" hint="רשות — למשל נושא ההרצאה או ההגשה">
-        <TextField value={note} onChangeText={setNote} placeholder="תולדות האדריכלות — שיעור 4" />
+      <FormField label="תאריך" error={errors.date}>
+        <DatePicker
+          value={date}
+          onChange={changeDate}
+          workedDates={workedDates}
+          invalid={Boolean(errors.date)}
+        />
       </FormField>
 
       <View style={styles.timesRow}>
         <View style={styles.timeCol}>
           <FormField label="שעת התחלה" error={errors.start}>
-            <TextField
+            <TimeInput
               value={start}
-              onChangeText={setStart}
-              placeholder="09:00"
+              onChange={(v) => {
+                setStart(v);
+                setErrors((prev) => ({ ...prev, start: undefined, end: undefined }));
+              }}
+              onComplete={() => endRef.current?.focus()}
               invalid={Boolean(errors.start)}
             />
           </FormField>
         </View>
         <View style={styles.timeCol}>
           <FormField label="שעת סיום" error={errors.end}>
-            <TextField
+            <TimeInput
+              ref={endRef}
               value={end}
-              onChangeText={setEnd}
-              placeholder="14:00"
+              onChange={(v) => {
+                setEnd(v);
+                setErrors((prev) => ({ ...prev, end: undefined }));
+              }}
+              onComplete={() => Keyboard.dismiss()}
               invalid={Boolean(errors.end)}
             />
           </FormField>
@@ -270,7 +348,7 @@ export default function ReportScreen() {
               <View style={styles.breakInput}>
                 <TextField
                   value={row.minutes}
-                  onChangeText={(t) => updateBreak(row.id, t)}
+                  onChangeText={(t) => updateBreak(row.id, t.replace(/\D/g, ''))}
                   placeholder={`הפסקה ${index + 1}`}
                   numeric
                 />
@@ -304,16 +382,23 @@ export default function ReportScreen() {
         </FormField>
       ) : null}
 
+      <FormField label="נושא / הערה" hint="רשות — למשל נושא ההרצאה או ההגשה">
+        <TextField value={note} onChangeText={setNote} placeholder="תולדות האדריכלות — שיעור 4" />
+      </FormField>
+
       <View style={styles.summary}>
-        <Text style={styles.summaryLine}>
-          טווח שעות: {rangeMin == null ? '—' : formatDuration(rangeMin)}
-        </Text>
-        <Text style={styles.summaryLine}>
-          זמן עבודה נטו: {netPreview == null ? '—' : formatDuration(netPreview)}
-        </Text>
-        <Text style={styles.summaryNet}>
-          שעות אקדמיות: {academicPreview == null ? '—' : formatHours(academicHoursNow)}
-        </Text>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLine}>זמן עבודה נטו</Text>
+          <Text style={styles.summaryValue}>
+            {netPreview == null ? '—' : formatDuration(netPreview)}
+          </Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLine}>שעות אקדמיות</Text>
+          <Text style={styles.summaryValue}>
+            {academicPreview == null ? '—' : formatHours(academicHoursNow)}
+          </Text>
+        </View>
         {leftoverPreview > 0 ? (
           <Text style={styles.summaryHint}>
             {leftoverChoice === 'carry'
@@ -321,9 +406,77 @@ export default function ReportScreen() {
               : `${leftoverPreview} דק׳ עודפות ייכללו בדיווח כשבר שעה`}
           </Text>
         ) : null}
+
+        <View style={styles.divider} />
+
+        {workplace == null ? (
+          <Text style={styles.summaryHint}>בחרו מקום עבודה כדי לראות את החישוב הכספי</Text>
+        ) : workplace.paymentType === 'monthly' ? (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLine}>שכר</Text>
+            <Text style={styles.summaryValue}>
+              משכורת חודשית קבועה ({formatShekels(workplace.rate)})
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLine}>
+              שכר · {formatHours(Math.round(hoursForPay * 100) / 100)}{' '}
+              {basis === 'academic' ? 'שע׳ אקד׳' : 'שע׳'} × {formatShekels(workplace.rate)}
+            </Text>
+            <Text style={styles.summaryValue}>{pay == null ? '—' : formatShekels(pay)}</Text>
+          </View>
+        )}
+        {workplace && hasTravelCost(workplace) ? (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLine}>
+              נסיעות{travelCounted ? ' · כבר נספרו ליום זה' : ` · ${workplace.tripsPerDay} × ${formatShekels(workplace.travelCostPerDirection)}`}
+            </Text>
+            <Text style={styles.summaryValue}>{formatShekels(travel)}</Text>
+          </View>
+        ) : null}
+        {workplace && workplace.paymentType === 'hourly' ? (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryTotalLabel}>סה״כ ליום</Text>
+            <Text style={styles.summaryTotal}>
+              {pay == null ? '—' : formatShekels(pay + travel)}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <Button label="שמירת הדיווח" onPress={handleSave} loading={saving} />
+      <Pressable
+        onPress={() => setExitReason('cancelled')}
+        style={styles.cancel}
+        accessibilityRole="link"
+      >
+        <Text style={styles.cancelText}>ביטול</Text>
+      </Pressable>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={pendingLeave != null}
+        onRequestClose={() => setPendingLeave(null)}
+      >
+        <View style={styles.backdrop}>
+          <View style={styles.dialog}>
+            <Text style={styles.dialogTitle}>לצאת בלי לשמור?</Text>
+            <Text style={styles.dialogBody}>הנתונים שהוזנו בדיווח הזה יאבדו.</Text>
+            <Button label="המשך עריכה" onPress={() => setPendingLeave(null)} />
+            <Button
+              label="יציאה בלי שמירה"
+              variant="danger"
+              onPress={() => {
+                const action = pendingLeave;
+                setPendingLeave(null);
+                if (action) navigation.dispatch(action);
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -355,7 +508,10 @@ const makeStyles = (colors: AppColors) =>
   },
   choice: {
     minHeight: 48,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -375,12 +531,30 @@ const makeStyles = (colors: AppColors) =>
   choiceTextSelected: {
     color: colors.textOnBrand,
   },
+  choiceBody: {
+    flex: 1,
+    gap: 2,
+  },
+  choiceSub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: 'right',
+  },
+  choiceSubSelected: {
+    color: colors.textOnBrand,
+    opacity: 0.85,
+  },
+  chevron: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
   timesRow: {
     flexDirection: 'row',
     gap: spacing.md,
   },
   timeCol: {
     flex: 1,
+    minWidth: 0,
   },
   breaks: {
     gap: spacing.sm,
@@ -415,8 +589,75 @@ const makeStyles = (colors: AppColors) =>
     gap: spacing.xs,
   },
   summaryLine: {
+    flex: 1,
     fontSize: 13,
     color: colors.brandDark,
+    textAlign: 'right',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.brandDark,
+  },
+  summaryTotalLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.brandDark,
+    textAlign: 'right',
+  },
+  summaryTotal: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.brandDark,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.brandDark,
+    opacity: 0.3,
+    marginVertical: spacing.xs,
+  },
+  cancel: {
+    alignSelf: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textDecorationLine: 'underline',
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  dialog: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+    textAlign: 'right',
+  },
+  dialogBody: {
+    fontSize: 14,
+    color: colors.textMuted,
     textAlign: 'right',
   },
   summaryNet: {
