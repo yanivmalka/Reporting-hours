@@ -20,17 +20,8 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter, type Href } from 'expo-router';
-import {
-  Animated,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Animated, Modal, Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable } from './Pressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '../lib/i18n';
 import type { Lang } from '../lib/strings';

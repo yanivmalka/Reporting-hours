@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from '../components/Pressable';
 import { SelectField } from '../components/SelectField';
 import { RangeCalendar, type DateRangeValue } from '../components/RangeCalendar';
 import { longDate } from '../components/DatePicker';

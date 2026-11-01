@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { courseScheduleLabel, loadCourses, type Course } from '../lib/courses';
 import { dateRange } from '../lib/dashboard';

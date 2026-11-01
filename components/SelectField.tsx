@@ -2,7 +2,8 @@
  * שדה בחירה מתוך רשימה (dropdown): מציג את הערך הנבחר עם חץ ▾, ולחיצה
  * פותחת חלון עם כל האפשרויות. בלי תלות חיצונית — זהה ב־web ובאנדרואיד.
  */
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from './Pressable';
 import { useState } from 'react';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';

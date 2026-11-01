@@ -6,7 +6,8 @@
  * - לחיצה על היום הנבחר היחיד, או "ניקוי": חזרה לכל החודש.
  * ימים שיש בהם דיווחים מסומנים במספר הדיווחים.
  */
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useI18n } from '../lib/i18n';
 import { radius, spacing } from '../theme/colors';

@@ -4,7 +4,8 @@
  */
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Pressable } from './Pressable';
 import { onDataChanged } from '../lib/demo';
 import { loadPayrollStatus, payrollItems, pendingPayroll, type PayrollItem } from '../lib/payroll';
 import { loadReports } from '../lib/reports';

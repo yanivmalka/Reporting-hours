@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import { ActivityIndicator, Keyboard, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Modal, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { DatePicker, longDate } from '../components/DatePicker';
 import { FormField } from '../components/FormField';

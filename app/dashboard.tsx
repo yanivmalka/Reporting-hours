@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { BarChart, Panel, ProgressBar, ShareRow, StatTile, TileGrid } from '../components/Charts';
 import { PayrollReminder } from '../components/PayrollReminder';

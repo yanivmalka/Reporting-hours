@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Pressable } from '../components/Pressable';
 import { NavCard } from '../components/NavCard';
 import { PayrollReminder } from '../components/PayrollReminder';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';

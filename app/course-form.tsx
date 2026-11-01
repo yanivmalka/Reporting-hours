@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Keyboard, StyleSheet, Text, View } from 'react-native';
+import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { useConfirm } from '../components/ConfirmDialog';
 import { DateField } from '../components/DatePicker';
