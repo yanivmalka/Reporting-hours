@@ -14,6 +14,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { DEFAULT_PALETTE_ID } from '../theme/palettes';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 type Action = 'load' | 'removeDemo' | 'resetAll';
 
@@ -194,13 +195,13 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 22,
       fontWeight: '800',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     subtitle: {
       fontSize: 14,
       lineHeight: 21,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     stats: {
       flexDirection: 'row',
@@ -237,12 +238,12 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 16,
       fontWeight: '700',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     cardText: {
       fontSize: 13,
       lineHeight: 20,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
   });

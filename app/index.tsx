@@ -11,6 +11,7 @@ import { loadWorkplaces } from '../lib/workplaces';
 import { Screen } from '../components/Screen';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -125,13 +126,13 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 26,
     fontWeight: '800',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   summary: {
     backgroundColor: colors.brand,
@@ -147,19 +148,19 @@ const makeStyles = (colors: AppColors) =>
     fontWeight: '600',
     color: colors.textOnBrand,
     opacity: 0.9,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   summaryValue: {
     fontSize: 32,
     fontWeight: '800',
     color: colors.textOnBrand,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   summaryMeta: {
     fontSize: 13,
     color: colors.textOnBrand,
     opacity: 0.9,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   cards: {
     gap: spacing.md,

@@ -25,6 +25,7 @@ import { loadWorkplaces, paymentTermsLabel, type Workplace } from '../lib/workpl
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 type PeriodChoice = 'current' | 'previous';
 type Metric = 'pay' | 'hours' | 'travel';
@@ -328,13 +329,13 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 22,
       fontWeight: '800',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     subtitle: {
       fontSize: 13,
       lineHeight: 20,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     empty: {
       gap: spacing.md,
@@ -348,7 +349,7 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 14,
       lineHeight: 21,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     pressed: {
       opacity: 0.7,
@@ -370,7 +371,7 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 14,
       fontWeight: '700',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     payAmount: {
       fontSize: 15,
@@ -380,6 +381,6 @@ const makeStyles = (colors: AppColors) =>
     payMeta: {
       fontSize: 12,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
   });

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 type NavCardProps = {
   title: string;
@@ -58,12 +59,12 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 17,
       fontWeight: '600',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     subtitle: {
       fontSize: 13,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     chevron: {
       fontSize: 26,

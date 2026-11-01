@@ -22,6 +22,7 @@ import { ARRIVAL_MODE_LABELS, loadWorkplaces, type Workplace } from '../lib/work
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 /** שורת הפסקה בטופס — משך בדקות נשמר כמחרוזת לעריכה חופשית. */
 type BreakRow = { id: string; minutes: string };
@@ -170,6 +171,9 @@ export default function ReportScreen() {
   }
 
   async function handleSave() {
+    // סגירת המקלדת (משדה ההערה) לפני המעבר למסך הסיום — אחרת סגירתה מזיזה
+    // את הכפתורים בזמן הלחיצה, ו"דיווח נוסף" לא תמיד נתפס.
+    Keyboard.dismiss();
     const found = validate();
     setErrors(found);
     if (Object.values(found).some(Boolean)) return;
@@ -351,6 +355,7 @@ export default function ReportScreen() {
   }
 
   function anotherReport() {
+    Keyboard.dismiss();
     setLastSaved(null);
     setErrors({});
     setStep('date');
@@ -753,13 +758,13 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 22,
     fontWeight: '800',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 21,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   choices: {
     gap: spacing.sm,
@@ -784,7 +789,7 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 15,
     fontWeight: '600',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   choiceTextSelected: {
     color: colors.textOnBrand,
@@ -839,7 +844,7 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 20,
     fontWeight: '800',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   context: {
     backgroundColor: colors.brandLight,
@@ -852,22 +857,22 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 14,
     fontWeight: '700',
     color: colors.brandDark,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   contextSub: {
     fontSize: 12,
     color: colors.brandDark,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   hint: {
     fontSize: 13,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   error: {
     fontSize: 13,
     color: colors.danger,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   pressed: {
     opacity: 0.7,
@@ -889,7 +894,7 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 18,
     fontWeight: '800',
     color: colors.brand,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   reported: {
     fontSize: 12,
@@ -967,7 +972,7 @@ const makeStyles = (colors: AppColors) =>
   choiceSub: {
     fontSize: 12,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   choiceSubSelected: {
     color: colors.textOnBrand,
@@ -1021,7 +1026,7 @@ const makeStyles = (colors: AppColors) =>
     flex: 1,
     fontSize: 13,
     color: colors.brandDark,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1039,7 +1044,7 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 15,
     fontWeight: '800',
     color: colors.brandDark,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   summaryTotal: {
     fontSize: 22,
@@ -1082,22 +1087,22 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 18,
     fontWeight: '800',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   dialogBody: {
     fontSize: 14,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   summaryNet: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.brandDark,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   summaryHint: {
     fontSize: 12,
     color: colors.brandDark,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
 });

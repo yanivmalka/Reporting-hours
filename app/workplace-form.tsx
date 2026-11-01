@@ -23,6 +23,7 @@ import {
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 /** מצב הטופס — שדות מספריים נשמרים כמחרוזת כדי לאפשר עריכה חופשית. */
 type FormState = {
@@ -377,12 +378,12 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 15,
     fontWeight: '700',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   courseMeta: {
     fontSize: 12,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   termsRow: {
     flexDirection: 'row',

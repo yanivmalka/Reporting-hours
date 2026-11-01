@@ -4,6 +4,7 @@ import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 type ReportCardProps = {
   report: WorkReport;
@@ -81,7 +82,7 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 17,
       fontWeight: '700',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
       flex: 1,
     },
     date: {
@@ -91,35 +92,35 @@ const makeStyles = (colors: AppColors) =>
     note: {
       fontSize: 14,
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     line: {
       fontSize: 13,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
       writingDirection: 'ltr',
     },
     net: {
       fontSize: 14,
       fontWeight: '600',
       color: colors.brandDark,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     academic: {
       fontSize: 14,
       fontWeight: '700',
       color: colors.brandDark,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     carried: {
       fontSize: 12,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     pay: {
       fontSize: 15,
       fontWeight: '800',
       color: colors.brandDark,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
   });

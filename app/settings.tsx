@@ -23,6 +23,7 @@ import { PAY_BASIS_LABELS, usePayBasis, type PayBasis } from '../lib/payBasis';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 export default function SettingsScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -212,13 +213,13 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 22,
     fontWeight: '800',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 21,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   section: {
     gap: spacing.sm,
@@ -227,7 +228,7 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 15,
     fontWeight: '700',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   card: {
     backgroundColor: colors.brandLight,
@@ -276,7 +277,7 @@ const makeStyles = (colors: AppColors) =>
   },
   rowLabel: {
     flex: 1,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
     fontSize: 15,
     fontWeight: '600',
     color: colors.text,
@@ -289,6 +290,6 @@ const makeStyles = (colors: AppColors) =>
   note: {
     fontSize: 12,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
 });

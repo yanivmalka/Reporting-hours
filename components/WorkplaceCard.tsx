@@ -5,6 +5,7 @@ import type { Workplace } from '../lib/workplaces';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { ProgressBar } from './Charts';
+import { TEXT_RIGHT } from '../theme/align';
 
 type WorkplaceCardProps = {
   workplace: Workplace;
@@ -86,18 +87,18 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 17,
       fontWeight: '700',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     line: {
       fontSize: 14,
       fontWeight: '600',
       color: colors.brandDark,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     sub: {
       fontSize: 12,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     chevron: {
       fontSize: 26,

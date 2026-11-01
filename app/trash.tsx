@@ -15,6 +15,7 @@ import { formatISODate } from '../lib/time';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 function deletedDateISO(deletedAt: number): string {
   const d = new Date(deletedAt);
@@ -140,13 +141,13 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 22,
       fontWeight: '800',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     subtitle: {
       fontSize: 14,
       lineHeight: 21,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     list: {
       gap: spacing.md,
@@ -171,12 +172,12 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 17,
       fontWeight: '700',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     meta: {
       fontSize: 13,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     actions: {
       flexDirection: 'row',

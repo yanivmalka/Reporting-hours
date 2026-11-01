@@ -14,6 +14,7 @@ import {
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 export default function WorkplacesScreen() {
   const router = useRouter();
@@ -108,13 +109,13 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 22,
       fontWeight: '800',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     subtitle: {
       fontSize: 14,
       lineHeight: 21,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     list: {
       gap: spacing.md,
@@ -130,7 +131,7 @@ const makeStyles = (colors: AppColors) =>
     hint: {
       fontSize: 12,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     action: {
       marginTop: spacing.sm,

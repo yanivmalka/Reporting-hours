@@ -23,6 +23,7 @@ import { loadWorkplaces } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 type Form = {
   name: string;
@@ -298,7 +299,7 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 15,
       fontWeight: '700',
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     chips: {
       flexDirection: 'row',
@@ -347,7 +348,7 @@ const makeStyles = (colors: AppColors) =>
     dateLabel: {
       fontSize: 12,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     summary: {
       backgroundColor: colors.brandLight,
@@ -357,6 +358,6 @@ const makeStyles = (colors: AppColors) =>
     summaryText: {
       fontSize: 13,
       color: colors.brandDark,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
   });

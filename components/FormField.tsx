@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 type FormFieldProps = {
   label: string;
@@ -35,16 +36,16 @@ const makeStyles = (colors: AppColors) =>
       fontSize: 14,
       fontWeight: '600',
       color: colors.text,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     hint: {
       fontSize: 12,
       color: colors.textMuted,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
     error: {
       fontSize: 12,
       color: colors.danger,
-      textAlign: 'right',
+      textAlign: TEXT_RIGHT,
     },
   });

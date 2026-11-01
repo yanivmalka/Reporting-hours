@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SelectField } from '../components/SelectField';
+import { RangeCalendar, type DateRangeValue } from '../components/RangeCalendar';
+import { longDate } from '../components/DatePicker';
+import { todayISO } from '../lib/time';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import {
   currentPayPeriod,
@@ -21,6 +24,7 @@ import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { TEXT_RIGHT } from '../theme/align';
 
 /** מיון: תאריך יורד, ובאותו תאריך לפי סדר ההזנה היורד. */
 function byNewest(a: WorkReport, b: WorkReport): number {
@@ -39,38 +43,66 @@ export default function ReportsScreen() {
   const params = useLocalSearchParams<{ wp?: string; when?: string }>();
   /** סינון: מזהה מקום עבודה; null = הכול */
   const [wpFilter, setWpFilter] = useState<string | null>(params.wp || null);
+  /** החודש המוצג בלוח השנה, "YYYY-MM" — ברירת מחדל: החודש הנוכחי */
+  const [calMonth, setCalMonth] = useState(() => todayISO().slice(0, 7));
+  /** יום / טווח שנבחר בלוח; null = כל החודש */
+  const [range, setRange] = useState<DateRangeValue>(null);
+  /** כל הדיווחים, בלי הגבלת חודש */
+  const [allTime, setAllTime] = useState(false);
   /**
-   * סינון זמן: null = הכול · 'current' / 'previous' = החודש הנוכחי / הקודם של
-   * כל מקום עבודה (לפי יום התשלום שלו) · "YYYY-MM" = חודש קלנדרי.
+   * "חודש נוכחי / קודם" לפי יום התשלום של כל מקום עבודה (מגיע מלוח הבקרה,
+   * כשלא נבחר מקום עבודה יחיד) — גובר על לוח השנה עד שמנקים.
    */
-  const [monthFilter, setMonthFilter] = useState<string | null>(params.when || null);
+  const [periodMode, setPeriodMode] = useState<'current' | 'previous' | null>(null);
 
-  // כשנכנסים שוב מלוח הבקרה עם סינון אחר — מעדכנים.
+  // סינון שמגיע מלוח הבקרה: ?wp=<מזהה>&when=current|previous|YYYY-MM
   useEffect(() => {
     if (params.wp !== undefined) setWpFilter(params.wp || null);
-    if (params.when !== undefined) setMonthFilter(params.when || null);
-  }, [params.wp, params.when]);
+    const when = params.when;
+    if (when === undefined) return;
+    setAllTime(false);
+    setPeriodMode(null);
+    setRange(null);
+    if (/^\d{4}-\d{2}$/.test(when)) {
+      setCalMonth(when);
+    } else if (when === 'current' || when === 'previous') {
+      const w = workplaces.find((x) => x.id === params.wp);
+      if (w) {
+        // מקום עבודה יחיד — התקופה שלו כטווח בלוח השנה.
+        const p = when === 'current' ? currentPayPeriod(w.payday) : previousPayPeriod(w.payday);
+        setCalMonth(p.start.slice(0, 7));
+        setRange({ from: p.start, to: p.end });
+      } else if (!params.wp) {
+        setPeriodMode(when);
+      }
+    }
+  }, [params.wp, params.when, workplaces]);
+
+  const byWorkplace = useMemo(
+    () => (reports ?? []).filter((r) => wpFilter == null || r.workplaceId === wpFilter),
+    [reports, wpFilter],
+  );
 
   const filtered = useMemo(() => {
-    const inTime = (r: WorkReport) => {
-      if (monthFilter == null) return true;
-      if (monthFilter === 'current' || monthFilter === 'previous') {
+    return byWorkplace.filter((r) => {
+      if (periodMode) {
         const w = workplaces.find((x) => x.id === r.workplaceId);
         if (!w) return false;
-        const p =
-          monthFilter === 'current' ? currentPayPeriod(w.payday) : previousPayPeriod(w.payday);
+        const p = periodMode === 'current' ? currentPayPeriod(w.payday) : previousPayPeriod(w.payday);
         return r.date >= p.start && r.date <= p.end;
       }
-      return r.date.startsWith(monthFilter);
-    };
-    return (reports ?? []).filter(
-      (r) => (wpFilter == null || r.workplaceId === wpFilter) && inTime(r),
-    );
-  }, [reports, workplaces, wpFilter, monthFilter]);
-  const months = useMemo(
-    () => [...new Set((reports ?? []).map((r) => r.date.slice(0, 7)))].sort((a, b) => b.localeCompare(a)),
-    [reports],
-  );
+      if (allTime) return true;
+      if (range) return r.date >= range.from && r.date <= range.to;
+      return r.date.startsWith(calMonth);
+    });
+  }, [byWorkplace, workplaces, periodMode, allTime, range, calMonth]);
+
+  // מספר הדיווחים לכל יום — לסימון בלוח השנה (לפי סינון מקום העבודה).
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const r of byWorkplace) out[r.date] = (out[r.date] ?? 0) + 1;
+    return out;
+  }, [byWorkplace]);
 
   useFocusEffect(
     useCallback(() => {
@@ -111,18 +143,18 @@ export default function ReportsScreen() {
     filtered,
     basis,
   );
-  const isFiltered = wpFilter != null || monthFilter != null;
-  const selectedWp = wpFilter ? workplaces.find((w) => w.id === wpFilter) : undefined;
-  const periodHint =
-    selectedWp && (monthFilter === 'current' || monthFilter === 'previous')
-      ? (() => {
-          const p =
-            monthFilter === 'current'
-              ? currentPayPeriod(selectedWp.payday)
-              : previousPayPeriod(selectedWp.payday);
-          return dateRange(p.start, p.end);
-        })()
-      : null;
+  const isFiltered = wpFilter != null || range != null || allTime || periodMode != null;
+  const timeLabel = periodMode
+    ? periodMode === 'current'
+      ? 'חודש נוכחי — לפי יום התשלום של כל מקום'
+      : 'חודש קודם — לפי יום התשלום של כל מקום'
+    : allTime
+      ? 'כל הדיווחים'
+      : range
+        ? range.from === range.to
+          ? longDate(range.from)
+          : dateRange(range.from, range.to, true)
+        : monthName(calMonth);
 
   return (
     <Screen>
@@ -138,30 +170,46 @@ export default function ReportsScreen() {
             ...usedWorkplaces.map((w) => ({ value: w.id, label: w.name })),
           ]}
         />
-        <SelectField<string | null>
-          label="חודש:"
-          title="סינון לפי חודש"
-          value={monthFilter}
-          active={monthFilter != null}
-          onChange={setMonthFilter}
-          options={[
-            { value: null, label: 'הכול' },
-            {
-              value: 'current',
-              label: 'חודש נוכחי',
-              sub: 'לכל מקום עבודה — מיום התשלום שלו',
-            },
-            { value: 'previous', label: 'חודש קודם', sub: 'לכל מקום עבודה — מיום התשלום שלו' },
-            ...months.map((m) => ({ value: m, label: monthName(m) })),
-          ]}
-        />
       </View>
 
+      {periodMode ? null : allTime ? (
+        <Pressable onPress={() => setAllTime(false)} style={styles.calLink}>
+          <Text style={styles.clear}>חזרה לתצוגה לפי חודש</Text>
+        </Pressable>
+      ) : (
+        <>
+          <RangeCalendar
+            month={calMonth}
+            onMonthChange={(m) => {
+              setCalMonth(m);
+              setRange(null);
+            }}
+            range={range}
+            onRangeChange={setRange}
+            counts={counts}
+          />
+          <View style={styles.calActions}>
+            <Text style={styles.calHint}>
+              {range ? 'לחיצה על יום נוסף — טווח' : 'לחיצה על יום — סינון; יום נוסף — טווח'}
+            </Text>
+            {range ? (
+              <Pressable onPress={() => setRange(null)} hitSlop={8}>
+                <Text style={styles.clear}>ניקוי — כל החודש</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => setAllTime(true)} hitSlop={8}>
+                <Text style={styles.clear}>כל הדיווחים</Text>
+              </Pressable>
+            )}
+          </View>
+        </>
+      )}
+
       <View style={styles.summary}>
+        <Text style={styles.summaryLine}>{timeLabel}</Text>
         <Text style={styles.summaryTitle}>
           {filtered.length} דיווחים · {totals.days} ימי עבודה
         </Text>
-        {periodHint ? <Text style={styles.summaryLine}>{periodHint}</Text> : null}
         <Text style={styles.summaryLine}>
           {Math.round((totals.netMinutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳ אקדמיות · שכר{' '}
           {formatShekels(Math.round(totals.pay))}
@@ -171,7 +219,9 @@ export default function ReportsScreen() {
           <Pressable
             onPress={() => {
               setWpFilter(null);
-              setMonthFilter(null);
+              setRange(null);
+              setAllTime(false);
+              setPeriodMode(null);
             }}
           >
             <Text style={styles.clear}>ניקוי סינון</Text>
@@ -221,16 +271,31 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 22,
     fontWeight: '800',
     color: colors.text,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 21,
     color: colors.textMuted,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   list: {
     gap: spacing.md,
+  },
+  calActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  calHint: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: TEXT_RIGHT,
+  },
+  calLink: {
+    alignSelf: 'flex-start',
   },
   filters: {
     gap: spacing.sm,
@@ -267,19 +332,19 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 15,
     fontWeight: '800',
     color: colors.brandDark,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   summaryLine: {
     fontSize: 13,
     color: colors.brandDark,
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
   },
   clear: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.brandDark,
     textDecorationLine: 'underline',
-    textAlign: 'right',
+    textAlign: TEXT_RIGHT,
     marginTop: spacing.xs,
   },
   empty: {
