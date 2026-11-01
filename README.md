@@ -11,8 +11,12 @@
   וגם כ**אפליקציית אנדרואיד**.
 - **expo-router** לניווט מבוסס־קבצים (תיקיית `app/`).
 - כיווניות **RTL** נכפית דרך [lib/rtl.ts](./lib/rtl.ts) ובתבנית ה־HTML [app/+html.tsx](./app/+html.tsx).
-- אחסון מקומי בלבד בשלב זה (ללא שרת) דרך `@react-native-async-storage/async-storage`,
-  שממופה ל־`localStorage` ב־web. עטיפת JSON: [lib/storage.ts](./lib/storage.ts).
+- אחסון מקומי דרך `@react-native-async-storage/async-storage` (ב־web: `localStorage`), עטיפת JSON: [lib/storage.ts](./lib/storage.ts).
+- **שרת:** פרויקט Firebase המשותף `malka-apps` ([apps-platform](https://github.com/yanivmalka/apps-platform)).
+  התחברות עם Google וסנכרון ענן ([lib/firebase.ts](./lib/firebase.ts), [lib/sync.ts](./lib/sync.ts),
+  [components/CloudSync.tsx](./components/CloudSync.tsx)): כל מפתח אחסון משוכפל ל־
+  `apps/reporting-hours/users/{uid}/kv/{key}`, רק המשתמש עצמו ניגש. בשלב זה באתר בלבד;
+  באנדרואיד דרוש build של EAS להתחברות גוגל נייטיבית.
 
 ## אתר (web)
 

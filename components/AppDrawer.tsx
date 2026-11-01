@@ -31,6 +31,7 @@ import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { SegmentedControl } from './SegmentedControl';
 import { UpdateSection } from './UpdateChecker';
+import { AccountSection } from './CloudSync';
 
 type DrawerContextValue = {
   open: () => void;
@@ -228,6 +229,8 @@ function AppDrawer() {
             </View>
 
             <ScrollView contentContainerStyle={drawerStyles.body}>
+              <AccountSection />
+
               <View style={drawerStyles.section}>
                 <Text style={drawerStyles.sectionLabel}>
                   {t('drawer.navigation')}

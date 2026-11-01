@@ -10,6 +10,7 @@
  *   כדי שאפשר יהיה למחוק אותם בלי לגעת בנתונים אמיתיים.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearCloudData } from './sync';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { loadAccumulated, saveAccumulated, type AccumulatedEntry } from './accumulated';
 import { loadReports, saveReports, type WorkReport } from './reports';
@@ -568,6 +569,8 @@ export async function resetAllData(): Promise<void> {
   } catch {
     // אחסון לא זמין — אין מה למחוק.
   }
+  // גם העותק בענן (אם המשתמש מחובר) — אחרת הסנכרון היה משחזר את הנתונים.
+  await clearCloudData();
   // לא לטעון שוב נתוני הדגמה אוטומטית אחרי איפוס מכוון.
   await writeJSON(AUTO_SEED_FLAG, true);
   notify();

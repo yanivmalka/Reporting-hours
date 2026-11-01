@@ -1,5 +1,6 @@
 import '../lib/rtl';
 
+import { Fragment, type ReactNode } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,6 +9,7 @@ import { ExitGuard } from '../components/ExitGuard';
 import { ToastProvider } from '../components/Toast';
 import { UpdateProvider } from '../components/UpdateChecker';
 import { DemoSeeder } from '../components/DemoSeeder';
+import { SyncProvider, useCloudSync } from '../components/CloudSync';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -16,16 +18,26 @@ export default function RootLayout() {
   return (
     <I18nProvider>
       <ThemeProvider>
-        <PayBasisProvider>
-          <SafeAreaProvider>
-            <ToastProvider>
-              <Chrome />
-            </ToastProvider>
-          </SafeAreaProvider>
-        </PayBasisProvider>
+        <SyncProvider>
+          <SyncedTree>
+            <PayBasisProvider>
+              <SafeAreaProvider>
+                <ToastProvider>
+                  <Chrome />
+                </ToastProvider>
+              </SafeAreaProvider>
+            </PayBasisProvider>
+          </SyncedTree>
+        </SyncProvider>
       </ThemeProvider>
     </I18nProvider>
   );
+}
+
+/** כשהמשיכה מהענן משנה נתונים במכשיר, העץ נטען מחדש (key) כדי שכל המסכים יציגו אותם. */
+function SyncedTree({ children }: { children: ReactNode }) {
+  const { revision } = useCloudSync();
+  return <Fragment key={revision}>{children}</Fragment>;
 }
 
 /** קליפת האפליקציה — כותרת, ניווט ותפריט ההמבורגר — תלויי ערכת צבעים ושפה. */

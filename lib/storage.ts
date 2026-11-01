@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { noteLocalWrite } from './sync';
 
 /**
  * עטיפה דקה מעל AsyncStorage לשמירה וטעינה של ערכי JSON.
@@ -21,6 +22,8 @@ export async function readJSON<T>(key: string, fallback: T): Promise<T> {
 export async function writeJSON<T>(key: string, value: T): Promise<void> {
   try {
     await AsyncStorage.setItem(key, JSON.stringify(value));
+    // כשהמשתמש מחובר — הכתיבה משוכפלת גם לענן (lib/sync.ts).
+    noteLocalWrite(key);
   } catch {
     // מתעלמים משגיאות אחסון (מכסת דיסק, גלישה פרטית וכו').
   }
