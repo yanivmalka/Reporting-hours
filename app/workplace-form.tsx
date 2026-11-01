@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { FormField } from '../components/FormField';
 import { Screen } from '../components/Screen';
@@ -10,6 +10,7 @@ import {
   ARRIVAL_MODE_LABELS,
   PAYMENT_TYPE_LABELS,
   emptyDraft,
+  paymentTermsOf,
   loadWorkplaces,
   trashWorkplace,
   upsertWorkplace,
@@ -18,7 +19,7 @@ import {
 } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { spacing, type AppColors } from '../theme/colors';
+import { radius, spacing, type AppColors } from '../theme/colors';
 
 /** מצב הטופס — שדות מספריים נשמרים כמחרוזת כדי לאפשר עריכה חופשית. */
 type FormState = {
@@ -26,6 +27,7 @@ type FormState = {
   rate: string;
   paymentType: PaymentType;
   payday: string;
+  paymentTermsDays: string;
   arrivalMode: ArrivalMode;
   travelCostPerDirection: string;
   tripsPerDay: string;
@@ -46,6 +48,7 @@ function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
     rate: String(d.rate),
     paymentType: d.paymentType,
     payday: String(d.payday),
+    paymentTermsDays: String(paymentTermsOf(d)),
     arrivalMode: d.arrivalMode,
     travelCostPerDirection: String(d.travelCostPerDirection),
     tripsPerDay: String(d.tripsPerDay),
@@ -104,6 +107,11 @@ export default function WorkplaceFormScreen() {
       next.payday = 'יום בחודש בין 1 ל־31';
     }
 
+    const terms = parseNum(state.paymentTermsDays);
+    if (!Number.isInteger(terms) || terms < 0 || terms > 365) {
+      next.paymentTermsDays = 'מספר ימים שלם בין 0 ל־365';
+    }
+
     if (state.arrivalMode === 'public_transport') {
       const cost = parseNum(state.travelCostPerDirection);
       if (!Number.isFinite(cost) || cost < 0) {
@@ -130,6 +138,7 @@ export default function WorkplaceFormScreen() {
       rate: parseNum(form.rate),
       paymentType: form.paymentType,
       payday: parseNum(form.payday),
+      paymentTermsDays: parseNum(form.paymentTermsDays),
       arrivalMode: form.arrivalMode,
       travelCostPerDirection:
         form.arrivalMode === 'public_transport'
@@ -215,6 +224,35 @@ export default function WorkplaceFormScreen() {
         />
       </FormField>
 
+      <FormField
+        label="תנאי תשלום — שוטף +"
+        hint="מספר הימים מסוף החודש ועד שהתשלום מתקבל בפועל (ברירת מחדל: שוטף + 30)"
+        error={errors.paymentTermsDays}
+      >
+        <View style={styles.termsRow}>
+          <Text style={styles.termsPrefix}>שוטף +</Text>
+          <View style={styles.termsInput}>
+            <TextField
+              value={form.paymentTermsDays}
+              onChangeText={(t) => set('paymentTermsDays', t.replace(/\D/g, ''))}
+              numeric
+              invalid={Boolean(errors.paymentTermsDays)}
+            />
+          </View>
+          {['0', '30', '45', '60', '90'].map((n) => (
+            <Pressable
+              key={n}
+              onPress={() => set('paymentTermsDays', n)}
+              style={[styles.termsChip, form.paymentTermsDays === n && styles.termsChipOn]}
+            >
+              <Text style={[styles.termsChipText, form.paymentTermsDays === n && styles.termsChipTextOn]}>
+                {n}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </FormField>
+
       <FormField label="אופן הגעה">
         <SegmentedControl
           options={ARRIVAL_OPTIONS}
@@ -275,8 +313,45 @@ export default function WorkplaceFormScreen() {
   );
 }
 
-const makeStyles = (_colors: AppColors) =>
+const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  termsPrefix: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  termsInput: {
+    width: 72,
+  },
+  termsChip: {
+    minWidth: 40,
+    height: 36,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  termsChipOn: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  termsChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  termsChipTextOn: {
+    color: colors.textOnBrand,
+  },
   center: {
     flex: 1,
     alignItems: 'center',

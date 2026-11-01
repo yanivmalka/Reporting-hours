@@ -11,7 +11,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
-import { loadAccumulated } from './accumulated';
+import { loadAccumulated, saveAccumulated, type AccumulatedEntry } from './accumulated';
 import { loadReports, saveReports, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import { formatTime } from './time';
@@ -22,7 +22,6 @@ const DEMO_META_KEY = 'reporting-hours/demo/v1';
 /** דגל שנשמר אחרי הבדיקה הראשונה, כדי שנתוני ההדגמה ייטענו אוטומטית פעם אחת בלבד. */
 const AUTO_SEED_FLAG = 'reporting-hours/demo-auto/v1';
 const WORKPLACES_KEY = 'reporting-hours/workplaces/v1';
-const ACCUMULATED_KEY = 'reporting-hours/accumulated/v1';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -37,10 +36,8 @@ function notify() {
 }
 
 type DemoMeta = {
-  /** כמה דקות הוסיפו נתוני ההדגמה למונה (ולא נפדו) */
-  minutes: number;
-  /** כמה שעות אקדמיות "נפדו" במסגרת נתוני ההדגמה */
-  redeemedHours: number;
+  /** כמה דקות/שעות הוסיפו נתוני ההדגמה למונה של כל מקום עבודה */
+  byWorkplace?: Record<string, AccumulatedEntry>;
   loadedAt: number;
 };
 
@@ -53,6 +50,7 @@ type DemoWorkplace = Workplace & { track: Track; group?: string };
 const WORKPLACES: DemoWorkplace[] = [
   {
     id: 'demo_wp_1',
+    paymentTermsDays: 30,
     name: 'סמינר "קו ומרחב" לעיצוב פנים — ירושלים',
     rate: 220,
     paymentType: 'hourly',
@@ -64,6 +62,7 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_2',
+    paymentTermsDays: 45,
     name: 'מכללת "מבנה" לאדריכלות ועיצוב — מודיעין',
     rate: 240,
     paymentType: 'hourly',
@@ -75,6 +74,7 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_3',
+    paymentTermsDays: 30,
     name: 'סמינר "שרטוט" — בית שמש',
     rate: 195,
     paymentType: 'hourly',
@@ -86,6 +86,7 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_4',
+    paymentTermsDays: 0,
     name: 'המדרשה לעיצוב "אבן וחומר"',
     rate: 6800,
     paymentType: 'monthly',
@@ -97,6 +98,7 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_5',
+    paymentTermsDays: 60,
     name: 'סמינר "פרופורציה" — מבשרת ציון',
     rate: 205,
     paymentType: 'hourly',
@@ -108,6 +110,7 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_6',
+    paymentTermsDays: 30,
     name: 'מכללת "קשת" לעיצוב ואדריכלות',
     rate: 230,
     paymentType: 'hourly',
@@ -119,6 +122,7 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_7',
+    paymentTermsDays: 90,
     name: 'בית הספר להנדסאים "יסוד"',
     rate: 185,
     paymentType: 'hourly',
@@ -130,6 +134,7 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_8',
+    paymentTermsDays: 30,
     name: 'סמינר "פתח" לאמנויות ועיצוב',
     rate: 4200,
     paymentType: 'monthly',
@@ -412,20 +417,30 @@ export async function loadDemoData(): Promise<number> {
   await saveWorkplaces([...existing.filter((w) => !ids.has(w.id)), ...demoWps, trashed]);
 
   // דיווחים.
-  const { reports, carriedTotal } = generateDemoReports();
+  const { reports } = generateDemoReports();
   const current = await loadReports();
   await saveReports([...current.filter((r) => !r.demo), ...reports]);
 
-  // מונה מצטבר: רוב הדקות כבר נפדו, ונשארת יתרה של 45–89 דק׳ (שעה אחת לפדיון).
-  const redeemed = Math.max(0, Math.floor(carriedTotal / ACADEMIC_HOUR_MINUTES) - 1);
-  const minutes = carriedTotal - redeemed * ACADEMIC_HOUR_MINUTES;
-  const acc = await loadAccumulated();
-  await writeJSON(ACCUMULATED_KEY, {
-    minutes: acc.minutes + minutes,
-    redeemedHours: acc.redeemedHours + redeemed,
+  // מונה מצטבר לכל סמינר: רוב הדקות כבר נפדו; בחלק מהסמינרים נשארה שעה
+  // אחת זמינה לפדיון, ובאחרים רק יתרה קטנה.
+  const carriedBy: Record<string, number> = {};
+  for (const r of reports) {
+    if (r.carriedMinutes > 0) carriedBy[r.workplaceId] = (carriedBy[r.workplaceId] ?? 0) + r.carriedMinutes;
+  }
+  const contributions: Record<string, AccumulatedEntry> = {};
+  Object.entries(carriedBy).forEach(([id, sum], i) => {
+    const redeemedHours = Math.max(0, Math.floor(sum / ACADEMIC_HOUR_MINUTES) - (i % 2 === 0 ? 1 : 0));
+    contributions[id] = { minutes: sum - redeemedHours * ACADEMIC_HOUR_MINUTES, redeemedHours };
   });
+  const acc = await loadAccumulated();
+  const byWorkplace = { ...acc.byWorkplace };
+  for (const [id, c] of Object.entries(contributions)) {
+    const e = byWorkplace[id] ?? { minutes: 0, redeemedHours: 0 };
+    byWorkplace[id] = { minutes: e.minutes + c.minutes, redeemedHours: e.redeemedHours + c.redeemedHours };
+  }
+  await saveAccumulated({ byWorkplace });
 
-  const meta: DemoMeta = { minutes, redeemedHours: redeemed, loadedAt: Date.now() };
+  const meta: DemoMeta = { byWorkplace: contributions, loadedAt: Date.now() };
   await writeJSON(DEMO_META_KEY, meta);
   await writeJSON(AUTO_SEED_FLAG, true);
   notify();
@@ -445,10 +460,21 @@ export async function removeDemoData(): Promise<number> {
   const meta = await readJSON<DemoMeta | null>(DEMO_META_KEY, null);
   if (meta) {
     const acc = await loadAccumulated();
-    await writeJSON(ACCUMULATED_KEY, {
-      minutes: Math.max(0, acc.minutes - meta.minutes),
-      redeemedHours: Math.max(0, acc.redeemedHours - meta.redeemedHours),
-    });
+    const byWorkplace = { ...acc.byWorkplace };
+    if (meta.byWorkplace) {
+      for (const [id, c] of Object.entries(meta.byWorkplace)) {
+        const e = byWorkplace[id];
+        if (!e) continue;
+        byWorkplace[id] = {
+          minutes: Math.max(0, e.minutes - c.minutes),
+          redeemedHours: Math.max(0, e.redeemedHours - c.redeemedHours),
+        };
+      }
+    } else {
+      // הדגמה ישנה (מונה גלובלי) — מאפסים את המונים של סמינרי ההדגמה.
+      for (const id of Object.keys(byWorkplace)) if (id.startsWith('demo_wp_')) delete byWorkplace[id];
+    }
+    await saveAccumulated({ byWorkplace });
     await AsyncStorage.removeItem(DEMO_META_KEY).catch(() => {});
   }
   if (removed > 0) notify();

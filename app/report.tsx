@@ -11,7 +11,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { useToast } from '../components/Toast';
 import { toAcademic } from '../lib/academic';
-import { addAccumulatedMinutes } from '../lib/accumulated';
+import { addAccumulatedMinutes, entryOf } from '../lib/accumulated';
 import { formatHours, payableHours, reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
 import { addReport, loadReports, makeBreakId, type WorkReport } from '../lib/reports';
@@ -184,9 +184,11 @@ export default function ReportScreen() {
     });
 
     if (carried > 0) {
-      const state = await addAccumulatedMinutes(carried);
+      const id = workplaceId as string;
+      const state = await addAccumulatedMinutes(id, carried);
+      const name = workplaces?.find((w) => w.id === id)?.name ?? '';
       showToast(
-        `נוספו ${carried} דק׳ למונה "דקות עבודה מצטברות" · סה״כ ${state.minutes} דק׳`,
+        `נוספו ${carried} דק׳ למונה של ${name} · סה״כ ${entryOf(state, id).minutes} דק׳`,
       );
     }
     setExitReason('saved');

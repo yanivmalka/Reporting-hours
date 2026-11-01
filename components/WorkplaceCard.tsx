@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   ARRIVAL_MODE_LABELS,
   PAYMENT_TYPE_LABELS,
+  paymentTermsLabel,
   type Workplace,
 } from '../lib/workplaces';
 import { formatHours } from '../lib/pay';
@@ -93,7 +94,7 @@ export function WorkplaceCard({
       <View style={styles.texts}>
         <Text style={styles.name}>{name}</Text>
         <Text style={styles.line}>
-          {PAYMENT_TYPE_LABELS[paymentType]} · {rateText} · תשלום ב־{payday} לחודש
+          {PAYMENT_TYPE_LABELS[paymentType]} · {rateText} · תשלום ב־{payday} לחודש · {paymentTermsLabel(workplace)}
         </Text>
         <Text style={styles.line}>הגעה: {ARRIVAL_MODE_LABELS[arrivalMode]}</Text>
         {showPay ? <Text style={styles.pay}>{payText}</Text> : null}

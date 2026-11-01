@@ -13,7 +13,7 @@ import { workplacePay } from './pay';
 import type { PayBasis } from './payBasis';
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
 import { travelCostForWorkplace } from './travel';
-import type { Workplace } from './workplaces';
+import { paymentTermsOf, type Workplace } from './workplaces';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -119,7 +119,18 @@ export type WorkplacePeriod = {
   workplace: Workplace;
   period: PayPeriod;
   totals: Totals;
+  /** מועד התשלום הצפוי לפי "שוטף +": סוף החודש שבו התקופה מסתיימת + N ימים */
+  expectedPayment: string;
+  /** ימים עד התשלום הצפוי (שלילי = כבר עבר) */
+  daysToExpected: number;
 };
+
+/** "שוטף + N": סוף החודש של התאריך + N ימים. */
+export function expectedPaymentDate(periodEnd: string, termsDays: number): string {
+  const [y, m] = periodEnd.split('-').map(Number);
+  // היום ה־0 של החודש הבא = היום האחרון בחודש; + N ימים.
+  return isoDate(new Date(y, m, termsDays));
+}
 
 /** התקופה שקדמה לתקופה הנוכחית (זו ששולמה ביום התשלום האחרון). */
 export function previousPayPeriod(payday: number, today: Date = new Date()): PayPeriod {
@@ -145,7 +156,16 @@ export function currentPeriods(
     const mine = reports.filter(
       (r) => r.workplaceId === workplace.id && inRange(r, period.start, period.end),
     );
-    return { workplace, period, totals: totalsFor([workplace], mine, basis) };
+    const expectedPayment = expectedPaymentDate(period.end, paymentTermsOf(workplace));
+    const [ey, em, ed] = expectedPayment.split('-').map(Number);
+    const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return {
+      workplace,
+      period,
+      totals: totalsFor([workplace], mine, basis),
+      expectedPayment,
+      daysToExpected: Math.round((new Date(ey, em - 1, ed).getTime() - t.getTime()) / DAY_MS),
+    };
   });
 }
 

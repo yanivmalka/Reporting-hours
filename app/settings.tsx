@@ -5,13 +5,18 @@ import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { useToast } from '../components/Toast';
+import { ProgressBar } from '../components/Charts';
 import {
+  accumulatedTotal,
+  entryOf,
   loadAccumulated,
   redeemAccumulated,
   redeemableHours,
   resetAccumulated,
   type AccumulatedState,
 } from '../lib/accumulated';
+import { formatShekels } from '../lib/travel';
+import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { PAY_BASIS_LABELS, usePayBasis, type PayBasis } from '../lib/payBasis';
 import { useTheme } from '../theme/ThemeContext';
@@ -24,14 +29,17 @@ export default function SettingsScreen() {
   const { showToast } = useToast();
   const { basis, setBasis } = usePayBasis();
   const [state, setState] = useState<AccumulatedState | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      loadAccumulated().then((next) => {
-        if (active) setState(next);
+      Promise.all([loadAccumulated(), loadWorkplaces()]).then(([next, list]) => {
+        if (!active) return;
+        setState(next);
+        setWorkplaces(list);
       });
       return () => {
         active = false;
@@ -39,14 +47,18 @@ export default function SettingsScreen() {
     }, []),
   );
 
-  async function handleRedeem() {
-    setBusy(true);
-    const { state: next, redeemed } = await redeemAccumulated();
+  const nameOf = (id: string) => workplaces.find((w) => w.id === id)?.name ?? 'מקום עבודה שנמחק';
+
+  async function handleRedeem(workplaceId?: string) {
+    setBusy(workplaceId ?? 'all');
+    const { state: next, redeemed } = await redeemAccumulated(workplaceId);
     setState(next);
-    setBusy(false);
+    setBusy(null);
     if (redeemed > 0) {
       showToast(
-        `נפדו ${redeemed} שע׳ אקדמיות · נותרו ${next.minutes} דק׳ במונה`,
+        workplaceId
+          ? `נפדו ${redeemed} שע׳ אקדמיות ב${nameOf(workplaceId)}`
+          : `נפדו ${redeemed} שע׳ אקדמיות בכל הסמינרים`,
       );
     }
   }
@@ -56,12 +68,12 @@ export default function SettingsScreen() {
       setConfirmReset(true);
       return;
     }
-    setBusy(true);
+    setBusy('reset');
     const next = await resetAccumulated();
     setState(next);
     setConfirmReset(false);
-    setBusy(false);
-    showToast('המונה אופס');
+    setBusy(null);
+    showToast('כל המונים אופסו');
   }
 
   if (state === null) {
@@ -74,15 +86,23 @@ export default function SettingsScreen() {
     );
   }
 
-  const canRedeem = redeemableHours(state);
+  const total = accumulatedTotal(state);
+  // כל מקומות העבודה הפעילים, וגם מונים של מקומות שנמחקו — מהגדול לקטן.
+  const ids = [
+    ...new Set([...workplaces.map((w) => w.id), ...Object.keys(state.byWorkplace)]),
+  ];
+  const rows = ids
+    .map((id) => ({ id, entry: entryOf(state, id), workplace: workplaces.find((w) => w.id === id) }))
+    .sort((a, b) => b.entry.minutes - a.entry.minutes || b.entry.redeemedHours - a.entry.redeemedHours);
+  const totalRedeemable = rows.reduce((n, r) => n + redeemableHours(r.entry), 0);
 
   return (
     <Screen>
       <View style={styles.intro}>
         <Text style={styles.title}>דקות מצטברות</Text>
         <Text style={styles.subtitle}>
-          כאן נקבע בסיס חישוב השכר ופועל מונה "דקות עבודה מצטברות". תגיות
-          הסיכום החודשי — סכום עד חודש זה, שעות ונסיעות — יתווספו בשלב 6.
+          לכל סמינר מונה נפרד: דקות שאינן משלימות שעה אקדמית ({ACADEMIC_HOUR_MINUTES} דק׳), או
+          שנבחר לא לדווח עליהן כרגע, נצברות במונה של אותו סמינר — ונפדות בתעריף שלו.
         </Text>
       </View>
 
@@ -98,51 +118,78 @@ export default function SettingsScreen() {
         />
         <Text style={styles.note}>
           {basis === 'academic'
-            ? 'התעריף השעתי מוכפל בשעות אקדמיות (45 דק׳). דקות שאינן משלימות שעה אקדמית נכנסות למונה "דקות עבודה מצטברות".'
+            ? 'התעריף השעתי מוכפל בשעות אקדמיות (45 דק׳). דקות שאינן משלימות שעה אקדמית נכנסות למונה של הסמינר.'
             : 'התעריף השעתי מוכפל בשעות רגילות (60 דק׳). כל זמן העבודה נטו נכנס לחישוב ללא עיגול.'}
-        </Text>
-        <Text style={styles.note}>
-          ההגדרה גלובלית ומשפיעה על כל הדיווחים והסיכומים, גם רטרואקטיבית.
-          למקום עבודה בתשלום חודשי הבחירה אינה רלוונטית.
         </Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>דקות עבודה מצטברות</Text>
-        <Text style={styles.bigNumber}>{state.minutes}</Text>
-        <Text style={styles.unit}>דקות</Text>
-        <Text style={styles.cardHint}>
-          דקות שאינן משלימות שעה אקדמית ({ACADEMIC_HOUR_MINUTES} דק׳), או שנבחר
-          לא לדווח עליהן כרגע, נצברות כאן מכל דיווח.
-        </Text>
-
-        {canRedeem > 0 ? (
+        <Text style={styles.cardLabel}>סה״כ בכל הסמינרים</Text>
+        <Text style={styles.bigNumber}>{total.minutes}</Text>
+        <Text style={styles.unit}>דקות · {total.redeemedHours} שע׳ אקדמיות נפדו עד כה</Text>
+        {totalRedeemable > 0 ? (
           <Button
-            label={`פדיון ${canRedeem} שע׳ אקדמיות`}
-            onPress={handleRedeem}
-            loading={busy}
+            label={`פדיון כל השעות הזמינות (${totalRedeemable})`}
+            onPress={() => handleRedeem()}
+            loading={busy === 'all'}
+            disabled={busy != null}
           />
         ) : (
           <Text style={styles.cardHint}>
-            צריך לפחות {ACADEMIC_HOUR_MINUTES} דקות כדי לפדות שעה אקדמית שלמה.
+            אין כרגע סמינר עם {ACADEMIC_HOUR_MINUTES} דקות לפחות לפדיון.
           </Text>
         )}
       </View>
 
-      <View style={styles.row}>
-        <Text style={styles.rowLabel}>שעות אקדמיות שנפדו</Text>
-        <Text style={styles.rowValue}>{state.redeemedHours}</Text>
+      <Text style={styles.sectionLabel}>פירוט לפי סמינר</Text>
+      <View style={styles.list}>
+        {rows.map(({ id, entry, workplace }) => {
+          const canRedeem = redeemableHours(entry);
+          const toNext = ACADEMIC_HOUR_MINUTES - (entry.minutes % ACADEMIC_HOUR_MINUTES);
+          const value =
+            workplace && workplace.paymentType === 'hourly' && entry.redeemedHours > 0
+              ? ` · שווי ${formatShekels(entry.redeemedHours * workplace.rate)}`
+              : '';
+          return (
+            <View key={id} style={styles.row}>
+              <View style={styles.rowHead}>
+                <Text style={styles.rowLabel} numberOfLines={2}>
+                  {workplace?.name ?? nameOf(id)}
+                </Text>
+                <Text style={styles.rowValue}>{entry.minutes} דק׳</Text>
+              </View>
+              <ProgressBar fraction={(entry.minutes % ACADEMIC_HOUR_MINUTES) / ACADEMIC_HOUR_MINUTES} thin />
+              <Text style={styles.note}>
+                {canRedeem > 0
+                  ? `${canRedeem} שע׳ זמינות לפדיון`
+                  : entry.minutes > 0
+                    ? `עוד ${toNext} דק׳ לשעה אקדמית`
+                    : 'אין דקות במונה'}
+                {` · נפדו ${entry.redeemedHours} שע׳${value}`}
+              </Text>
+              {canRedeem > 0 ? (
+                <Button
+                  label={`פדיון ${canRedeem} שע׳ אקדמיות`}
+                  variant="secondary"
+                  onPress={() => handleRedeem(id)}
+                  loading={busy === id}
+                  disabled={busy != null}
+                />
+              ) : null}
+            </View>
+          );
+        })}
       </View>
       <Text style={styles.note}>
-        השעות שנפדו ייכללו בסיכומים ובחישוב השכר בשלבים הבאים.
+        השעות שנפדו ייכללו בסיכומים ובחישוב השכר בתעריף של כל סמינר.
       </Text>
 
-      {state.minutes > 0 || state.redeemedHours > 0 ? (
+      {total.minutes > 0 || total.redeemedHours > 0 ? (
         <Button
-          label={confirmReset ? 'לחצו שוב לאישור האיפוס' : 'איפוס המונה'}
+          label={confirmReset ? 'לחצו שוב לאישור איפוס כל המונים' : 'איפוס כל המונים'}
           variant="danger"
           onPress={handleReset}
-          disabled={busy}
+          disabled={busy != null}
         />
       ) : null}
     </Screen>
@@ -208,10 +255,17 @@ const makeStyles = (colors: AppColors) =>
     color: colors.brandDark,
     textAlign: 'center',
   },
-  row: {
+  list: {
+    gap: spacing.sm,
+  },
+  rowHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  row: {
+    gap: spacing.xs,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -219,6 +273,8 @@ const makeStyles = (colors: AppColors) =>
     padding: spacing.md,
   },
   rowLabel: {
+    flex: 1,
+    textAlign: 'right',
     fontSize: 15,
     fontWeight: '600',
     color: colors.text,

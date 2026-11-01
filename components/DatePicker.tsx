@@ -81,6 +81,7 @@ export function DatePicker({ value, onChange, workedDates, invalid }: DatePicker
 
       <ScrollView
         horizontal
+        style={{ flexGrow: 0 }}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chips}
         keyboardShouldPersistTaps="handled"

@@ -17,6 +17,11 @@ export type Workplace = {
   paymentType: PaymentType;
   /** יום בחודש (1–31) שבו מתקבל השכר — מגדיר את "החודש" הנפרד של מקום העבודה */
   payday: number;
+  /**
+   * תנאי תשלום "שוטף +" — מספר הימים מסוף החודש עד התשלום בפועל
+   * (ברירת מחדל {@link DEFAULT_PAYMENT_TERMS}). חסר בנתונים ישנים.
+   */
+  paymentTermsDays?: number;
   arrivalMode: ArrivalMode;
   /** עלות נסיעה לכיוון בתחבורה ציבורית, ב־₪ */
   travelCostPerDirection: number;
@@ -35,6 +40,20 @@ export type Workplace = {
 export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'demo'>;
 
 const STORAGE_KEY = 'reporting-hours/workplaces/v1';
+
+/** ברירת המחדל של "שוטף +" — שוטף + 30. */
+export const DEFAULT_PAYMENT_TERMS = 30;
+
+/** תנאי התשלום של מקום עבודה ("שוטף + N"), עם ברירת מחדל לנתונים ישנים. */
+export function paymentTermsOf(workplace: Pick<Workplace, 'paymentTermsDays'>): number {
+  const n = workplace.paymentTermsDays;
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? Math.round(n) : DEFAULT_PAYMENT_TERMS;
+}
+
+/** "שוטף + 30" */
+export function paymentTermsLabel(workplace: Pick<Workplace, 'paymentTermsDays'>): string {
+  return `שוטף + ${paymentTermsOf(workplace)}`;
+}
 
 /** כמה ימים מקום עבודה נשמר באשפה לפני מחיקה סופית. */
 export const TRASH_RETENTION_DAYS = 30;
@@ -60,6 +79,7 @@ export function emptyDraft(): WorkplaceDraft {
     rate: 0,
     paymentType: 'hourly',
     payday: 1,
+    paymentTermsDays: DEFAULT_PAYMENT_TERMS,
     arrivalMode: 'public_transport',
     travelCostPerDirection: 0,
     tripsPerDay: 2,

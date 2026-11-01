@@ -6,7 +6,7 @@ import { BarChart, Panel, ProgressBar, ShareRow, StatTile, TileGrid } from '../c
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
-import { loadAccumulated, type AccumulatedState } from '../lib/accumulated';
+import { accumulatedTotal, loadAccumulated, redeemableHours, type AccumulatedEntry } from '../lib/accumulated';
 import {
   currentPeriods,
   monthName,
@@ -20,7 +20,7 @@ import {
 import { usePayBasis } from '../lib/payBasis';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels } from '../lib/travel';
-import { loadWorkplaces, type Workplace } from '../lib/workplaces';
+import { loadWorkplaces, paymentTermsLabel, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -58,7 +58,8 @@ export default function DashboardScreen() {
   const [data, setData] = useState<{
     reports: WorkReport[];
     workplaces: Workplace[];
-    accumulated: AccumulatedState;
+    accumulated: AccumulatedEntry;
+    redeemable: number;
   } | null>(null);
   const [which, setWhich] = useState<PeriodChoice>('current');
   const [metric, setMetric] = useState<Metric>('pay');
@@ -68,7 +69,13 @@ export default function DashboardScreen() {
       let active = true;
       Promise.all([loadReports(), loadWorkplaces(), loadAccumulated()]).then(
         ([reports, workplaces, accumulated]) => {
-          if (active) setData({ reports, workplaces, accumulated });
+          if (!active) return;
+          setData({
+            reports,
+            workplaces,
+            accumulated: accumulatedTotal(accumulated),
+            redeemable: Object.values(accumulated.byWorkplace).reduce((n, e) => n + redeemableHours(e), 0),
+          });
         },
       );
       return () => {
@@ -96,7 +103,7 @@ export default function DashboardScreen() {
     const windowStart = `${trend[0].key}-01`;
     const recent = reports.filter((r) => r.date >= windowStart);
     return {
-      periods: [...periods].sort((a, b) => a.period.nextPayday.localeCompare(b.period.nextPayday)),
+      periods: [...periods].sort((a, b) => a.expectedPayment.localeCompare(b.expectedPayment)),
       totals,
       uniqueDays: dates.size,
       trend,
@@ -181,7 +188,7 @@ export default function DashboardScreen() {
         <StatTile
           label="דקות מצטברות"
           value={String(accumulated.minutes)}
-          sub={`${Math.floor(accumulated.minutes / ACADEMIC_HOUR_MINUTES)} שע׳ זמינות לפדיון · ${accumulated.redeemedHours} נפדו`}
+          sub={`בכל הסמינרים · ${data.redeemable} שע׳ זמינות לפדיון · ${accumulated.redeemedHours} נפדו`}
         />
         <StatTile
           label="ממוצע ליום עבודה"
@@ -198,11 +205,11 @@ export default function DashboardScreen() {
         title={which === 'current' ? 'תשלומים קרובים' : 'תשלומים אחרונים'}
         subtitle={
           which === 'current'
-            ? 'הסכום שנצבר בכל מקום עבודה עד עכשיו, לפי יום התשלום הקרוב'
+            ? 'הסכום שנצבר בכל מקום עבודה עד עכשיו, ומתי ישולם לפי תנאי התשלום (שוטף +)'
             : 'מה ששולם (או ישולם) עבור התקופה שהסתיימה'
         }
       >
-        {view.periods.map(({ workplace, period, totals: t }) => (
+        {view.periods.map(({ workplace, period, totals: t, expectedPayment, daysToExpected }) => (
           <View key={workplace.id} style={styles.payRow}>
             <View style={styles.payHead}>
               <Text style={styles.payName} numberOfLines={1}>
@@ -212,9 +219,9 @@ export default function DashboardScreen() {
             </View>
             <Text style={styles.payMeta}>
               {shortDate(period.start)}–{shortDate(period.end)} ·{' '}
-              {which === 'current'
-                ? `תשלום ${shortDate(period.nextPayday)} (${daysText(period.daysToPayday)})`
-                : `תשלום ${shortDate(period.nextPayday)}`}
+              {`תשלום צפוי ${shortDate(expectedPayment)} (${paymentTermsLabel(workplace)}${
+                daysToExpected >= 0 ? `, ${daysText(daysToExpected)}` : ', עבר'
+              })`}
               {' · '}
               {t.days} ימים
               {workplace.paymentType === 'monthly' ? ' · חודשי' : ` · ${hoursText(academicHours(t.netMinutes))} שע׳ אק׳`}

@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Keyboard, Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
 
@@ -13,6 +13,9 @@ type ScreenProps = {
    */
   keyboardFooter?: boolean;
 };
+
+/** גובה מינימלי לפוטר בכל מסך (מעבר לשוליים הבטוחים של המערכת). */
+const FOOTER_MIN = 56;
 
 /** גובה המקלדת האחרון שנמדד — משמש לפוטר הקבוע גם כשהמקלדת סגורה. */
 let lastKeyboardHeight = 0;
@@ -44,15 +47,17 @@ export function Screen({ children, scroll = true, keyboardFooter = false }: Scre
   const styles = useThemedStyles(makeStyles);
   const keyboard = useKeyboardHeight();
   const { height: windowHeight } = useWindowDimensions();
-  // טופס: פוטר קבוע בגובה המקלדת (או ~40% מהמסך לפני שנמדדה). מסך רגיל:
-  // רווח רק כשהמקלדת פתוחה.
+  const insets = useSafeAreaInsets();
+  // פוטר בכל מסך: מרווח מעל סרגל הניווט של המערכת, כדי שכפתורים בתחתית
+  // לא יוסתרו. בטופס: פוטר קבוע בגובה המקלדת (או ~40% מהמסך לפני שנמדדה).
+  const base = insets.bottom + FOOTER_MIN;
   const footer = keyboardFooter
-    ? Math.max(keyboard, lastKeyboardHeight || Math.round(windowHeight * 0.4))
-    : keyboard;
+    ? Math.max(keyboard, lastKeyboardHeight || Math.round(windowHeight * 0.4), base)
+    : Math.max(keyboard, base);
   const inner = (
     <View style={styles.content}>
       {children}
-      {scroll && footer > 0 ? <View style={{ height: footer }} /> : null}
+      {scroll ? <View style={{ height: footer }} /> : <View style={{ height: insets.bottom }} />}
     </View>
   );
   return (

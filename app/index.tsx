@@ -31,7 +31,7 @@ export default function HomeScreen() {
         }
         const periods = currentPeriods(workplaces, reports, basis);
         const nextPay = periods.length
-          ? Math.min(...periods.map((p) => p.period.daysToPayday))
+          ? Math.min(...periods.map((p) => p.daysToExpected).filter((d) => d >= 0))
           : null;
         setSummary({ totals: sumTotals(periods.map((p) => p.totals)), nextPay });
       });
