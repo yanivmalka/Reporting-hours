@@ -15,7 +15,7 @@ import { addAccumulatedMinutes, entryOf } from '../lib/accumulated';
 import { formatHours, payableHours, reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
 import { addReport, loadReports, makeBreakId, type WorkReport } from '../lib/reports';
-import { coursesOn, loadCourses, type Course } from '../lib/courses';
+import { coursesOn, loadCourses, timeRange, type Course } from '../lib/courses';
 import { formatShekels, hasTravelCost } from '../lib/travel';
 import { formatDuration, isValidISODate, parseTime, todayISO } from '../lib/time';
 import { ARRIVAL_MODE_LABELS, loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -59,6 +59,8 @@ export default function ReportScreen() {
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
   const [existing, setExisting] = useState<WorkReport[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  /** הקורס שנבחר (כשיש כמה קורסים בטווח השעות) */
+  const [courseId, setCourseId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [touched, setTouched] = useState(false);
   /** 'saved' / 'cancelled' — יציאה מכוונת, בלי אזהרה */
@@ -257,19 +259,45 @@ export default function ReportScreen() {
       : 0;
   const workedDates = existing.map((r) => r.date);
   // קורסים קבועים שמתקיימים בתאריך שנבחר (במקום העבודה שנבחר, או בכולם).
-  const todaysCourses = coursesOn(courses, date, workplaceId ?? undefined).filter((c) =>
+  const activeCourses = coursesOn(courses, date).filter((c) =>
     workplaces.some((w) => w.id === c.workplaceId),
   );
+  const todaysCourses = workplaceId
+    ? activeCourses.filter((c) => c.workplaceId === workplaceId)
+    : activeCourses;
+  // כשהוזן טווח שעות: הקורסים (בכל מקומות העבודה) שחופפים לו. אם יש יותר
+  // מאחד — צריך לבחור לאיזה קורס שייך הדיווח.
+  const rangeCourses =
+    rangeMin != null
+      ? activeCourses.filter((c) => {
+          const cs = parseTime(c.start);
+          const ce = parseTime(c.end);
+          return cs != null && ce != null && cs < (endMin as number) && ce > (startMin as number);
+        })
+      : [];
+  const mustChoose = rangeCourses.length > 1;
+  const shownCourses = mustChoose ? rangeCourses : todaysCourses;
 
-  function applyCourse(c: Course) {
+  /**
+   * בחירת קורס. כשהשעות כבר הוזנו ונבחר קורס מתוך כמה שחופפים לטווח —
+   * נקבעים מקום העבודה והנושא, והשעות שהוקלדו נשמרות. אחרת — ממלאים הכול.
+   */
+  function applyCourse(c: Course, keepTimes = false) {
+    setCourseId(c.id);
     setWorkplaceId(c.workplaceId);
     setPickerOpen(false);
-    setStart(c.start);
-    setEnd(c.end);
-    setBreaks(c.breakMinutes > 0 ? [{ id: makeBreakId(), minutes: String(c.breakMinutes) }] : []);
     setNote(c.name);
     setTouched(true);
     setErrors({});
+    if (keepTimes) {
+      if (breaks.length === 0 && c.breakMinutes > 0) {
+        setBreaks([{ id: makeBreakId(), minutes: String(c.breakMinutes) }]);
+      }
+      return;
+    }
+    setStart(c.start);
+    setEnd(c.end);
+    setBreaks(c.breakMinutes > 0 ? [{ id: makeBreakId(), minutes: String(c.breakMinutes) }] : []);
   }
   const visibleWorkplaces = pickerOpen || !workplace ? workplaces : [workplace];
 
@@ -309,6 +337,21 @@ export default function ReportScreen() {
                     {ARRIVAL_MODE_LABELS[w.arrivalMode]}
                   </Text>
                 </View>
+                <Pressable
+                  onPress={() =>
+                    router.push({ pathname: '/workplace-form', params: { id: w.id } })
+                  }
+                  hitSlop={6}
+                  style={({ pressed }) => [
+                    styles.editBtn,
+                    selected && styles.editBtnSelected,
+                    pressed && { opacity: 0.6 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`עריכת ${w.name}`}
+                >
+                  <Text style={[styles.editIcon, selected && styles.choiceTextSelected]}>✎</Text>
+                </Pressable>
                 {collapsed && workplaces.length > 1 ? (
                   <Text style={[styles.chevron, styles.choiceTextSelected]}>▾</Text>
                 ) : null}
@@ -327,24 +370,39 @@ export default function ReportScreen() {
         />
       </FormField>
 
-      {todaysCourses.length > 0 ? (
-        <FormField label="מהמערכת השבועית" hint="בחירת קורס ממלאת שעות, הפסקה ונושא">
+      {shownCourses.length > 0 ? (
+        <FormField
+          label={
+            mustChoose
+              ? `יש ${rangeCourses.length} קורסים בטווח השעות — לאיזה קורס הדיווח?`
+              : 'מהמערכת השבועית'
+          }
+          hint={
+            mustChoose
+              ? 'הבחירה קובעת את מקום העבודה והנושא; השעות שהוקלדו נשמרות'
+              : 'בחירת קורס ממלאת שעות, הפסקה ונושא'
+          }
+        >
           <View style={styles.choices}>
-            {todaysCourses.map((c) => {
-              const on = workplaceId === c.workplaceId && start === c.start && end === c.end;
+            {shownCourses.map((c) => {
+              const on = mustChoose
+                ? courseId === c.id
+                : workplaceId === c.workplaceId && start === c.start && end === c.end;
               return (
                 <Pressable
                   key={c.id}
-                  onPress={() => applyCourse(c)}
+                  onPress={() => applyCourse(c, mustChoose)}
                   style={[styles.courseChip, on && styles.choiceSelected]}
                 >
                   <Text style={[styles.choiceText, on && styles.choiceTextSelected]}>
                     {c.name}
                   </Text>
                   <Text style={[styles.choiceSub, on && styles.choiceSubSelected]}>
-                    {c.start}–{c.end}
+                    {timeRange(c.start, c.end)}
                     {c.breakMinutes > 0 ? ` · הפסקה ${c.breakMinutes} דק׳` : ''}
-                    {workplaceId ? '' : ` · ${workplaces.find((w) => w.id === c.workplaceId)?.name ?? ''}`}
+                    {workplaceId && !mustChoose
+                      ? ''
+                      : ` · ${workplaces.find((w) => w.id === c.workplaceId)?.name ?? ''}`}
                   </Text>
                 </Pressable>
               );
@@ -577,6 +635,22 @@ const makeStyles = (colors: AppColors) =>
   },
   choiceTextSelected: {
     color: colors.textOnBrand,
+  },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  editBtnSelected: {
+    borderColor: colors.textOnBrand,
+  },
+  editIcon: {
+    fontSize: 16,
+    color: colors.textMuted,
   },
   courseChip: {
     paddingVertical: spacing.sm,

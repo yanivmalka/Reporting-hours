@@ -128,9 +128,14 @@ export function sessionAcademicHours(course: Pick<Course, 'start' | 'end' | 'bre
   return sessionMinutes(course) / ACADEMIC_HOUR_MINUTES;
 }
 
+/** "09:00–12:15" בבידוד LTR — אחרת בטקסט עברי סדר השעות מתהפך. */
+export function timeRange(start: string, end: string): string {
+  return `\u2066${start}–${end}\u2069`;
+}
+
 /** "יום ב׳ · 09:00–12:15" */
 export function courseScheduleLabel(course: Pick<Course, 'weekday' | 'start' | 'end'>): string {
-  return `יום ${WEEKDAY_SHORT[course.weekday]} · ${course.start}–${course.end}`;
+  return `יום ${WEEKDAY_SHORT[course.weekday]} · ${timeRange(course.start, course.end)}`;
 }
 
 // ───────────────────────── תקופות מוכנות ─────────────────────────
