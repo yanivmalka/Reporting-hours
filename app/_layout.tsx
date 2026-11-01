@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DrawerProvider, DrawerToggle } from '../components/AppDrawer';
 import { ToastProvider } from '../components/Toast';
-import { UpdateChecker } from '../components/UpdateChecker';
+import { UpdateProvider } from '../components/UpdateChecker';
 import { DemoSeeder } from '../components/DemoSeeder';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
@@ -33,32 +33,33 @@ function Chrome() {
   const { t } = useI18n();
 
   return (
-    <DrawerProvider>
-      <StatusBar style="light" />
-      <UpdateChecker />
-      <DemoSeeder />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.brand },
-          headerTintColor: colors.textOnBrand,
-          headerTitleStyle: { fontWeight: '700' },
-          headerBackTitle: t('common.back'),
-          contentStyle: { backgroundColor: colors.background },
-          headerRight: () => <DrawerToggle />,
-        }}
-      >
-        <Stack.Screen name="index" options={{ title: t('nav.home') }} />
-        <Stack.Screen name="report" options={{ title: t('nav.report') }} />
-        <Stack.Screen name="reports" options={{ title: t('nav.reports') }} />
-        <Stack.Screen name="workplaces" options={{ title: t('nav.workplaces') }} />
-        <Stack.Screen
-          name="workplace-form"
-          options={{ title: t('nav.workplaceForm') }}
-        />
-        <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
-        <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
-        <Stack.Screen name="data" options={{ title: t('nav.data') }} />
-      </Stack>
-    </DrawerProvider>
+    <UpdateProvider>
+      <DrawerProvider>
+        <StatusBar style="light" />
+        <DemoSeeder />
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: colors.brand },
+            headerTintColor: colors.textOnBrand,
+            headerTitleStyle: { fontWeight: '700' },
+            headerBackTitle: t('common.back'),
+            contentStyle: { backgroundColor: colors.background },
+            headerRight: () => <DrawerToggle />,
+          }}
+        >
+          <Stack.Screen name="index" options={{ title: t('nav.home') }} />
+          <Stack.Screen name="report" options={{ title: t('nav.report') }} />
+          <Stack.Screen name="reports" options={{ title: t('nav.reports') }} />
+          <Stack.Screen name="workplaces" options={{ title: t('nav.workplaces') }} />
+          <Stack.Screen
+            name="workplace-form"
+            options={{ title: t('nav.workplaceForm') }}
+          />
+          <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
+          <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
+          <Stack.Screen name="data" options={{ title: t('nav.data') }} />
+        </Stack>
+      </DrawerProvider>
+    </UpdateProvider>
   );
 }

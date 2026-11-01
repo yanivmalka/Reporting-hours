@@ -4,9 +4,12 @@
  * כל push ל־main בונה APK ומפרסם אותו כ־GitHub Release עם תגית
  * v0.1.<מספר בנייה> (.github/workflows/build-apk.yml). כאן נשלפת הגרסה
  * האחרונה מה־API הציבורי של GitHub ומושווית למספר הבנייה המותקן.
- * העדכון עצמו: פתיחת קישור ה־APK בדפדפן — אנדרואיד מוריד ומציע להתקין.
+ * העדכון עצמו: ה־APK יורד לתוך האפליקציה (עם התקדמות), ואז נפתח ישירות
+ * מתקין החבילות של אנדרואיד — בלי דפדפן חיצוני.
  */
 import Constants from 'expo-constants';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { Linking, Platform } from 'react-native';
 
 const REPO = 'yanivmalka/Reporting-hours';
@@ -64,7 +67,55 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   };
 }
 
-/** פותח את הורדת ה־APK (או את דף הגרסאות אם אין קישור ישיר). */
-export function openUpdate(info: UpdateInfo | null): Promise<void> {
-  return Linking.openURL(info?.apkUrl ?? RELEASES_PAGE);
+/** גיבוי: פתיחת דף הגרסאות בדפדפן (אם ההורדה הפנימית נכשלה). */
+export function openReleasesPage(): Promise<void> {
+  return Linking.openURL(RELEASES_PAGE);
+}
+
+/** FLAG_GRANT_READ_URI_PERMISSION — מאפשר למתקין לקרוא את הקובץ שלנו. */
+const FLAG_GRANT_READ_URI_PERMISSION = 1;
+
+/**
+ * מוריד את ה־APK לתיקיית המטמון של האפליקציה, תוך דיווח התקדמות (0–1).
+ * מחזיר את נתיב הקובץ המקומי. קובץ שכבר הורד במלואו — לא יורד שוב.
+ */
+export async function downloadApk(
+  info: UpdateInfo,
+  onProgress: (fraction: number) => void,
+): Promise<string> {
+  if (!info.apkUrl) throw new Error('no apk');
+  const target = `${FileSystem.cacheDirectory}reporting-hours-${info.latestBuild}.apk`;
+  const done = `${target}.done`;
+  if ((await FileSystem.getInfoAsync(done)).exists) {
+    onProgress(1);
+    return target;
+  }
+  await FileSystem.deleteAsync(target, { idempotent: true });
+
+  const task = FileSystem.createDownloadResumable(info.apkUrl, target, {}, (p) => {
+    if (p.totalBytesExpectedToWrite > 0) {
+      onProgress(p.totalBytesWritten / p.totalBytesExpectedToWrite);
+    }
+  });
+  const result = await task.downloadAsync();
+  if (!result || result.status !== 200) {
+    await FileSystem.deleteAsync(target, { idempotent: true });
+    throw new Error(`download ${result?.status ?? 'cancelled'}`);
+  }
+  await FileSystem.writeAsStringAsync(done, '1');
+  onProgress(1);
+  return result.uri;
+}
+
+/**
+ * פותח את מתקין החבילות של אנדרואיד עבור ה־APK שהורד. בפעם הראשונה
+ * אנדרואיד מבקש לאשר "התקנת אפליקציות לא מוכרות" עבור האפליקציה.
+ */
+export async function installApk(fileUri: string): Promise<void> {
+  const contentUri = await FileSystem.getContentUriAsync(fileUri);
+  await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+    data: contentUri,
+    flags: FLAG_GRANT_READ_URI_PERMISSION,
+    type: 'application/vnd.android.package-archive',
+  });
 }

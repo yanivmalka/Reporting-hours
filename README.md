@@ -32,7 +32,8 @@
 - **הורדה:** `https://github.com/yanivmalka/Reporting-hours/releases/latest`
 - **עדכון מתוך האפליקציה:** [lib/update.ts](./lib/update.ts) בודק בפתיחה את ה־Release האחרון ומשווה
   למספר הבנייה המותקן (`extra.buildNumber`, מוזרק ב־[app.config.js](./app.config.js)). אם יש חדשה —
-  חלון "עדכון זמין" שפותח את הורדת ה־APK. בתפריט הצד: הגרסה המותקנת וכפתור "בדיקת עדכונים".
+  חלון "עדכון זמין": ה־APK יורד בתוך האפליקציה עם פס התקדמות (expo-file-system), ואז נפתח מתקין החבילות
+  של אנדרואיד (expo-intent-launcher, הרשאת REQUEST_INSTALL_PACKAGES). בתפריט הצד: הגרסה המותקנת וכפתור "בדיקת עדכונים".
 - **חתימה:** עדכון מותקן רק אם נחתם באותו מפתח. אם הוגדרו הסודות `ANDROID_KEYSTORE_BASE64`,
   `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` — נחתם בהם; אחרת במפתח ה־debug הקבוע של תבנית Expo
   (יציב, אך ציבורי). מעבר בין המפתחות מחייב הסרה והתקנה מחדש פעם אחת.
