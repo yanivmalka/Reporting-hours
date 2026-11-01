@@ -1,6 +1,13 @@
-import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavCard } from '../components/NavCard';
+import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
+import { currentPeriods, sumTotals, type Totals } from '../lib/dashboard';
+import { onDataChanged } from '../lib/demo';
+import { usePayBasis } from '../lib/payBasis';
+import { loadReports } from '../lib/reports';
+import { loadWorkplaces } from '../lib/workplaces';
 import { Screen } from '../components/Screen';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
@@ -8,6 +15,35 @@ import { spacing, type AppColors } from '../theme/colors';
 export default function HomeScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
+  const { basis } = usePayBasis();
+  const [summary, setSummary] = useState<{ totals: Totals; nextPay: number | null } | null>(null);
+
+  // תקציר "החודש" לכרטיס העליון — סכום עד כה, שעות, והתשלום הקרוב.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const load = () =>
+        Promise.all([loadReports(), loadWorkplaces()]).then(([reports, workplaces]) => {
+        if (!active) return;
+        if (reports.length === 0) {
+          setSummary(null);
+          return;
+        }
+        const periods = currentPeriods(workplaces, reports, basis);
+        const nextPay = periods.length
+          ? Math.min(...periods.map((p) => p.period.daysToPayday))
+          : null;
+        setSummary({ totals: sumTotals(periods.map((p) => p.totals)), nextPay });
+      });
+      void load();
+      // טעינת נתוני הדגמה בהפעלה הראשונה מסתיימת אחרי שהמסך כבר נטען.
+      const unsubscribe = onDataChanged(() => void load());
+      return () => {
+        active = false;
+        unsubscribe();
+      };
+    }, [basis]),
+  );
 
   return (
     <Screen>
@@ -19,7 +55,32 @@ export default function HomeScreen() {
         </Text>
       </View>
 
+      {summary ? (
+        <Pressable
+          style={({ pressed }) => [styles.summary, pressed && styles.summaryPressed]}
+          onPress={() => router.push('/dashboard')}
+          accessibilityRole="button"
+        >
+          <Text style={styles.summaryLabel}>החודש עד כה · לוח בקרה ←</Text>
+          <Text style={styles.summaryValue}>
+            {Math.round(summary.totals.pay).toLocaleString('en-US')} ₪
+          </Text>
+          <Text style={styles.summaryMeta}>
+            {Math.round((summary.totals.netMinutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳
+            אקדמיות · {summary.totals.reports} דיווחים
+            {summary.nextPay != null
+              ? ` · תשלום קרוב ${summary.nextPay === 0 ? 'היום' : `בעוד ${summary.nextPay} ימים`}`
+              : ''}
+          </Text>
+        </Pressable>
+      ) : null}
+
       <View style={styles.cards}>
+        <NavCard
+          title="לוח בקרה"
+          subtitle="סכומים לפי תקופת שכר, תשלומים קרובים, מגמות ועיגול שעות"
+          onPress={() => router.push('/dashboard')}
+        />
         <NavCard
           title="דיווח יום עבודה"
           subtitle="בחירת מקום עבודה, טווח שעות והפסקות"
@@ -48,8 +109,8 @@ export default function HomeScreen() {
       </View>
 
       <Text style={styles.footnote}>
-        שלב 4 — לכל דיווח ולכל מקום עבודה מוצג השכר המחושב, לפי בסיס חישוב
-        (שעות אקדמיות / רגילות) שנקבע בהגדרות. סיכומים חודשיים יתווספו בשלב 6.
+        לוח הבקרה מסכם כל מקום עבודה לפי תקופת השכר שלו (מיום התשלום ועד הבא),
+        לפי בסיס חישוב השכר שנקבע בהגדרות.
       </Text>
     </Screen>
   );
@@ -70,6 +131,34 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 15,
     lineHeight: 22,
     color: colors.textMuted,
+    textAlign: 'right',
+  },
+  summary: {
+    backgroundColor: colors.brand,
+    borderRadius: 16,
+    padding: spacing.lg,
+    gap: 2,
+  },
+  summaryPressed: {
+    opacity: 0.9,
+  },
+  summaryLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textOnBrand,
+    opacity: 0.9,
+    textAlign: 'right',
+  },
+  summaryValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.textOnBrand,
+    textAlign: 'right',
+  },
+  summaryMeta: {
+    fontSize: 13,
+    color: colors.textOnBrand,
+    opacity: 0.9,
     textAlign: 'right',
   },
   cards: {

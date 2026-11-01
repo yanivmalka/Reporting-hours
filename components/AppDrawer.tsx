@@ -98,6 +98,7 @@ const ANIM_MS = 220;
 /** קישורי הניווט בתפריט; התוויות מתורגמות דרך t('nav.*'). */
 const NAV_LINKS: { href: Href; key: string }[] = [
   { href: '/', key: 'nav.home' },
+  { href: '/dashboard', key: 'nav.dashboard' },
   { href: '/report', key: 'nav.report' },
   { href: '/reports', key: 'nav.reports' },
   { href: '/workplaces', key: 'nav.workplaces' },

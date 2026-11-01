@@ -40,6 +40,7 @@ const he = {
     trash: 'אשפה',
     settings: 'דקות מצטברות',
     data: 'ניהול נתונים',
+    dashboard: 'לוח בקרה',
   },
   home: {
     welcome: 'ברוך הבא 👋',
@@ -200,6 +201,7 @@ const en: StringTree = {
     trash: 'Trash',
     settings: 'Accumulated Minutes',
     data: 'Data management',
+    dashboard: 'Dashboard',
   },
   home: {
     welcome: 'Welcome 👋',

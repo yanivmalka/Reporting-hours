@@ -26,6 +26,16 @@ const ACCUMULATED_KEY = 'reporting-hours/accumulated/v1';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** מאזינים לשינוי נתונים (טעינה/מחיקה של הדגמה, איפוס) — כדי שמסכים פתוחים יתרעננו. */
+const listeners = new Set<() => void>();
+export function onDataChanged(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+function notify() {
+  listeners.forEach((l) => l());
+}
+
 type DemoMeta = {
   /** כמה דקות הוסיפו נתוני ההדגמה למונה (ולא נפדו) */
   minutes: number;
@@ -418,6 +428,7 @@ export async function loadDemoData(): Promise<number> {
   const meta: DemoMeta = { minutes, redeemedHours: redeemed, loadedAt: Date.now() };
   await writeJSON(DEMO_META_KEY, meta);
   await writeJSON(AUTO_SEED_FLAG, true);
+  notify();
   return reports.length;
 }
 
@@ -440,6 +451,7 @@ export async function removeDemoData(): Promise<number> {
     });
     await AsyncStorage.removeItem(DEMO_META_KEY).catch(() => {});
   }
+  if (removed > 0) notify();
   return removed;
 }
 
@@ -453,6 +465,7 @@ export async function resetAllData(): Promise<void> {
   }
   // לא לטעון שוב נתוני הדגמה אוטומטית אחרי איפוס מכוון.
   await writeJSON(AUTO_SEED_FLAG, true);
+  notify();
 }
 
 /**
