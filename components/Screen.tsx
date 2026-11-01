@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { Keyboard, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Keyboard, Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
@@ -7,7 +7,15 @@ import { spacing, type AppColors } from '../theme/colors';
 type ScreenProps = {
   children: ReactNode;
   scroll?: boolean;
+  /**
+   * פוטר קבוע בתחתית הגלילה בגובה מקלדת — למסכי טפסים, כדי שאפשר יהיה
+   * לגלול כל שדה (גם האחרון) אל מעל המקלדת.
+   */
+  keyboardFooter?: boolean;
 };
+
+/** גובה המקלדת האחרון שנמדד — משמש לפוטר הקבוע גם כשהמקלדת סגורה. */
+let lastKeyboardHeight = 0;
 
 /**
  * גובה המקלדת הפתוחה (0 כשסגורה). באנדרואיד עם תצוגה מקצה לקצה המסך לא
@@ -18,9 +26,10 @@ function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    const show = Keyboard.addListener('keyboardDidShow', (e) =>
-      setHeight(e.endCoordinates.height),
-    );
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      lastKeyboardHeight = e.endCoordinates.height;
+      setHeight(e.endCoordinates.height);
+    });
     const hide = Keyboard.addListener('keyboardDidHide', () => setHeight(0));
     return () => {
       show.remove();
@@ -31,13 +40,19 @@ function useKeyboardHeight(): number {
 }
 
 /** מעטפת מסך אחידה: רקע, שוליים בטוחים וריווח פנימי. */
-export function Screen({ children, scroll = true }: ScreenProps) {
+export function Screen({ children, scroll = true, keyboardFooter = false }: ScreenProps) {
   const styles = useThemedStyles(makeStyles);
   const keyboard = useKeyboardHeight();
+  const { height: windowHeight } = useWindowDimensions();
+  // טופס: פוטר קבוע בגובה המקלדת (או ~40% מהמסך לפני שנמדדה). מסך רגיל:
+  // רווח רק כשהמקלדת פתוחה.
+  const footer = keyboardFooter
+    ? Math.max(keyboard, lastKeyboardHeight || Math.round(windowHeight * 0.4))
+    : keyboard;
   const inner = (
     <View style={styles.content}>
       {children}
-      {scroll && keyboard > 0 ? <View style={{ height: keyboard }} /> : null}
+      {scroll && footer > 0 ? <View style={{ height: footer }} /> : null}
     </View>
   );
   return (
@@ -47,7 +62,9 @@ export function Screen({ children, scroll = true }: ScreenProps) {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-        >{inner}</ScrollView>
+        >
+          {inner}
+        </ScrollView>
       ) : (
         inner
       )}

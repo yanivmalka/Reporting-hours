@@ -3,9 +3,11 @@
  *
  * - מקלדת מספרית בלבד, ספרות בלבד נקלטות.
  * - הקלדה רציפה: אחרי 2 ספרות שעה — מעבר אוטומטי לדקות; אחרי 2 ספרות דקות —
- *   `onComplete` (מעבר לשדה הבא). ספרת שעה ראשונה 3–9 משלימה "0" ועוברת מיד
- *   (‎"9" → 09), וכך גם ספרת דקות ראשונה 6–9.
- * - מחיקה (Backspace) בשדה דקות ריק חוזרת לשדה השעות.
+ *   מעבר לשדה הבא (`onOverflow` / `onComplete`). ספרת שעה ראשונה 3–9 משלימה
+ *   "0" ועוברת מיד (‎"9" → 09), וכך גם ספרת דקות ראשונה 6–9.
+ * - עמיד להקלדה מהירה: ספרות שמגיעות לשדה שכבר מלא (כי המעבר עוד לא הושלם)
+ *   מועברות הלאה לשדה הבא במקום ללכת לאיבוד, והקלדה בשדה מלא שנכנסים אליו
+ *   מחליפה את תוכנו.
  * - הערך החיצוני הוא "HH:MM" כששני החלקים מלאים, אחרת מחרוזת ריקה.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
@@ -14,27 +16,48 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 
-export type TimeInputHandle = { focus: () => void };
+export type TimeInputHandle = {
+  focus: () => void;
+  /** מזין ספרות שנשפכו מהשדה הקודם (הקלדה רציפה), כאילו הוקלדו כאן */
+  feed: (digits: string) => void;
+};
 
 type TimeInputProps = {
   value: string;
   onChange: (value: string) => void;
   /** נקרא כשהשעה הוקלדה במלואה — למעבר לשדה הבא */
   onComplete?: () => void;
+  /** ספרות עודפות אחרי שהשעה הושלמה — להעברה לשדה הבא */
+  onOverflow?: (digits: string) => void;
   invalid?: boolean;
   hourPlaceholder?: string;
   minutePlaceholder?: string;
 };
 
-const digits = (text: string) => text.replace(/\D/g, '');
+const onlyDigits = (text: string) => text.replace(/\D/g, '');
 
 function split(value: string): [string, string] {
   const m = /^(\d{1,2}):(\d{2})$/.exec(value);
   return m ? [m[1].padStart(2, '0'), m[2]] : ['', ''];
 }
 
+/** לוקח חלק (שעות/דקות) מתחילת רצף ספרות; מחזיר [חלק, שארית]. */
+function take(d: string, maxFirst: number): [string, string] {
+  if (d === '') return ['', ''];
+  if (Number(d[0]) > maxFirst) return [`0${d[0]}`, d.slice(1)];
+  return [d.slice(0, 2), d.slice(2)];
+}
+
 export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function TimeInput(
-  { value, onChange, onComplete, invalid, hourPlaceholder = 'שש', minutePlaceholder = 'דד' },
+  {
+    value,
+    onChange,
+    onComplete,
+    onOverflow,
+    invalid,
+    hourPlaceholder = 'שש',
+    minutePlaceholder = 'דד',
+  },
   ref,
 ) {
   const styles = useThemedStyles(makeStyles);
@@ -42,20 +65,24 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
   const hourRef = useRef<TextInput>(null);
   const minuteRef = useRef<TextInput>(null);
   const [[hh, mm], setParts] = useState<[string, string]>(() => split(value));
+  // הערכים העדכניים, מתעדכנים מיד (לא מחכים לרינדור) — בהקלדה מהירה אירוע
+  // אחד עלול להגיע לפני שהקודם הגיע ל־state.
+  const partsRef = useRef<[string, string]>([hh, mm]);
+  // אחרי כניסה לשדה מלא — ההקלדה הבאה מחליפה את תוכנו.
+  const replaceNext = useRef<{ h: boolean; m: boolean }>({ h: false, m: false });
 
-  useImperativeHandle(ref, () => ({ focus: () => hourRef.current?.focus() }), []);
-
-  // סנכרון רק כשהערך הוחלף מבחוץ (ולא כהד של מה שהשדה עצמו שלח),
-  // כדי שהקלדה חלקית — שנשלחת כ־'' — לא תימחק.
+  // סנכרון רק כשהערך הוחלף מבחוץ (ולא כהד של מה שהשדה עצמו שלח).
   const lastEmitted = useRef(value);
   useEffect(() => {
     if (value !== lastEmitted.current) {
       lastEmitted.current = value;
-      setParts(split(value));
+      partsRef.current = split(value);
+      setParts(partsRef.current);
     }
   }, [value]);
 
   function emit(nextH: string, nextM: string) {
+    partsRef.current = [nextH, nextM];
     setParts([nextH, nextM]);
     const valid = nextH.length === 2 && nextM.length === 2;
     const next = valid ? `${nextH}:${nextM}` : '';
@@ -63,25 +90,84 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     onChange(next);
   }
 
-  function onHour(text: string) {
-    let h = digits(text).slice(0, 2);
-    if (h.length === 1 && Number(h) > 2) h = `0${h}`;
+  /** מזין ספרות לשדה הדקות; שארית — לשדה הבא. */
+  function feedMinutes(d: string) {
+    const [m, rest] = take(d, 5);
+    emit(partsRef.current[0], m);
+    if (m.length === 2) {
+      replaceNext.current.m = false;
+      if (rest && onOverflow) onOverflow(rest);
+      else onComplete?.();
+    } else {
+      minuteRef.current?.focus();
+    }
+  }
+
+  /** מזין ספרות לשדה השעות; שארית — לדקות. */
+  function feedHours(d: string) {
+    let [h, rest] = take(d, 2);
     if (h.length === 2 && Number(h) > 23) h = '23';
-    emit(h, mm);
-    if (h.length === 2) minuteRef.current?.focus();
+    emit(h, partsRef.current[1]);
+    if (h.length === 2) {
+      replaceNext.current.m = partsRef.current[1] !== '';
+      minuteRef.current?.focus();
+      if (rest) feedMinutes(rest);
+    }
+  }
+
+  /** מה שהוקלד בפועל: בשדה שסומן להחלפה — רק התווים החדשים. */
+  function typed(text: string, prev: string, replace: boolean): string {
+    const d = onlyDigits(text);
+    if (replace && d.length > prev.length && d.startsWith(prev)) return d.slice(prev.length);
+    return d;
+  }
+
+  function onHour(text: string) {
+    const prev = partsRef.current[0];
+    const replace = replaceNext.current.h;
+    replaceNext.current.h = false;
+    let d = typed(text, prev, replace);
+    // שדה מלא שקיבל עוד ספרות (המעבר לדקות עוד לא הושלם) — הספרות לדקות.
+    if (!replace && prev.length === 2 && d.length > 2 && d.startsWith(prev)) {
+      feedMinutes(d.slice(2));
+      return;
+    }
+    feedHours(d);
   }
 
   function onMinute(text: string) {
-    let m = digits(text).slice(0, 2);
-    if (m.length === 1 && Number(m) > 5) m = `0${m}`;
-    emit(hh, m);
-    if (m.length === 2) onComplete?.();
+    const prev = partsRef.current[1];
+    const replace = replaceNext.current.m;
+    replaceNext.current.m = false;
+    const d = typed(text, prev, replace);
+    if (!replace && prev.length === 2 && d.length > 2 && d.startsWith(prev)) {
+      if (onOverflow) onOverflow(d.slice(2));
+      return;
+    }
+    feedMinutes(d);
   }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => {
+        replaceNext.current.h = partsRef.current[0] !== '';
+        hourRef.current?.focus();
+      },
+      feed: (d: string) => {
+        replaceNext.current.h = false;
+        hourRef.current?.focus();
+        feedHours(d);
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const common = {
     keyboardType: 'number-pad' as const,
     inputMode: 'numeric' as const,
-    maxLength: 2,
+    maxLength: 4,
     selectTextOnFocus: true,
     placeholderTextColor: colors.textMuted,
     style: [styles.part, invalid && styles.invalid],
@@ -93,6 +179,9 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         ref={hourRef}
         value={hh}
         onChangeText={onHour}
+        onFocus={() => {
+          replaceNext.current.h = partsRef.current[0] !== '';
+        }}
         placeholder={hourPlaceholder}
         accessibilityLabel="שעות"
         returnKeyType="next"
@@ -104,13 +193,13 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         ref={minuteRef}
         value={mm}
         onChangeText={onMinute}
+        onFocus={() => {
+          replaceNext.current.m = partsRef.current[1] !== '';
+        }}
         placeholder={minutePlaceholder}
         accessibilityLabel="דקות"
         returnKeyType="next"
         onSubmitEditing={() => onComplete?.()}
-        onKeyPress={(e) => {
-          if (e.nativeEvent.key === 'Backspace' && mm === '') hourRef.current?.focus();
-        }}
         {...common}
       />
     </View>

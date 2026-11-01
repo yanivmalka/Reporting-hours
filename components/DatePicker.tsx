@@ -1,6 +1,6 @@
 /**
  * בחירת תאריך לדיווח:
- * - שורת כפתורים מהירים בגלילה אופקית: "היום", "אתמול", ואחריהם תאריכי ימי
+ * - שורת כפתורים מהירים בגלילה אופקית: "היום", "אתמול", ואחריהם עד 7 ימי
  *   עבודה קודמים שכבר דווחו (מהחדש לישן).
  * - כפתור "📅" שפותח תאריכון חודשי (ימים שכבר דווחו מסומנים בנקודה).
  * בלי תלות חיצונית — עובד זהה ב־web ובאנדרואיד.
@@ -57,7 +57,7 @@ export function DatePicker({ value, onChange, workedDates, invalid }: DatePicker
       [...new Set(workedDates)]
         .filter((d) => d !== today && d !== yesterday && d <= today)
         .sort((a, b) => b.localeCompare(a))
-        .slice(0, 30),
+        .slice(0, 7), // עד 7 ימי עבודה אחורה
     [workedDates, today, yesterday],
   );
 

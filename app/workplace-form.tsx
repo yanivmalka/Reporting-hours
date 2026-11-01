@@ -170,7 +170,7 @@ export default function WorkplaceFormScreen() {
   const isPublicTransport = form.arrivalMode === 'public_transport';
 
   return (
-    <Screen>
+    <Screen keyboardFooter>
       <Stack.Screen options={{ title }} />
 
       <FormField label="שם מקום העבודה" error={errors.name}>

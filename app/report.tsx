@@ -254,7 +254,7 @@ export default function ReportScreen() {
   const visibleWorkplaces = pickerOpen || !workplace ? workplaces : [workplace];
 
   return (
-    <Screen>
+    <Screen keyboardFooter>
       <FormField label="מקום עבודה" error={errors.workplace}>
         <View style={styles.choices}>
           {visibleWorkplaces.map((w) => {
@@ -317,6 +317,7 @@ export default function ReportScreen() {
                 setErrors((prev) => ({ ...prev, start: undefined, end: undefined }));
               }}
               onComplete={() => endRef.current?.focus()}
+              onOverflow={(d) => endRef.current?.feed(d)}
               invalid={Boolean(errors.start)}
             />
           </FormField>
