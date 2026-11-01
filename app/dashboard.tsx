@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { BarChart, Panel, ProgressBar, ShareRow, StatTile, TileGrid } from '../components/Charts';
+import { PayrollReminder } from '../components/PayrollReminder';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
@@ -163,6 +164,8 @@ export default function DashboardScreen() {
           "החודש" של כל מקום עבודה נמדד מיום התשלום שלו ועד יום התשלום הבא. הקישו על נתון לפירוט.
         </Text>
       </View>
+
+      <PayrollReminder />
 
       <SegmentedControl<PeriodChoice>
         options={[

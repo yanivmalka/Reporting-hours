@@ -41,6 +41,7 @@ const he = {
     settings: 'דקות מצטברות',
     data: 'ניהול נתונים',
     dashboard: 'לוח בקרה',
+    payroll: 'דוחות שכר',
   },
   home: {
     welcome: 'ברוך הבא 👋',
@@ -202,6 +203,7 @@ const en: StringTree = {
     settings: 'Accumulated Minutes',
     data: 'Data management',
     dashboard: 'Dashboard',
+    payroll: 'Payroll reports',
   },
   home: {
     welcome: 'Welcome 👋',

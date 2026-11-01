@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavCard } from '../components/NavCard';
+import { PayrollReminder } from '../components/PayrollReminder';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { currentPeriods, sumTotals, type Totals } from '../lib/dashboard';
 import { onDataChanged } from '../lib/demo';
@@ -76,6 +77,8 @@ export default function HomeScreen() {
         </Pressable>
       ) : null}
 
+      <PayrollReminder />
+
       <View style={styles.cards}>
         <NavCard
           title="לוח בקרה"
@@ -91,6 +94,11 @@ export default function HomeScreen() {
           title="הדיווחים שלי"
           subtitle="רשימת ימי העבודה שדווחו וזמן העבודה נטו"
           onPress={() => router.push('/reports')}
+        />
+        <NavCard
+          title="דוחות שכר"
+          subtitle="דוח שעות חודשי לכל מקום עבודה ומייל מוכן לשליחה"
+          onPress={() => router.push('/payroll')}
         />
         <NavCard
           title="מקומות עבודה"

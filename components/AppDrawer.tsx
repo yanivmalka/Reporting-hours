@@ -101,6 +101,7 @@ const NAV_LINKS: { href: Href; key: string }[] = [
   { href: '/dashboard', key: 'nav.dashboard' },
   { href: '/report', key: 'nav.report' },
   { href: '/reports', key: 'nav.reports' },
+  { href: '/payroll', key: 'nav.payroll' },
   { href: '/workplaces', key: 'nav.workplaces' },
   { href: '/settings', key: 'nav.settings' },
   { href: '/trash', key: 'nav.trash' },

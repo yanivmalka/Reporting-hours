@@ -16,6 +16,7 @@ import { loadReports, saveReports, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import { formatTime } from './time';
 import { loadCourses, saveCourses, type Course } from './courses';
+import { loadPayrollStatus, payrollItems, savePayrollStatus, statusKey } from './payroll';
 import { saveWorkplaces, type Workplace } from './workplaces';
 
 const KEY_PREFIX = 'reporting-hours/';
@@ -51,6 +52,8 @@ type DemoWorkplace = Workplace & { track: Track; group?: string };
 const WORKPLACES: DemoWorkplace[] = [
   {
     id: 'demo_wp_1',
+    payrollEmail: 'sachar@kav-umerhav.example',
+    ccEmails: ['rakezet@kav-umerhav.example'],
     paymentTermsDays: 30,
     name: 'סמינר "קו ומרחב" לעיצוב פנים — ירושלים',
     rate: 220,
@@ -63,6 +66,8 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_2',
+    payrollEmail: 'sachar@mivne.example',
+    ccEmails: [],
     paymentTermsDays: 45,
     name: 'מכללת "מבנה" לאדריכלות ועיצוב — מודיעין',
     rate: 240,
@@ -75,6 +80,8 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_3',
+    payrollEmail: 'sachar@sirtut.example',
+    ccEmails: ['mazkirut@sirtut.example'],
     paymentTermsDays: 30,
     name: 'סמינר "שרטוט" — בית שמש',
     rate: 195,
@@ -87,6 +94,8 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_4',
+    payrollEmail: 'sachar@even-vehomer.example',
+    ccEmails: [],
     paymentTermsDays: 0,
     name: 'המדרשה לעיצוב "אבן וחומר"',
     rate: 6800,
@@ -99,6 +108,8 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_5',
+    payrollEmail: 'sachar@proportzia.example',
+    ccEmails: ['academic@proportzia.example'],
     paymentTermsDays: 60,
     name: 'סמינר "פרופורציה" — מבשרת ציון',
     rate: 205,
@@ -111,6 +122,8 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_6',
+    payrollEmail: 'sachar@keshet.example',
+    ccEmails: [],
     paymentTermsDays: 30,
     name: 'מכללת "קשת" לעיצוב ואדריכלות',
     rate: 230,
@@ -123,6 +136,8 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_7',
+    payrollEmail: 'sachar@yesod.example',
+    ccEmails: ['menahel@yesod.example'],
     paymentTermsDays: 90,
     name: 'בית הספר להנדסאים "יסוד"',
     rate: 185,
@@ -135,6 +150,8 @@ const WORKPLACES: DemoWorkplace[] = [
   },
   {
     id: 'demo_wp_8',
+    payrollEmail: 'sachar@petach.example',
+    ccEmails: [],
     paymentTermsDays: 30,
     name: 'סמינר "פתח" לאמנויות ועיצוב',
     rate: 4200,
@@ -477,6 +494,7 @@ export async function loadDemoData(): Promise<number> {
   const fromMonth = `${firstDate.slice(0, 7)}-01`;
   const userCourses = (await loadCourses()).filter((c) => !c.demo);
   await saveCourses([...userCourses, ...demoCourses(fromMonth, now)]);
+  await seedDemoPayroll(demoWps, reports);
   const current = await loadReports();
   await saveReports([...current.filter((r) => !r.demo), ...reports]);
 
@@ -583,6 +601,48 @@ export async function ensureDemoCourses(): Promise<boolean> {
   if (reports.length === 0) return false;
   const firstDate = reports.reduce((m, r) => (r.date < m ? r.date : m), reports[0].date);
   await saveCourses([...courses, ...demoCourses(`${firstDate.slice(0, 7)}-01`, new Date())]);
+  notify();
+  return true;
+}
+
+/**
+ * מצב דוחות השכר בהדגמה: חודשים ישנים כבר "נשלחו"; החודש האחרון שנסגר
+ * ממתין לשליחה בחלק מהסמינרים — כדי שהתזכורות יופיעו.
+ */
+async function seedDemoPayroll(workplaces: Workplace[], reports: WorkReport[]): Promise<void> {
+  const statuses = await loadPayrollStatus();
+  const items = payrollItems(workplaces, reports, {});
+  workplaces.forEach((w, i) => {
+    const closed = items
+      .filter((x) => x.workplace.id === w.id && x.closed && x.reports > 0)
+      .sort((a, b) => b.period.start.localeCompare(a.period.start));
+    closed.forEach((x, k) => {
+      // החודש האחרון שנסגר: ממתין בסמינרים זוגיים, נשלח בשאר.
+      if (k === 0 && i % 2 === 0) return;
+      const [y, m, d] = x.period.end.split('-').map(Number);
+      statuses[statusKey(w.id, x.period.start)] = {
+        generatedAt: new Date(y, m - 1, d + 2).getTime(),
+        sentAt: new Date(y, m - 1, d + 2).getTime(),
+      };
+    });
+  });
+  await savePayrollStatus(statuses);
+}
+
+/** הדגמה שנטענה לפני דוחות השכר — משלימה כתובות מייל ומצב דוחות, פעם אחת. */
+export async function ensureDemoPayroll(): Promise<boolean> {
+  if (!(await isDemoLoaded())) return false;
+  const all = await readJSON<Workplace[]>(WORKPLACES_KEY, []);
+  const demoWps = all.filter((w) => w.demo && !w.deletedAt);
+  if (demoWps.length === 0 || demoWps.some((w) => w.payrollEmail)) return false;
+  const byId = new Map(WORKPLACES.map((w) => [w.id, w]));
+  const updated = all.map((w) => {
+    const src = byId.get(w.id);
+    return src && w.demo ? { ...w, payrollEmail: src.payrollEmail, ccEmails: src.ccEmails } : w;
+  });
+  await saveWorkplaces(updated);
+  const reports = (await loadReports()).filter((r) => r.demo);
+  await seedDemoPayroll(updated.filter((w) => w.demo && !w.deletedAt), reports);
   notify();
   return true;
 }

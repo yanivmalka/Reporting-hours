@@ -56,6 +56,8 @@ function Chrome() {
             name="workplace-form"
             options={{ title: t('nav.workplaceForm') }}
           />
+          <Stack.Screen name="payroll" options={{ title: t('nav.payroll') }} />
+          <Stack.Screen name="payroll-report" options={{ title: 'דוח שכר' }} />
           <Stack.Screen name="course-form" options={{ title: 'קורס' }} />
           <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
           <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />

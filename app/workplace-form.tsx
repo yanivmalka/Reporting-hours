@@ -32,6 +32,8 @@ type FormState = {
   paymentType: PaymentType;
   payday: string;
   paymentTermsDays: string;
+  payrollEmail: string;
+  ccEmails: string;
   arrivalMode: ArrivalMode;
   travelCostPerDirection: string;
   tripsPerDay: string;
@@ -56,11 +58,20 @@ function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
     paymentType: d.paymentType,
     payday: String(d.payday),
     paymentTermsDays: String(paymentTermsOf(d)),
+    payrollEmail: d.payrollEmail ?? '',
+    ccEmails: (d.ccEmails ?? []).join(', '),
     arrivalMode: d.arrivalMode,
     travelCostPerDirection: String(d.travelCostPerDirection),
     tripsPerDay: String(d.tripsPerDay),
   };
 }
+
+const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+const splitEmails = (v: string) =>
+  v
+    .split(/[,;\s]+/)
+    .map((e) => e.trim())
+    .filter(Boolean);
 
 function parseNum(value: string): number {
   return Number(value.replace(',', '.').trim());
@@ -129,6 +140,12 @@ export default function WorkplaceFormScreen() {
       next.payday = 'יום בחודש בין 1 ל־31';
     }
 
+    if (state.payrollEmail.trim() && !isEmail(state.payrollEmail.trim())) {
+      next.payrollEmail = 'כתובת מייל לא תקינה';
+    }
+    if (splitEmails(state.ccEmails).some((e) => !isEmail(e))) {
+      next.ccEmails = 'אחת הכתובות אינה תקינה (מפרידים בפסיק)';
+    }
     const terms = parseNum(state.paymentTermsDays);
     if (!Number.isInteger(terms) || terms < 0 || terms > 365) {
       next.paymentTermsDays = 'מספר ימים שלם בין 0 ל־365';
@@ -161,6 +178,8 @@ export default function WorkplaceFormScreen() {
       paymentType: form.paymentType,
       payday: parseNum(form.payday),
       paymentTermsDays: parseNum(form.paymentTermsDays),
+      payrollEmail: form.payrollEmail.trim(),
+      ccEmails: splitEmails(form.ccEmails),
       arrivalMode: form.arrivalMode,
       travelCostPerDirection:
         form.arrivalMode === 'public_transport'
@@ -311,6 +330,30 @@ export default function WorkplaceFormScreen() {
           </FormField>
         </>
       ) : null}
+
+      <FormField
+        label="מייל לשכר"
+        hint="לכתובת זו נשלח דוח השעות החודשי (מסך דוחות שכר)"
+        error={errors.payrollEmail}
+      >
+        <TextField
+          value={form.payrollEmail}
+          onChangeText={(t) => set('payrollEmail', t)}
+          placeholder="payroll@college.ac.il"
+          email
+          invalid={Boolean(errors.payrollEmail)}
+        />
+      </FormField>
+
+      <FormField label="העתק (CC)" hint="אפשר כמה כתובות, מופרדות בפסיק" error={errors.ccEmails}>
+        <TextField
+          value={form.ccEmails}
+          onChangeText={(t) => set('ccEmails', t)}
+          placeholder="coordinator@college.ac.il, ..."
+          email
+          invalid={Boolean(errors.ccEmails)}
+        />
+      </FormField>
 
       <FormField
         label="קורסים קבועים"

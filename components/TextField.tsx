@@ -8,6 +8,8 @@ type TextFieldProps = {
   onChangeText: (text: string) => void;
   placeholder?: string;
   numeric?: boolean;
+  /** כתובת מייל: מקלדת מייל, בלי אות גדולה אוטומטית, משמאל לימין */
+  email?: boolean;
   invalid?: boolean;
 };
 
@@ -17,6 +19,7 @@ export function TextField({
   onChangeText,
   placeholder,
   numeric,
+  email,
   invalid,
 }: TextFieldProps) {
   const styles = useThemedStyles(makeStyles);
@@ -27,11 +30,13 @@ export function TextField({
       onChangeText={onChangeText}
       placeholder={placeholder}
       placeholderTextColor={colors.textMuted}
-      keyboardType={numeric ? 'numeric' : 'default'}
-      inputMode={numeric ? 'decimal' : 'text'}
+      keyboardType={numeric ? 'numeric' : email ? 'email-address' : 'default'}
+      inputMode={numeric ? 'decimal' : email ? 'email' : 'text'}
+      autoCapitalize={email ? 'none' : undefined}
+      autoCorrect={email ? false : undefined}
       style={[
         styles.input,
-        numeric && styles.numeric,
+        (numeric || email) && styles.numeric,
         invalid && styles.invalid,
       ]}
     />

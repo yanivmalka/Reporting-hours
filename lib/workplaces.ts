@@ -22,6 +22,10 @@ export type Workplace = {
    * (ברירת מחדל {@link DEFAULT_PAYMENT_TERMS}). חסר בנתונים ישנים.
    */
   paymentTermsDays?: number;
+  /** כתובת המייל של מחלקת השכר — לשליחת דוח השעות החודשי */
+  payrollEmail?: string;
+  /** כתובות להעתק (CC) בשליחת הדוח */
+  ccEmails?: string[];
   arrivalMode: ArrivalMode;
   /** עלות נסיעה לכיוון בתחבורה ציבורית, ב־₪ */
   travelCostPerDirection: number;
