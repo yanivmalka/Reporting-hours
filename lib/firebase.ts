@@ -5,24 +5,14 @@
  *
  * ההגדרות כאן ציבוריות (לא סוד): ההרשאות נאכפות בחוקי האבטחה של Firestore.
  *
- * בשלב זה ההתחברות והסנכרון פעילים בגרסת האתר בלבד. באנדרואיד התחברות גוגל
- * דורשת build ייעודי (EAS) — יתווסף בהמשך; עד אז האפליקציה שומרת מקומית בלבד.
+ * ההתחברות עצמה תלויה בפלטפורמה: lib/authPlatform.web.ts (חלון באתר)
+ * ו־lib/authPlatform.ts (בורר החשבונות הנייטיבי באנדרואיד).
  */
 import { Platform } from 'react-native';
 import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import {
-  GoogleAuthProvider,
-  browserLocalPersistence,
-  getAuth,
-  onAuthStateChanged,
-  setPersistence,
-  signInWithPopup,
-  signInWithRedirect,
-  signOut,
-  type Auth,
-  type User,
-} from 'firebase/auth';
+import { onAuthStateChanged, signOut, type Auth, type User } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { createAuth, platformSignIn, platformSignOut } from './authPlatform';
 
 export const APP_ID = 'reporting-hours';
 
@@ -35,8 +25,9 @@ const firebaseConfig = {
   appId: '1:141711225817:web:30ceb430dee31b59ebdfc8',
 };
 
-/** סנכרון ענן נתמך כרגע רק בדפדפן (ולא בזמן בניית הדפים הסטטיים). */
-export const cloudSupported = Platform.OS === 'web' && typeof window !== 'undefined';
+/** סנכרון ענן: באתר (לא בזמן בניית הדפים הסטטיים) ובאנדרואיד. */
+export const cloudSupported =
+  (Platform.OS === 'web' && typeof window !== 'undefined') || Platform.OS === 'android';
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -46,8 +37,7 @@ function ensure(): { auth: Auth; db: Firestore } | null {
   if (!cloudSupported) return null;
   if (!app) {
     app = getApps()[0] ?? initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    void setPersistence(auth, browserLocalPersistence).catch(() => {});
+    auth = createAuth(app);
     db = getFirestore(app);
   }
   return { auth: auth!, db: db! };
@@ -76,22 +66,11 @@ export function watchUser(cb: (u: CloudUser | null) => void): () => void {
 export async function signInWithGoogle(): Promise<void> {
   const f = ensure();
   if (!f) throw new Error('cloud-unsupported');
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
-  try {
-    await signInWithPopup(f.auth, provider);
-  } catch (e: unknown) {
-    const code = (e as { code?: string })?.code ?? '';
-    // חלון קופץ חסום (למשל בדפדפן מובייל) — מעבר להתחברות בהפניה.
-    if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
-      await signInWithRedirect(f.auth, provider);
-      return;
-    }
-    throw e;
-  }
+  await platformSignIn(f.auth);
 }
 
 export async function signOutCloud(): Promise<void> {
   const f = ensure();
   if (f) await signOut(f.auth);
+  await platformSignOut();
 }

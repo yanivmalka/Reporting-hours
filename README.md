@@ -15,8 +15,10 @@
 - **שרת:** פרויקט Firebase המשותף `malka-apps` ([apps-platform](https://github.com/yanivmalka/apps-platform)).
   התחברות עם Google וסנכרון ענן ([lib/firebase.ts](./lib/firebase.ts), [lib/sync.ts](./lib/sync.ts),
   [components/CloudSync.tsx](./components/CloudSync.tsx)): כל מפתח אחסון משוכפל ל־
-  `apps/reporting-hours/users/{uid}/kv/{key}`, רק המשתמש עצמו ניגש. בשלב זה באתר בלבד;
-  באנדרואיד דרוש build של EAS להתחברות גוגל נייטיבית.
+  `apps/reporting-hours/users/{uid}/kv/{key}`, רק המשתמש עצמו ניגש. באתר: חלון התחברות של Firebase
+  ([lib/authPlatform.web.ts](./lib/authPlatform.web.ts)); באנדרואיד: בורר החשבונות הנייטיבי של גוגל
+  ([lib/authPlatform.ts](./lib/authPlatform.ts)), שדורש אפליקציית אנדרואיד רשומה ב־Firebase עם
+  החבילה `com.reportinghours.app` ו־SHA-1 של מפתח החתימה (סודות `ANDROID_KEYSTORE_*`).
 
 ## אתר (web)
 

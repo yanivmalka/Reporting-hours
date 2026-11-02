@@ -16,11 +16,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Text, View } from 'react-native';
+import { AppState, Platform, Text, View } from 'react-native';
 import { Button } from './Button';
 import { useI18n } from '../lib/i18n';
 import { cloudSupported, signInWithGoogle, signOutCloud, watchUser, type CloudUser } from '../lib/firebase';
-import { cloudHasData, getSyncStatus, onRemoteChange, onSyncStatus, pull, setSyncUser, type SyncStatus } from '../lib/sync';
+import { cloudHasData, flush, getSyncStatus, onRemoteChange, onSyncStatus, pull, setSyncUser, type SyncStatus } from '../lib/sync';
 import { isDemoLoaded, onDataChanged, removeDemoData } from '../lib/demo';
 import { spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
@@ -71,14 +71,21 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // חזרה ללשונית / לאפליקציה — בודקים אם יש שינויים ממכשיר אחר.
+  // חזרה ללשונית (אתר) או לאפליקציה (אנדרואיד) — בודקים אם יש שינויים ממכשיר אחר.
   useEffect(() => {
     if (!cloudSupported || !user) return;
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void pull();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    if (Platform.OS === 'web') {
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') void pull();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      return () => document.removeEventListener('visibilitychange', onVisible);
+    }
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') void pull();
+      else void flush(); // יוצאים מהאפליקציה — דוחפים מיד את מה שממתין
+    });
+    return () => sub.remove();
   }, [user]);
 
   // הסרת נתוני הדגמה / איפוס — מחדשים את הסנכרון.
@@ -105,7 +112,7 @@ const TEXT = {
     signIn: 'התחברות עם Google',
     signOut: 'התנתקות',
     signedInAs: 'מחובר בתור',
-    nativeNote: 'סנכרון ענן זמין כרגע בגרסת האתר. באפליקציה הנתונים נשמרים במכשיר בלבד.',
+    nativeNote: 'סנכרון ענן אינו זמין במכשיר זה. הנתונים נשמרים במכשיר בלבד.',
     failed: 'ההתחברות נכשלה. נסו שוב.',
     status: {
       off: '',
@@ -121,7 +128,7 @@ const TEXT = {
     signIn: 'Sign in with Google',
     signOut: 'Sign out',
     signedInAs: 'Signed in as',
-    nativeNote: 'Cloud sync is currently available in the web version. In the app, data stays on this device.',
+    nativeNote: 'Cloud sync is not available on this device. Data stays on this device only.',
     failed: 'Sign-in failed. Please try again.',
     status: {
       off: '',
