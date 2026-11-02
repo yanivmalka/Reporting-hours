@@ -6,12 +6,53 @@ import { readJSON, writeJSON } from './storage';
  */
 
 export type PaymentType = 'hourly' | 'monthly';
-export type ArrivalMode = 'public_transport' | 'car' | 'walk';
+export type ArrivalMode = 'public_transport' | 'car' | 'walk' | 'taxi' | 'taxi_voucher';
+
+/**
+ * תזכורת להזמנת מונית לפני יום עבודה:
+ *  - none — בלי תזכורת;
+ *  - hoursBefore — X שעות לפני שעת היציאה (תחילת הקורס הראשון באותו יום);
+ *  - nightBefore — בערב שלפני, בשעה קבועה ("HH:MM").
+ */
+export type TaxiReminder =
+  | { kind: 'none' }
+  | { kind: 'hoursBefore'; hours: number }
+  | { kind: 'nightBefore'; time: string };
+
+/** פרטי מונית למקום עבודה שמגיעים אליו במונית או במונית פתק. */
+export type TaxiSettings = {
+  /** טלפון תחנת המונית / הנהג */
+  phone: string;
+  /** שם איש הקשר (כשנבחר מאנשי הקשר) */
+  contactName?: string;
+  reminder: TaxiReminder;
+};
+
+export const DEFAULT_TAXI_REMINDER: TaxiReminder = { kind: 'hoursBefore', hours: 2 };
+
+/** האם מגיעים למקום העבודה במונית (רגילה או פתק). */
+export function isTaxi(mode: ArrivalMode): boolean {
+  return mode === 'taxi' || mode === 'taxi_voucher';
+}
+
+/** איש קשר במקום העבודה — מזכירות, רכז/ת, מחלקת שכר וכד׳. */
+export type WorkplaceContact = {
+  id: string;
+  /** תיאור התפקיד, למשל "מזכירות" */
+  description: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+};
 
 export type Workplace = {
   id: string;
   /** שם המוסד — מכללה / אוניברסיטה */
   name: string;
+  /** כתובת מקום העבודה — מוצגת בתזכורת לנסיעה */
+  address?: string;
+  /** אנשי קשר משויכים (מזכירות וכד׳) — ידנית או מאנשי הקשר במכשיר */
+  contacts?: WorkplaceContact[];
   /** תעריף לשעה (שכר שעתי) או סכום חודשי קבוע (שכר חודשי), ב־₪ */
   rate: number;
   paymentType: PaymentType;
@@ -43,6 +84,8 @@ export type Workplace = {
   travelCostPerDirection: number;
   /** מספר נסיעות ליום — ברירת מחדל 2 (הלוך ושוב) */
   tripsPerDay: number;
+  /** מונית / מונית פתק: טלפון והעדפת תזכורת (רק כשאופן ההגעה מונית) */
+  taxi?: TaxiSettings;
   /**
    * חותמת מחיקה (מילישניות). כשקיימת — מקום העבודה נמצא ב"אשפה" ואינו
    * מוצג ברשימות הרגילות. אחרי {@link TRASH_RETENTION_DAYS} ימים הוא נמחק לצמיתות.
@@ -145,6 +188,8 @@ export const ARRIVAL_MODE_LABELS: Record<ArrivalMode, string> = {
   public_transport: 'תחבורה ציבורית',
   car: 'רכב',
   walk: 'הליכה',
+  taxi: 'מונית',
+  taxi_voucher: 'מונית פתק',
 };
 
 /** ברירת מחדל לטופס מקום עבודה חדש. */
@@ -198,6 +243,10 @@ export function trashDaysLeft(workplace: Workplace, now: number = Date.now()): n
   if (workplace.deletedAt == null) return TRASH_RETENTION_DAYS;
   const remaining = TRASH_RETENTION_MS - (now - workplace.deletedAt);
   return Math.max(0, Math.ceil(remaining / DAY_MS));
+}
+
+export function makeContactId(): string {
+  return `ct_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function makeId(): string {

@@ -32,6 +32,12 @@
       "expo-router",
       "expo-localization",
       [
+        "expo-contacts",
+        {
+          "contactsPermission": "האפליקציה ניגשת לאנשי הקשר כדי לבחור מספר טלפון להזמנת מונית."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

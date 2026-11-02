@@ -82,7 +82,7 @@ export default function WorkplacesScreen() {
       )}
 
       <Text style={styles.hint}>
-        העברה לאשפה — מתוך מסך העריכה. מהאשפה שבתפריט אפשר לשחזר תוך 30 יום.
+        העברה לאשפה — מתוך מסך העריכה. מהאשפה אפשר לשחזר תוך 30 יום.
       </Text>
 
       <View style={styles.action}>
@@ -90,6 +90,7 @@ export default function WorkplacesScreen() {
           label="הוספת מקום עבודה"
           onPress={() => router.push('/workplace-form')}
         />
+        <Button label="אשפה — מקומות עבודה שנמחקו" variant="secondary" onPress={() => router.push('/trash')} />
       </View>
     </Screen>
   );
@@ -135,5 +136,6 @@ const makeStyles = (colors: AppColors) =>
     },
     action: {
       marginTop: spacing.sm,
+      gap: spacing.sm,
     },
   });

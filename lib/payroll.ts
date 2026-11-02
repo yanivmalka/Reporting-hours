@@ -39,7 +39,7 @@ export type PayrollStatus = {
 /** האם הדוח נעול לעריכה (נשלח לשכר ולא בוטל). */
 export const isLocked = (st: PayrollStatus | undefined) => Boolean(st?.sentAt);
 
-type StatusMap = Record<string, PayrollStatus>;
+export type StatusMap = Record<string, PayrollStatus>;
 
 const STATUS_KEY = 'reporting-hours/payroll/v1';
 

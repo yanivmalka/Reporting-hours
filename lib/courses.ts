@@ -138,6 +138,27 @@ export function courseScheduleLabel(course: Pick<Course, 'weekday' | 'start' | '
   return `יום ${WEEKDAY_SHORT[course.weekday]} · ${timeRange(course.start, course.end)}`;
 }
 
+/**
+ * האם מפגש של קורס בתאריך נתון כבר דווח: יש באותו יום דיווח לאותו מקום
+ * עבודה שנושאו שם הקורס, או שטווח השעות שלו חופף לקורס.
+ */
+export function courseReported(
+  course: Pick<Course, 'workplaceId' | 'name' | 'start' | 'end'>,
+  date: string,
+  reports: readonly { id: string; workplaceId: string; date: string; start: string; end: string; note?: string }[],
+  excludeReportId?: string,
+): boolean {
+  const cs = parseTime(course.start) ?? 0;
+  const ce = parseTime(course.end) ?? 0;
+  return reports.some((r) => {
+    if (r.date !== date || r.workplaceId !== course.workplaceId || r.id === excludeReportId) return false;
+    if (r.note === course.name) return true;
+    const rs = parseTime(r.start) ?? 0;
+    const re = parseTime(r.end) ?? 0;
+    return rs < ce && re > cs;
+  });
+}
+
 // ───────────────────────── תקופות מוכנות ─────────────────────────
 
 export type PeriodPreset = { key: string; label: string; from: string; to: string };

@@ -1,0 +1,304 @@
+/**
+ * הנתונים של מסך הבית — טהור, בלי React ובלי אחסון:
+ *   - ברכה לפי שעת היום ושם פרטי;
+ *   - לו״ז היום ומחר מתוך הקורסים הפעילים של כל מקום עבודה, עם סטטוס דיווח;
+ *   - התראות ותזכורות (מונית, דיווחים חסרים, תשלום קרוב, דקות מצטברות,
+ *     דוחות שכר ותיאום מס).
+ */
+import type { Href } from 'expo-router';
+import { accumulatedTotal, redeemableHours, entryOf, type AccumulatedState } from './accumulated';
+import { courseReported, coursesOn, timeRange, type Course } from './courses';
+import { currentPeriods, isoDate } from './dashboard';
+import type { PayBasis } from './payBasis';
+import { overduePayments, payrollItems, pendingPayroll, type StatusMap } from './payroll';
+import type { WorkReport } from './reports';
+import { parseTime } from './time';
+import { isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
+
+// ───────────────────────── ברכה ─────────────────────────
+
+/** בוקר 05–11 · צהריים 12–16 · ערב 17–20 · לילה 21–04. */
+export function greetingFor(hour: number): string {
+  if (hour >= 5 && hour < 12) return 'בוקר טוב';
+  if (hour >= 12 && hour < 17) return 'צהריים טובים';
+  if (hour >= 17 && hour < 21) return 'ערב טוב';
+  return 'לילה טוב';
+}
+
+/** השם הפרטי מתוך שם מלא ("יניב מלכא" → "יניב"). */
+export function firstName(fullName: string | null | undefined): string {
+  return (fullName ?? '').trim().split(/\s+/)[0] ?? '';
+}
+
+const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+const MONTHS = [
+  'בינואר', 'בפברואר', 'במרץ', 'באפריל', 'במאי', 'ביוני',
+  'ביולי', 'באוגוסט', 'בספטמבר', 'באוקטובר', 'בנובמבר', 'בדצמבר',
+];
+
+/** "יום שני, 2 בנובמבר" */
+export function longDayLabel(d: Date): string {
+  return `יום ${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+export function addDays(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
+
+// ───────────────────────── לו״ז ─────────────────────────
+
+export type SessionStatus = 'reported' | 'pending' | 'now' | 'later' | 'tomorrow';
+
+export type AgendaItem = {
+  course: Course;
+  workplace: Workplace;
+  date: string;
+  status: SessionStatus;
+  /** "09:00–12:15" בבידוד LTR */
+  time: string;
+};
+
+export type AgendaDay = {
+  key: 'today' | 'tomorrow';
+  label: string;
+  date: string;
+  dayLabel: string;
+  items: AgendaItem[];
+};
+
+/** הקורסים של היום ומחר במקומות העבודה הפעילים, עם סטטוס לכל מפגש. */
+export function agenda(
+  courses: readonly Course[],
+  workplaces: readonly Workplace[],
+  reports: readonly WorkReport[],
+  now: Date = new Date(),
+): AgendaDay[] {
+  const byId = new Map(workplaces.map((w) => [w.id, w]));
+  const nowMin = minutesOfDay(now);
+  const build = (key: AgendaDay['key'], d: Date): AgendaDay => {
+    const date = isoDate(d);
+    const items: AgendaItem[] = [];
+    for (const course of coursesOn(courses, date)) {
+      const workplace = byId.get(course.workplaceId);
+      if (!workplace) continue;
+      let status: SessionStatus = 'tomorrow';
+      if (key === 'today') {
+        const s = parseTime(course.start) ?? 0;
+        const e = parseTime(course.end) ?? 0;
+        if (courseReported(course, date, reports)) status = 'reported';
+        else if (nowMin >= e) status = 'pending';
+        else if (nowMin >= s) status = 'now';
+        else status = 'later';
+      }
+      items.push({ course, workplace, date, status, time: timeRange(course.start, course.end) });
+    }
+    return { key, label: key === 'today' ? 'היום' : 'מחר', date, dayLabel: longDayLabel(d), items };
+  };
+  return [build('today', now), build('tomorrow', addDays(now, 1))];
+}
+
+/**
+ * הקורס שכדאי למלא מראש בכפתור הדיווח: מפגש של היום שהסתיים או מתקיים
+ * עכשיו ולא דווח (המוקדם מביניהם). null כשאין.
+ */
+export function suggestedSession(today: AgendaDay): AgendaItem | null {
+  return today.items.find((i) => i.status === 'pending' || i.status === 'now') ?? null;
+}
+
+// ───────────────────────── התראות ─────────────────────────
+
+export type AlertTone = 'info' | 'warn' | 'danger';
+
+export type HomeAlert = {
+  /** מפתח יציב — כולל תאריך כשההתראה תלויה ביום, כדי שסגירה תחול רק עליה */
+  key: string;
+  /** שם אייקון ב־MaterialCommunityIcons */
+  icon: string;
+  tone: AlertTone;
+  title: string;
+  body: string;
+  action?: { label: string; href?: Href; tel?: string };
+};
+
+export type AlertInput = {
+  workplaces: readonly Workplace[];
+  courses: readonly Course[];
+  reports: readonly WorkReport[];
+  accumulated: AccumulatedState;
+  payroll: StatusMap;
+  basis: PayBasis;
+  now?: Date;
+};
+
+/** כמה ימים אחורה לחפש מפגשים שלא דווחו. */
+const MISSING_LOOKBACK_DAYS = 7;
+
+const shortDate = (iso: string) => {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${d}.${m}`;
+};
+
+const names = (list: string[]) => {
+  const u = [...new Set(list)];
+  return u.slice(0, 3).join(' · ') + (u.length > 3 ? ` ועוד ${u.length - 3}` : '');
+};
+
+/** תזכורות מונית: לפי ההעדפה של כל מקום עבודה שמגיעים אליו במונית. */
+function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[], now: Date): HomeAlert[] {
+  const out: HomeAlert[] = [];
+  const nowMin = minutesOfDay(now);
+  const today = isoDate(now);
+  const tomorrow = isoDate(addDays(now, 1));
+  for (const w of workplaces) {
+    if (!isTaxi(w.arrivalMode) || !w.taxi) continue;
+    const reminder = w.taxi.reminder;
+    const tel = w.taxi.phone || undefined;
+    const kind = w.arrivalMode === 'taxi_voucher' ? 'מונית פתק' : 'מונית';
+    if (reminder.kind === 'hoursBefore') {
+      const first = coursesOn(courses, today, w.id)[0];
+      const start = first ? parseTime(first.start) : null;
+      if (first && start != null && nowMin < start && nowMin >= start - reminder.hours * 60) {
+        out.push({
+          key: `taxi|${w.id}|${today}`,
+          icon: 'taxi',
+          tone: 'warn',
+          title: `להזמין ${kind} ל${w.name}`,
+          body: `${first.name} מתחיל ב־${first.start}.${w.address ? `\nיעד: ${w.address}` : ''}`,
+          action: tel ? { label: 'חיוג להזמנה', tel } : undefined,
+        });
+      }
+    } else if (reminder.kind === 'nightBefore') {
+      const first = coursesOn(courses, tomorrow, w.id)[0];
+      const at = parseTime(reminder.time);
+      if (first && at != null && nowMin >= at) {
+        out.push({
+          key: `taxi|${w.id}|${tomorrow}`,
+          icon: 'taxi',
+          tone: 'warn',
+          title: `להזמין ${kind} למחר — ${w.name}`,
+          body: `${first.name} מחר ב־${first.start}.${w.address ? `\nיעד: ${w.address}` : ''}`,
+          action: tel ? { label: 'חיוג להזמנה', tel } : undefined,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** מפגשים מהימים האחרונים (לא כולל היום) שלא דווחו. */
+function missingAlerts(
+  workplaces: readonly Workplace[],
+  courses: readonly Course[],
+  reports: readonly WorkReport[],
+  now: Date,
+): HomeAlert[] {
+  const ids = new Set(workplaces.map((w) => w.id));
+  const missing: { course: Course; date: string }[] = [];
+  for (let i = MISSING_LOOKBACK_DAYS; i >= 1; i--) {
+    const date = isoDate(addDays(now, -i));
+    for (const course of coursesOn(courses, date)) {
+      if (ids.has(course.workplaceId) && !courseReported(course, date, reports)) missing.push({ course, date });
+    }
+  }
+  if (missing.length === 0) return [];
+  const wpName = (id: string) => workplaces.find((w) => w.id === id)?.name ?? '';
+  const first = missing[0];
+  return [
+    {
+      key: `missing|${missing.map((m) => `${m.course.id}@${m.date}`).join(',')}`,
+      icon: 'clipboard-alert-outline',
+      tone: 'danger',
+      title: missing.length === 1 ? 'דיווח חסר' : `${missing.length} דיווחים חסרים מהשבוע האחרון`,
+      body:
+        missing.length === 1
+          ? `${first.course.name} · ${wpName(first.course.workplaceId)} · ${shortDate(first.date)}`
+          : `הראשון: ${first.course.name} · ${shortDate(first.date)}`,
+      action: {
+        label: 'דיווח עכשיו',
+        href: { pathname: '/report', params: { course: first.course.id, date: first.date } },
+      },
+    },
+  ];
+}
+
+/** כל ההתראות למסך הבית, מהדחוף לפחות דחוף. */
+export function homeAlerts(input: AlertInput): HomeAlert[] {
+  const now = input.now ?? new Date();
+  const { workplaces, courses, reports } = input;
+  const out: HomeAlert[] = [];
+
+  out.push(...taxiAlerts(workplaces, courses, now));
+  out.push(...missingAlerts(workplaces, courses, reports, now));
+
+  // דוחות שכר ותיאום מס (אותה לוגיקה שהייתה בבאנר התזכורות).
+  const items = payrollItems(workplaces, reports, input.payroll);
+  const overdue = overduePayments(items, now);
+  if (overdue.length) {
+    out.push({
+      key: `overdue|${overdue.map((o) => o.workplace.id).join(',')}`,
+      icon: 'cash-clock',
+      tone: 'danger',
+      title: overdue.length === 1 ? 'תשלום אחד באיחור' : `${overdue.length} תשלומים באיחור`,
+      body: `טרם סומנו כשולמו: ${names(overdue.map((o) => o.workplace.name))}`,
+      action: { label: 'מעקב תשלומים', href: '/payments' },
+    });
+  }
+  const pending = pendingPayroll(items);
+  if (pending.length) {
+    out.push({
+      key: `pending|${pending.map((p) => p.workplace.id).join(',')}`,
+      icon: 'email-fast-outline',
+      tone: 'warn',
+      title: pending.length === 1 ? 'דוח שכר ממתין לשליחה' : `${pending.length} דוחות שכר ממתינים לשליחה`,
+      body: names(pending.map((p) => p.workplace.name)),
+      action: { label: 'לדוחות השכר', href: '/payroll' },
+    });
+  }
+
+  // תשלום צפוי היום / מחר (לפי "שוטף +" של התקופה הקודמת).
+  for (const p of currentPeriods(workplaces, reports, input.basis, now, 'previous')) {
+    if (p.daysToExpected !== 0 && p.daysToExpected !== 1) continue;
+    if (p.totals.reports === 0 && p.workplace.paymentType === 'hourly') continue;
+    out.push({
+      key: `payday|${p.workplace.id}|${p.expectedPayment}`,
+      icon: 'calendar-check-outline',
+      tone: 'info',
+      title: `${p.daysToExpected === 0 ? 'היום' : 'מחר'} צפוי תשלום — ${p.workplace.name}`,
+      body: `עבור ${shortDate(p.period.start)}–${shortDate(p.period.end)}.`,
+      action: { label: 'מעקב תשלומים', href: '/payments' },
+    });
+  }
+
+  // דקות מצטברות שאפשר לפדות לשעות אקדמיות.
+  if (redeemableHours(accumulatedTotal(input.accumulated)) > 0) {
+    const ready = workplaces.filter((w) => redeemableHours(entryOf(input.accumulated, w.id)) > 0);
+    const minutes = ready.reduce((s, w) => s + entryOf(input.accumulated, w.id).minutes, 0);
+    if (ready.length) {
+      out.push({
+        key: `acc|${minutes}`,
+        icon: 'timer-sand',
+        tone: 'info',
+        title: `${minutes} דקות במונה המצטבר`,
+        body: `אפשר לפדות שעות אקדמיות שלמות: ${names(ready.map((w) => w.name))}`,
+        action: { label: 'לפדיון', href: '/settings' },
+      });
+    }
+  }
+
+  const year = String(now.getFullYear());
+  const noTax = missingTaxCoordination(workplaces, year);
+  if (noTax.length) {
+    out.push({
+      key: `tax|${year}|${noTax.map((w) => w.id).join(',')}`,
+      icon: 'file-percent-outline',
+      tone: 'warn',
+      title: `תיאום מס ${year}`,
+      body: `${noTax.length === 1 ? 'מקום עבודה אחד לא נכלל' : `${noTax.length} מקומות עבודה לא נכללו`}: ${names(noTax.map((w) => w.name))}`,
+      action: { label: 'לתיאום המס', href: '/tax' },
+    });
+  }
+
+  return out;
+}
