@@ -1,5 +1,14 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { Keyboard, Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import {
+  Keyboard,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
@@ -12,6 +21,10 @@ type ScreenProps = {
    * לגלול כל שדה (גם האחרון) אל מעל המקלדת.
    */
   keyboardFooter?: boolean;
+  /** מאזין לגלילה (למשל לכיווץ פקד בראש המסך) */
+  onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  /** שכבה קבועה בראש המסך, מעל התוכן הנגלל (פקד מוצמד) */
+  overlay?: ReactNode;
 };
 
 /** גובה מינימלי לפוטר בכל מסך (מעבר לשוליים הבטוחים של המערכת). */
@@ -43,7 +56,7 @@ function useKeyboardHeight(): number {
 }
 
 /** מעטפת מסך אחידה: רקע, שוליים בטוחים וריווח פנימי. */
-export function Screen({ children, scroll = true, keyboardFooter = false }: ScreenProps) {
+export function Screen({ children, scroll = true, keyboardFooter = false, onScroll, overlay }: ScreenProps) {
   const styles = useThemedStyles(makeStyles);
   const keyboard = useKeyboardHeight();
   const { height: windowHeight } = useWindowDimensions();
@@ -68,12 +81,15 @@ export function Screen({ children, scroll = true, keyboardFooter = false }: Scre
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          onScroll={onScroll}
+          scrollEventThrottle={onScroll ? 16 : undefined}
         >
           {inner}
         </ScrollView>
       ) : (
         inner
       )}
+      {overlay ? <View style={styles.overlay}>{overlay}</View> : null}
     </SafeAreaView>
   );
 }
@@ -86,6 +102,12 @@ const makeStyles = (colors: AppColors) =>
     },
     scroll: {
       flexGrow: 1,
+    },
+    overlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
     },
     content: {
       flex: 1,

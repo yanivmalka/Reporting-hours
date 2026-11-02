@@ -33,7 +33,7 @@ import {
   updateReport,
   type WorkReport,
 } from '../lib/reports';
-import { coursesOn, loadCourses, timeRange, type Course } from '../lib/courses';
+import { courseReported, coursesOn, loadCourses, timeRange, type Course } from '../lib/courses';
 import { currentPayPeriod } from '../lib/dashboard';
 import { isLocked, loadPayrollStatus, statusKey } from '../lib/payroll';
 import { formatShekels, hasTravelCost, travelCostForDay } from '../lib/travel';
@@ -90,7 +90,8 @@ export default function ReportScreen() {
     id: editId,
     wp: presetWp,
     date: presetDate,
-  } = useLocalSearchParams<{ id?: string; wp?: string; date?: string }>();
+    course: presetCourse,
+  } = useLocalSearchParams<{ id?: string; wp?: string; date?: string; course?: string }>();
   // מקום עבודה / תאריך שנבחרו מראש (למשל מ"הדיווחים שלי" המסונן) — פעם אחת.
   const presetApplied = useRef(false);
   /** הדיווח המקורי בעריכה (לתיקון המונה ולמחיקה) */
@@ -140,6 +141,8 @@ export default function ReportScreen() {
   const [leftoverChoice, setLeftoverChoice] = useState<LeftoverChoice>('carry');
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  /** ערכים שמולאו מראש (קורס שנבחר במסך הבית) — לא נחשבים "שינוי שלא נשמר" */
+  const [baseline, setBaseline] = useState({ start: '', end: '', note: '', breaks: 0 });
 
   // נטען מחדש בכל כניסה למסך כדי לשקף מקומות עבודה שנוספו בינתיים.
   useFocusEffect(
@@ -177,6 +180,22 @@ export default function ReportScreen() {
         }
         if (!presetApplied.current) {
           presetApplied.current = true;
+          // קורס שנבחר מראש (מסך הבית): ממלאים הכול ומדלגים ישר לשעות.
+          const pc = presetCourse ? crs.find((c) => c.id === presetCourse) : undefined;
+          if (pc && list.some((w) => w.id === pc.workplaceId)) {
+            const breakMin = pc.breakMinutes > 0 ? pc.breakMinutes : 0;
+            if (presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)) setDate(presetDate);
+            setCourseId(pc.id);
+            setWorkplaceId(pc.workplaceId);
+            setNote(pc.name);
+            setStart(pc.start);
+            setEnd(pc.end);
+            setBreaks(breakMin ? [{ id: makeBreakId(), minutes: String(breakMin) }] : []);
+            setBaseline({ start: pc.start, end: pc.end, note: pc.name, breaks: breakMin ? 1 : 0 });
+            setViaCourse(true);
+            setStep('times');
+            return;
+          }
           if (presetWp && list.some((w) => w.id === presetWp)) setWorkplaceId(presetWp);
           if (presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)) setDate(presetDate);
           if (presetWp && list.some((w) => w.id === presetWp)) return;
@@ -189,7 +208,7 @@ export default function ReportScreen() {
       return () => {
         active = false;
       };
-    }, [editId, editing]),
+    }, [editId, editing, presetCourse, presetDate]),
   );
 
   // האם הוזן משהו שעדיין לא נשמר.
@@ -199,7 +218,11 @@ export default function ReportScreen() {
       end !== editing.end ||
       note.trim() !== (editing.note ?? '') ||
       breaks.length !== editing.breaks.length
-    : touched || start !== '' || end !== '' || note.trim() !== '' || breaks.length > 0;
+    : touched ||
+      start !== baseline.start ||
+      end !== baseline.end ||
+      note.trim() !== baseline.note ||
+      breaks.length !== baseline.breaks;
 
   // אזהרה לפני יציאה מהמסך (חזרה, תפריט, כפתור אחורה של אנדרואיד) בלי שמירה או ביטול.
   usePreventRemove(dirty && exitReason == null, ({ data }) => setPendingLeave(data.action));
@@ -434,17 +457,7 @@ export default function ReportScreen() {
   }
   // קורסים שכבר דווחו באותו יום (אותו מקום עבודה ואותו נושא) — מסומנים ✓.
   // קורס "דווח" — יש באותו יום דיווח לאותו מקום שחופף בשעות לקורס (או שנושאו שם הקורס).
-  const reportedCourse = (c: Course) => {
-    const cs = parseTime(c.start) ?? 0;
-    const ce = parseTime(c.end) ?? 0;
-    return existing.some((r) => {
-      if (r.date !== date || r.workplaceId !== c.workplaceId || r.id === editing?.id) return false;
-      if (r.note === c.name) return true;
-      const rs = parseTime(r.start) ?? 0;
-      const re = parseTime(r.end) ?? 0;
-      return rs < ce && re > cs;
-    });
-  };
+  const reportedCourse = (c: Course) => courseReported(c, date, existing, editing?.id);
   const workplaceName = (id: string | null) => workplaces.find((w) => w.id === id)?.name ?? '';
   const selectedCourse = courses.find((c) => c.id === courseId) ?? null;
 

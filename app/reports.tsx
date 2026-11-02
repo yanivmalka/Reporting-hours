@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from '../components/Pressable';
 import { SelectField } from '../components/SelectField';
 import { RangeCalendar, type DateRangeValue } from '../components/RangeCalendar';
+import { WeekStrip, monthOfWeek, shiftWeek, weekStartOf } from '../components/WeekStrip';
 import { longDate } from '../components/DatePicker';
 import { todayISO } from '../lib/time';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
@@ -57,6 +58,43 @@ export default function ReportsScreen() {
    * כשלא נבחר מקום עבודה יחיד) — גובר על לוח השנה עד שמנקים.
    */
   const [periodMode, setPeriodMode] = useState<'current' | 'previous' | null>(null);
+  /** ראש לוח השנה החודשי בתוך הגלילה — כשהוא נגלל החוצה מוצג פס השבוע המוצמד */
+  const [calTop, setCalTop] = useState<number | null>(null);
+  const [pinned, setPinned] = useState(false);
+  /** השבוע שמוצג בפס המכווץ (יום ראשון שלו) */
+  const [weekStart, setWeekStart] = useState(() => weekStartOf(todayISO()));
+
+  // פס השבוע עוקב אחרי החודש / הבחירה בלוח החודשי: אם השבוע שמוצג כבר לא
+  // שייך אליהם — קופצים לשבוע של תחילת הבחירה, של היום (בחודש הנוכחי) או ל־1 בחודש.
+  useEffect(() => {
+    setWeekStart((ws) => {
+      if (range) {
+        const end = shiftWeek(ws, 1);
+        return range.from >= ws && range.from < end ? ws : weekStartOf(range.from);
+      }
+      if (monthOfWeek(ws) === calMonth) return ws;
+      const today = todayISO();
+      return weekStartOf(today.startsWith(calMonth) ? today : `${calMonth}-01`);
+    });
+  }, [calMonth, range]);
+
+  /** מעבר שבוע בפס המכווץ — החודש המוצג ברשימה מתעדכן איתו. */
+  function changeWeek(ws: string) {
+    setWeekStart(ws);
+    const mm = monthOfWeek(ws);
+    if (mm !== calMonth) {
+      setCalMonth(mm);
+      const end = shiftWeek(ws, 1);
+      if (range && (range.to < ws || range.from >= end)) setRange(null);
+    }
+  }
+
+  function goToday() {
+    const today = todayISO();
+    setRange(null);
+    setCalMonth(today.slice(0, 7));
+    setWeekStart(weekStartOf(today));
+  }
 
   // סינון שמגיע מלוח הבקרה: ?wp=<מזהה>&when=current|previous|YYYY-MM
   useEffect(() => {
@@ -192,8 +230,29 @@ export default function ReportsScreen() {
           : dateRange(range.from, range.to, true)
         : monthName(calMonth);
 
+  const showCalendar = !periodMode && !allTime;
+  const strip =
+    showCalendar && pinned ? (
+      <WeekStrip
+        weekStart={weekStart}
+        onWeekChange={changeWeek}
+        onToday={goToday}
+        range={range}
+        onRangeChange={setRange}
+        counts={counts}
+      />
+    ) : null;
+
   return (
-    <Screen>
+    <Screen
+      overlay={strip}
+      onScroll={(e) => {
+        const y = e.nativeEvent.contentOffset.y;
+        // מספיק שכותרת החודש נגללה מחוץ למסך — הפס המוצמד מחליף את הלוח.
+        const next = calTop != null && y > calTop + 48;
+        if (next !== pinned) setPinned(next);
+      }}
+    >
       <View style={styles.filters}>
         <SelectField<string | null>
           label="מקום עבודה:"
@@ -214,6 +273,9 @@ export default function ReportsScreen() {
         </Pressable>
       ) : (
         <>
+          <View
+            onLayout={(e) => setCalTop(e.nativeEvent.layout.y)}
+          >
           <RangeCalendar
             month={calMonth}
             onMonthChange={(m) => {
@@ -224,6 +286,7 @@ export default function ReportsScreen() {
             onRangeChange={setRange}
             counts={counts}
           />
+          </View>
           <View style={styles.calActions}>
             <Text style={styles.calHint}>
               {range ? 'לחיצה על יום נוסף — טווח' : 'לחיצה על יום — סינון; יום נוסף — טווח'}

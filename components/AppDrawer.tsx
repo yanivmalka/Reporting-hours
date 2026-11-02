@@ -1,12 +1,14 @@
 /**
  * תפריט המבורגר צדדי (Drawer) לאפליקציה.
  *
- * נבנה מעל <Modal> ו־Animated בלבד — בלי תלות חדשה — כדי לעבוד זהה
- * ב־web ובאנדרואיד ולכבד כיווניות RTL/LTR. התפריט נשלף מהצד ה"טבעי"
- * של השפה (ימין בעברית, שמאל באנגלית).
+ * נבנה מעל <Modal> ו־Animated בלבד כדי לעבוד זהה ב־web ובאנדרואיד ולכבד
+ * כיווניות RTL/LTR. התפריט נשלף מהצד ה"טבעי" של השפה (ימין בעברית,
+ * שמאל באנגלית). ההצמדה נעשית בזרימת flex ('row' מתחיל מצד ההתחלה של
+ * השפה) ולא ב־left/right — אלה מוחלפים אוטומטית באנדרואיד ב־RTL ולכן
+ * הפאנל נצמד לצד הלא נכון.
  *
- * בתוכו: ניווט בין המסכים, בחירת מצב יום/לילה/מערכת, בחירת ערכת צבעים,
- * ובחירת שפה. מצב הפתיחה משותף דרך DrawerProvider כך שכפתור ההמבורגר
+ * בתוכו: ניווט ראשי (5), שכר ומס (3), ו"הגדרות ותצוגה" מתקפל — מסכי
+ * ההגדרות, מצב יום/לילה, ערכת צבעים, שפה, חשבון ועדכונים. מצב הפתיחה משותף דרך DrawerProvider כך שכפתור ההמבורגר
  * בכותרת (DrawerToggle) יכול לפתוח אותו.
  */
 import {
@@ -19,9 +21,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useRouter, type Href } from 'expo-router';
+import { usePathname, useRouter, type Href } from 'expo-router';
 import { Animated, Modal, Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Pressable } from './Pressable';
+import { Icon } from './Icon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '../lib/i18n';
 import type { Lang } from '../lib/strings';
@@ -76,11 +79,9 @@ export function DrawerToggle() {
       accessibilityRole="button"
       accessibilityLabel={t('drawer.openMenu')}
       hitSlop={10}
-      style={styles.toggle}
+      style={styles.iconBtn}
     >
-      <View style={[styles.toggleBar, { backgroundColor: colors.textOnBrand }]} />
-      <View style={[styles.toggleBar, { backgroundColor: colors.textOnBrand }]} />
-      <View style={[styles.toggleBar, { backgroundColor: colors.textOnBrand }]} />
+      <Icon name="menu" size={26} color={colors.textOnBrand} />
     </Pressable>
   );
 }
@@ -99,12 +100,40 @@ export function HeaderStart({ canGoBack, tintColor }: { canGoBack?: boolean; tin
       hitSlop={10}
       accessibilityRole="button"
       accessibilityLabel="חזרה"
-      style={styles.back}
+      style={styles.iconBtn}
     >
-      <Text style={[styles.backText, { color: tintColor }]}>{isRTL ? '→' : '←'}</Text>
+      <Icon name={isRTL ? 'arrow-right' : 'arrow-left'} size={24} color={tintColor ?? '#fff'} />
     </Pressable>
   );
 }
+
+type NavLink = { href: Href; key: string; icon: string };
+
+/** ניווט ראשי — הפעולות היומיומיות. */
+const MAIN_LINKS: NavLink[] = [
+  { href: '/', key: 'nav.homeLink', icon: 'home-outline' },
+  { href: '/report', key: 'nav.report', icon: 'clipboard-edit-outline' },
+  { href: '/reports', key: 'nav.reports', icon: 'format-list-bulleted' },
+  { href: '/dashboard', key: 'nav.dashboard', icon: 'view-dashboard-outline' },
+  { href: '/workplaces', key: 'nav.workplaces', icon: 'briefcase-outline' },
+];
+
+/** שכר ומס. */
+const PAY_LINKS: NavLink[] = [
+  { href: '/payroll', key: 'nav.payroll', icon: 'file-document-outline' },
+  { href: '/payments', key: 'nav.payments', icon: 'cash-check' },
+  { href: '/tax', key: 'nav.tax', icon: 'receipt-text-outline' },
+];
+
+/** מסכי הגדרה — בתוך "הגדרות ותצוגה" המתקפל. (האשפה — ממסך מקומות העבודה.) */
+const SETTINGS_LINKS: NavLink[] = [
+  { href: '/settings', key: 'nav.settings', icon: 'timer-cog-outline' },
+  { href: '/profile', key: 'nav.profile', icon: 'account-circle-outline' },
+  { href: '/data', key: 'nav.data', icon: 'database-cog-outline' },
+];
+
+/** האם הקישור הוא המסך הנוכחי. */
+const isCurrent = (href: Href, pathname: string) => String(href) === pathname;
 
 /**
  * סוף הכותרת (בעברית — צד שמאל): במסכים פנימיים — תפריט ⋮ שמשכפל את
@@ -112,7 +141,9 @@ export function HeaderStart({ canGoBack, tintColor }: { canGoBack?: boolean; tin
  */
 export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintColor?: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { t } = useI18n();
+  const { colors } = useTheme();
   const { open: openDrawer } = useDrawer();
   const menuStyles = useStyles(makeOverflowStyles);
   const [open, setOpen] = useState(false);
@@ -124,6 +155,20 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
     else router.push(href);
   }
 
+  const item = (link: NavLink) => {
+    const current = isCurrent(link.href, pathname);
+    return (
+      <Pressable
+        key={String(link.href)}
+        onPress={() => go(link.href)}
+        style={({ pressed }) => [menuStyles.item, (pressed || current) && menuStyles.itemPressed]}
+      >
+        <Icon name={link.icon} size={20} color={current ? colors.brand : colors.textMuted} />
+        <Text style={menuStyles.itemText}>{t(link.key)}</Text>
+      </Pressable>
+    );
+  };
+
   return (
     <>
       <Pressable
@@ -131,36 +176,32 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
         hitSlop={10}
         accessibilityRole="button"
         accessibilityLabel="תפריט נוסף"
-        style={styles.overflowBtn}
+        style={styles.iconBtn}
       >
-        <View style={[styles.dot, { backgroundColor: tintColor }]} />
-        <View style={[styles.dot, { backgroundColor: tintColor }]} />
-        <View style={[styles.dot, { backgroundColor: tintColor }]} />
+        <Icon name="dots-vertical" size={24} color={tintColor ?? '#fff'} />
       </Pressable>
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={menuStyles.backdrop} onPress={() => setOpen(false)}>
-          <View style={menuStyles.menu}>
-            <ScrollView style={{ flexGrow: 0 }}>
-              {NAV_LINKS.map((link) => (
+          {/* שורה ברוחב מלא שמצמידה את התפריט לסוף (שמאל בעברית) — בלי left/right */}
+          <View style={menuStyles.anchorRow} pointerEvents="box-none">
+            <View style={menuStyles.menu}>
+              <ScrollView style={{ flexGrow: 0 }}>
+                {MAIN_LINKS.map(item)}
+                <View style={menuStyles.divider} />
+                {PAY_LINKS.map(item)}
+                <View style={menuStyles.divider} />
                 <Pressable
-                  key={String(link.href)}
-                  onPress={() => go(link.href)}
+                  onPress={() => {
+                    setOpen(false);
+                    openDrawer();
+                  }}
                   style={({ pressed }) => [menuStyles.item, pressed && menuStyles.itemPressed]}
                 >
-                  <Text style={menuStyles.itemText}>{t(link.key)}</Text>
+                  <Icon name="cog-outline" size={20} color={colors.textMuted} />
+                  <Text style={menuStyles.itemText}>הגדרות ותצוגה…</Text>
                 </Pressable>
-              ))}
-              <View style={menuStyles.divider} />
-              <Pressable
-                onPress={() => {
-                  setOpen(false);
-                  openDrawer();
-                }}
-                style={({ pressed }) => [menuStyles.item, pressed && menuStyles.itemPressed]}
-              >
-                <Text style={menuStyles.itemText}>הגדרות תצוגה ועדכונים…</Text>
-              </Pressable>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
         </Pressable>
       </Modal>
@@ -174,13 +215,15 @@ const makeOverflowStyles = (c: ColorScheme, layout: StyleLayout) =>
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.15)',
     },
-    // צמוד לפינה השמאלית־עליונה (סוף הכותרת בעברית), כמו תפריט ⋮ באנדרואיד.
+    anchorRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      paddingTop: Platform.OS === 'web' ? 52 : 44,
+      paddingHorizontal: 8,
+    },
     menu: {
-      position: 'absolute',
-      top: Platform.OS === 'web' ? 52 : 44,
-      [layout.isRTL ? 'left' : 'right']: 8,
-      minWidth: 220,
-      maxHeight: '80%',
+      minWidth: 230,
+      maxHeight: '85%',
       backgroundColor: c.surface,
       borderRadius: radius.md,
       paddingVertical: spacing.xs,
@@ -191,13 +234,17 @@ const makeOverflowStyles = (c: ColorScheme, layout: StyleLayout) =>
       shadowOffset: { width: 0, height: 4 },
     },
     item: {
-      paddingHorizontal: spacing.lg,
-      paddingVertical: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingHorizontal: spacing.md,
+      minHeight: 44,
     },
     itemPressed: {
       backgroundColor: c.brandLight,
     },
     itemText: {
+      flex: 1,
       fontSize: 15,
       color: c.text,
       textAlign: layout.textStart,
@@ -211,37 +258,25 @@ const makeOverflowStyles = (c: ColorScheme, layout: StyleLayout) =>
 
 const ANIM_MS = 220;
 
-/** קישורי הניווט בתפריט; התוויות מתורגמות דרך t('nav.*'). */
-const NAV_LINKS: { href: Href; key: string }[] = [
-  { href: '/', key: 'nav.home' },
-  { href: '/dashboard', key: 'nav.dashboard' },
-  { href: '/report', key: 'nav.report' },
-  { href: '/reports', key: 'nav.reports' },
-  { href: '/payroll', key: 'nav.payroll' },
-  { href: '/payments', key: 'nav.payments' },
-  { href: '/tax', key: 'nav.tax' },
-  { href: '/workplaces', key: 'nav.workplaces' },
-  { href: '/settings', key: 'nav.settings' },
-  { href: '/trash', key: 'nav.trash' },
-  { href: '/profile', key: 'nav.profile' },
-  { href: '/data', key: 'nav.data' },
-];
-
 function AppDrawer() {
   const { visible, close } = useDrawer();
   const { t, lang, setLang, langLabels, isRTL } = useI18n();
-  const { mode, setMode, paletteId, setPaletteId, palettes } = useTheme();
+  const { mode, setMode, paletteId, setPaletteId, palettes, colors } = useTheme();
   const drawerStyles = useStyles(makeStyles);
   const router = useRouter();
+  const pathname = usePathname();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   function go(href: Href) {
     close();
-    router.push(href);
+    if (href === '/') router.dismissTo('/');
+    else router.push(href);
   }
 
   const { width } = useWindowDimensions();
   const panelWidth = Math.min(320, Math.round(width * 0.84));
-  // מהצד ה"טבעי": בעברית מימין, באנגלית משמאל.
+  // הפאנל נצמד לצד ההתחלה (ימין בעברית); מוסתר בהזזה החוצה לאותו צד.
+  // transform אינו מתהפך ב־RTL, ולכן הכיוון נקבע כאן במפורש.
   const hiddenOffset = isRTL ? panelWidth : -panelWidth;
 
   const [mounted, setMounted] = useState(visible);
@@ -283,145 +318,112 @@ function AppDrawer() {
     { value: 'en', label: langLabels.en },
   ];
 
+  const navItem = (link: NavLink) => {
+    const current = isCurrent(link.href, pathname);
+    return (
+      <Pressable
+        key={String(link.href)}
+        onPress={() => go(link.href)}
+        accessibilityRole="link"
+        accessibilityState={{ selected: current }}
+        style={({ pressed }) => [
+          drawerStyles.navItem,
+          current && drawerStyles.navItemCurrent,
+          pressed && drawerStyles.navItemPressed,
+        ]}
+      >
+        <Icon name={link.icon} size={22} color={current ? colors.brand : colors.textMuted} />
+        <Text style={[drawerStyles.navItemText, current && drawerStyles.navItemTextCurrent]}>
+          {t(link.key)}
+        </Text>
+      </Pressable>
+    );
+  };
+
   return (
-    <Modal
-      visible
-      transparent
-      animationType="none"
-      onRequestClose={close}
-      statusBarTranslucent
-    >
-      <View style={styles.fill}>
-        <Animated.View
-          style={[styles.backdrop, { opacity: progress }]}
-          // מאחורי הפאנל — מקבל את הלחיצות לסגירה
-        >
-          <Pressable
-            style={styles.fill}
-            accessibilityLabel={t('drawer.closeMenu')}
-            onPress={close}
-          />
+    <Modal visible transparent animationType="none" onRequestClose={close} statusBarTranslucent>
+      {/* שורה: הילד הראשון מוצב בצד ההתחלה של השפה — ימין בעברית */}
+      <View style={styles.row}>
+        <Animated.View style={[styles.backdrop, { opacity: progress }]}>
+          <Pressable style={styles.fill} accessibilityLabel={t('drawer.closeMenu')} onPress={close} />
         </Animated.View>
 
-        <Animated.View
-          style={[
-            drawerStyles.panel,
-            {
-              width: panelWidth,
-              transform: [{ translateX }],
-            },
-            isRTL ? drawerStyles.panelEnd : drawerStyles.panelStart,
-          ]}
-        >
+        <Animated.View style={[drawerStyles.panel, { width: panelWidth, transform: [{ translateX }] }]}>
           <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
             <View style={drawerStyles.header}>
-              <Text style={drawerStyles.title}>{t('drawer.title')}</Text>
+              <Icon name="clock-check-outline" size={26} color={colors.textOnBrand} />
+              <Text style={drawerStyles.title}>{t('nav.home')}</Text>
               <Pressable
                 onPress={close}
                 accessibilityRole="button"
                 accessibilityLabel={t('drawer.closeMenu')}
                 hitSlop={10}
-                style={drawerStyles.closeBtn}
+                style={styles.iconBtn}
               >
-                <Text style={drawerStyles.closeIcon}>✕</Text>
+                <Icon name="close" size={22} color={colors.textOnBrand} />
               </Pressable>
             </View>
 
             <ScrollView contentContainerStyle={drawerStyles.body}>
-              <AccountSection />
+              {MAIN_LINKS.map(navItem)}
+              <View style={drawerStyles.divider} />
+              {PAY_LINKS.map(navItem)}
+              <View style={drawerStyles.divider} />
 
-              <View style={drawerStyles.section}>
-                <Text style={drawerStyles.sectionLabel}>
-                  {t('drawer.navigation')}
-                </Text>
-                {NAV_LINKS.map((link) => (
-                  <Pressable
-                    key={String(link.href)}
-                    onPress={() => go(link.href)}
-                    accessibilityRole="link"
-                    style={({ pressed }) => [
-                      drawerStyles.navItem,
-                      pressed && drawerStyles.navItemPressed,
-                    ]}
-                  >
-                    <Text style={drawerStyles.navItemText}>{t(link.key)}</Text>
-                  </Pressable>
-                ))}
-              </View>
+              <Pressable
+                onPress={() => setSettingsOpen((v) => !v)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: settingsOpen }}
+                style={({ pressed }) => [drawerStyles.navItem, pressed && drawerStyles.navItemPressed]}
+              >
+                <Icon name="cog-outline" size={22} color={colors.textMuted} />
+                <Text style={drawerStyles.navItemText}>הגדרות ותצוגה</Text>
+                <Icon name={settingsOpen ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
+              </Pressable>
 
-              <View style={drawerStyles.section}>
-                <Text style={drawerStyles.sectionLabel}>
-                  {t('drawer.appearance')}
-                </Text>
-                <SegmentedControl
-                  options={modeOptions}
-                  value={mode}
-                  onChange={setMode}
-                />
-              </View>
+              {settingsOpen ? (
+                <View style={drawerStyles.settings}>
+                  {SETTINGS_LINKS.map(navItem)}
 
-              <View style={drawerStyles.section}>
-                <Text style={drawerStyles.sectionLabel}>
-                  {t('drawer.palette')}
-                </Text>
-                <View style={drawerStyles.swatchRow}>
-                  {palettes.map((palette) => {
-                    const selected = palette.id === paletteId;
-                    return (
-                      <Pressable
-                        key={palette.id}
-                        onPress={() => setPaletteId(palette.id)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        accessibilityLabel={
-                          lang === 'he' ? palette.labelHe : palette.labelEn
-                        }
-                        style={[
-                          drawerStyles.swatch,
-                          selected && drawerStyles.swatchSelected,
-                        ]}
-                      >
-                        <View style={drawerStyles.swatchDisc}>
-                          <View
-                            style={[
-                              drawerStyles.swatchHalf,
-                              { backgroundColor: palette.light.brand },
-                            ]}
-                          />
-                          <View
-                            style={[
-                              drawerStyles.swatchHalf,
-                              { backgroundColor: palette.dark.brand },
-                            ]}
-                          />
-                        </View>
-                        <Text
-                          style={[
-                            drawerStyles.swatchLabel,
-                            selected && drawerStyles.swatchLabelSelected,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {lang === 'he' ? palette.labelHe : palette.labelEn}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  <View style={drawerStyles.section}>
+                    <SectionLabel icon="theme-light-dark" text={t('drawer.appearance')} />
+                    <SegmentedControl options={modeOptions} value={mode} onChange={setMode} />
+                  </View>
+
+                  <View style={drawerStyles.section}>
+                    <SectionLabel icon="palette-outline" text={t('drawer.palette')} />
+                    <View style={drawerStyles.swatchRow}>
+                      {palettes.map((palette) => {
+                        const selected = palette.id === paletteId;
+                        const label = lang === 'he' ? palette.labelHe : palette.labelEn;
+                        return (
+                          <Pressable
+                            key={palette.id}
+                            onPress={() => setPaletteId(palette.id)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            accessibilityLabel={label}
+                            style={[drawerStyles.swatch, selected && drawerStyles.swatchSelected]}
+                          >
+                            <View style={drawerStyles.swatchDisc}>
+                              <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.light.brand }]} />
+                              <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.dark.brand }]} />
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <View style={drawerStyles.section}>
+                    <SectionLabel icon="translate" text={t('drawer.language')} />
+                    <SegmentedControl options={langOptions} value={lang} onChange={setLang} />
+                  </View>
+
+                  <AccountSection />
+                  <UpdateSection />
                 </View>
-              </View>
-
-              <View style={drawerStyles.section}>
-                <Text style={drawerStyles.sectionLabel}>
-                  {t('drawer.language')}
-                </Text>
-                <SegmentedControl
-                  options={langOptions}
-                  value={lang}
-                  onChange={setLang}
-                />
-              </View>
-
-              <UpdateSection />
+              ) : null}
             </ScrollView>
           </SafeAreaView>
         </Animated.View>
@@ -430,81 +432,96 @@ function AppDrawer() {
   );
 }
 
+function SectionLabel({ icon, text }: { icon: string; text: string }) {
+  const drawerStyles = useStyles(makeStyles);
+  const { colors } = useTheme();
+  return (
+    <View style={drawerStyles.sectionHead}>
+      <Icon name={icon} size={16} color={colors.textMuted} />
+      <Text style={drawerStyles.sectionLabel}>{text}</Text>
+    </View>
+  );
+}
+
 const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   StyleSheet.create({
     panel: {
-      position: 'absolute',
-      top: 0,
-      bottom: 0,
+      height: '100%',
       backgroundColor: c.background,
-      borderColor: c.border,
-    },
-    panelStart: {
-      left: 0,
-      borderRightWidth: StyleSheet.hairlineWidth,
-    },
-    panelEnd: {
-      right: 0,
-      borderLeftWidth: StyleSheet.hairlineWidth,
+      elevation: 16,
+      shadowColor: '#000',
+      shadowOpacity: 0.25,
+      shadowRadius: 16,
     },
     header: {
-      flexDirection: layout.rowStart,
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: c.border,
+      gap: spacing.sm,
+      paddingStart: spacing.md,
+      paddingEnd: spacing.xs,
+      paddingVertical: spacing.sm,
       backgroundColor: c.brand,
     },
     title: {
+      flex: 1,
       fontSize: 18,
       fontWeight: '800',
       color: c.textOnBrand,
-    },
-    closeBtn: {
-      width: 36,
-      height: 36,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: radius.sm,
-    },
-    closeIcon: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: c.textOnBrand,
+      textAlign: layout.textStart,
     },
     body: {
-      padding: spacing.lg,
-      gap: spacing.xl,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      gap: 2,
     },
-    section: {
-      gap: spacing.sm,
-    },
-    sectionLabel: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: c.textMuted,
-      textAlign: layout.textStart,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: c.border,
+      marginVertical: spacing.sm,
+      marginHorizontal: spacing.sm,
     },
     navItem: {
-      minHeight: 44,
-      justifyContent: 'center',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      minHeight: 48,
       paddingHorizontal: spacing.md,
-      borderRadius: radius.md,
-      backgroundColor: c.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
+      borderRadius: 24,
+    },
+    navItemCurrent: {
+      backgroundColor: c.brandLight,
     },
     navItemPressed: {
       backgroundColor: c.brandLight,
     },
     navItemText: {
+      flex: 1,
       fontSize: 15,
       fontWeight: '600',
       color: c.text,
+      textAlign: layout.textStart,
+    },
+    navItemTextCurrent: {
+      color: c.brand,
+      fontWeight: '800',
+    },
+    settings: {
+      gap: spacing.md,
+      paddingTop: spacing.xs,
+      paddingHorizontal: spacing.sm,
+    },
+    section: {
+      gap: spacing.sm,
+    },
+    sectionHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    sectionLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: c.textMuted,
       textAlign: layout.textStart,
     },
     swatchRow: {
@@ -513,22 +530,18 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       gap: spacing.sm,
     },
     swatch: {
-      alignItems: 'center',
-      gap: spacing.xs,
-      padding: spacing.xs,
-      borderRadius: radius.md,
+      padding: 3,
+      borderRadius: 24,
       borderWidth: 2,
       borderColor: 'transparent',
-      width: 76,
     },
     swatchSelected: {
       borderColor: c.brand,
-      backgroundColor: c.brandLight,
     },
     swatchDisc: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       overflow: 'hidden',
       flexDirection: 'row',
       borderWidth: StyleSheet.hairlineWidth,
@@ -537,38 +550,20 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     swatchHalf: {
       flex: 1,
     },
-    swatchLabel: {
-      fontSize: 12,
-      color: c.textMuted,
-      textAlign: 'center',
-    },
-    swatchLabelSelected: {
-      color: c.text,
-      fontWeight: '700',
-    },
   });
 
 const styles = StyleSheet.create({
-  overflowBtn: {
-    width: 28,
-    height: 32,
+  iconBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  back: {
-    paddingHorizontal: 4,
-  },
-  backText: {
-    fontSize: 24,
-    fontWeight: '600',
   },
   fill: { flex: 1 },
+  row: {
+    flex: 1,
+    flexDirection: 'row',
+  },
   backdrop: {
     position: 'absolute',
     top: 0,
@@ -576,18 +571,5 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  toggle: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    marginHorizontal: spacing.xs,
-  },
-  toggleBar: {
-    width: 20,
-    height: 2,
-    borderRadius: 1,
   },
 });

@@ -33,6 +33,7 @@ const he = {
   },
   nav: {
     home: 'דיווח שעות',
+    homeLink: 'בית',
     report: 'דיווח יום עבודה',
     reports: 'הדיווחים שלי',
     workplaces: 'מקומות עבודה',
@@ -136,6 +137,8 @@ const he = {
       public_transport: 'תחבורה ציבורית',
       car: 'רכב',
       walk: 'הליכה',
+      taxi: 'מונית',
+      taxi_voucher: 'מונית פתק',
     },
     payHourly: '{rate} ₪ לשעה',
     payMonthly: '{rate} ₪ לחודש',
@@ -197,6 +200,7 @@ const en: StringTree = {
     language: 'Language',
   },
   nav: {
+    homeLink: 'Home',
     home: 'Hours Reporting',
     report: 'Log a Work Day',
     reports: 'My Reports',
@@ -301,6 +305,8 @@ const en: StringTree = {
       public_transport: 'Public transport',
       car: 'Car',
       walk: 'Walking',
+      taxi: 'Taxi',
+      taxi_voucher: 'Taxi voucher',
     },
     payHourly: '₪{rate} / hour',
     payMonthly: '₪{rate} / month',

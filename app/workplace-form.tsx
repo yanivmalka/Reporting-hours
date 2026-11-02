@@ -12,10 +12,16 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
+import { TimeInput } from '../components/TimeInput';
+import { contactsSupported, pickContact, pickContactPhone } from '../lib/contacts';
+import { parseTime } from '../lib/time';
 import {
   ARRIVAL_MODE_LABELS,
   PAYMENT_TYPE_LABELS,
+  DEFAULT_TAXI_REMINDER,
   emptyDraft,
+  isTaxi,
+  makeContactId,
   paymentTermsOf,
   termsChanged,
   type Workplace,
@@ -24,6 +30,7 @@ import {
   upsertWorkplace,
   type ArrivalMode,
   type PaymentType,
+  type TaxiReminder,
 } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -31,8 +38,13 @@ import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 
 /** מצב הטופס — שדות מספריים נשמרים כמחרוזת כדי לאפשר עריכה חופשית. */
+/** איש קשר בטופס — כל השדות כמחרוזות */
+type ContactRow = { id: string; description: string; name: string; phone: string; email: string };
+
 type FormState = {
   name: string;
+  address: string;
+  contacts: ContactRow[];
   rate: string;
   paymentType: PaymentType;
   payday: string;
@@ -44,9 +56,15 @@ type FormState = {
   arrivalMode: ArrivalMode;
   travelCostPerDirection: string;
   tripsPerDay: string;
+  /** מונית: טלפון, שם איש קשר והעדפת תזכורת */
+  taxiPhone: string;
+  taxiContact: string;
+  taxiReminderKind: TaxiReminder['kind'];
+  taxiHours: string;
+  taxiNightTime: string;
 };
 
-type Errors = Partial<Record<keyof FormState, string>>;
+type Errors = Partial<Record<keyof FormState, string>> & { contactErrors?: Record<string, string> };
 
 /** אפשרויות "שוטף +" לבחירה (בלי הקלדה חופשית). */
 const TERMS_OPTIONS = [0, 15, 30, 45, 60, 90];
@@ -59,8 +77,17 @@ const ARRIVAL_OPTIONS = (Object.keys(ARRIVAL_MODE_LABELS) as ArrivalMode[]).map(
 );
 
 function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
+  const reminder = d.taxi?.reminder ?? DEFAULT_TAXI_REMINDER;
   return {
     name: d.name,
+    address: d.address ?? '',
+    contacts: (d.contacts ?? []).map((c) => ({
+      id: c.id,
+      description: c.description,
+      name: c.name ?? '',
+      phone: c.phone ?? '',
+      email: c.email ?? '',
+    })),
     rate: String(d.rate),
     paymentType: d.paymentType,
     payday: String(d.payday),
@@ -72,7 +99,24 @@ function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
     arrivalMode: d.arrivalMode,
     travelCostPerDirection: String(d.travelCostPerDirection),
     tripsPerDay: String(d.tripsPerDay),
+    taxiPhone: d.taxi?.phone ?? '',
+    taxiContact: d.taxi?.contactName ?? '',
+    taxiReminderKind: reminder.kind,
+    taxiHours: String(reminder.kind === 'hoursBefore' ? reminder.hours : 2),
+    taxiNightTime: reminder.kind === 'nightBefore' ? reminder.time : '21:00',
   };
+}
+
+const TAXI_REMINDER_OPTIONS: { value: TaxiReminder['kind']; label: string }[] = [
+  { value: 'hoursBefore', label: 'שעות לפני' },
+  { value: 'nightBefore', label: 'ערב לפני' },
+  { value: 'none', label: 'בלי תזכורת' },
+];
+
+function formToReminder(f: FormState): TaxiReminder {
+  if (f.taxiReminderKind === 'hoursBefore') return { kind: 'hoursBefore', hours: parseNum(f.taxiHours) };
+  if (f.taxiReminderKind === 'nightBefore') return { kind: 'nightBefore', time: f.taxiNightTime };
+  return { kind: 'none' };
 }
 
 const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -177,7 +221,73 @@ export default function WorkplaceFormScreen() {
         next.tripsPerDay = 'מספר שלם, 0 ומעלה';
       }
     }
+    const contactErrors: Record<string, string> = {};
+    for (const c of state.contacts) {
+      if (!c.phone.trim() && !c.email.trim()) contactErrors[c.id] = 'יש להזין טלפון או מייל';
+      else if (c.email.trim() && !isEmail(c.email.trim())) contactErrors[c.id] = 'כתובת מייל לא תקינה';
+    }
+    if (Object.keys(contactErrors).length) next.contactErrors = contactErrors;
+
+    if (isTaxi(state.arrivalMode)) {
+      const phone = state.taxiPhone.replace(/[^\d+]/g, '');
+      if (state.taxiPhone.trim() && phone.length < 7) next.taxiPhone = 'מספר טלפון לא תקין';
+      if (state.taxiReminderKind === 'hoursBefore') {
+        const h = parseNum(state.taxiHours);
+        if (!Number.isFinite(h) || h <= 0 || h > 24) next.taxiHours = 'בין חצי שעה ל־24 שעות';
+      }
+      if (state.taxiReminderKind === 'nightBefore' && parseTime(state.taxiNightTime) == null) {
+        next.taxiNightTime = 'יש להזין שעה';
+      }
+    }
     return next;
+  }
+
+  function addContact(row?: Partial<ContactRow>) {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            contacts: [
+              ...prev.contacts,
+              {
+                id: makeContactId(),
+                description: prev.contacts.length === 0 ? 'מזכירות' : '',
+                name: '',
+                phone: '',
+                email: '',
+                ...row,
+              },
+            ],
+          }
+        : prev,
+    );
+  }
+
+  function updateContact(cid: string, patch: Partial<ContactRow>) {
+    setForm((prev) =>
+      prev ? { ...prev, contacts: prev.contacts.map((c) => (c.id === cid ? { ...c, ...patch } : c)) } : prev,
+    );
+    setErrors((prev) => {
+      if (!prev.contactErrors?.[cid]) return prev;
+      const { [cid]: _gone, ...rest } = prev.contactErrors;
+      return { ...prev, contactErrors: rest };
+    });
+  }
+
+  function removeContact(cid: string) {
+    setForm((prev) => (prev ? { ...prev, contacts: prev.contacts.filter((c) => c.id !== cid) } : prev));
+  }
+
+  async function importContact() {
+    const picked = await pickContact();
+    if (picked) addContact({ name: picked.name, phone: picked.phone, email: picked.email });
+  }
+
+  async function chooseContact() {
+    const picked = await pickContactPhone();
+    if (!picked) return;
+    set('taxiPhone', picked.phone);
+    set('taxiContact', picked.name);
   }
 
   async function handleSave() {
@@ -190,6 +300,14 @@ export default function WorkplaceFormScreen() {
     await upsertWorkplace({
       id,
       name: form.name.trim(),
+      address: form.address.trim() || undefined,
+      contacts: form.contacts.map((c) => ({
+        id: c.id,
+        description: c.description.trim(),
+        name: c.name.trim() || undefined,
+        phone: c.phone.trim() || undefined,
+        email: c.email.trim() || undefined,
+      })),
       rate: parseNum(form.rate),
       paymentType: form.paymentType,
       payday: parseNum(form.payday),
@@ -207,6 +325,13 @@ export default function WorkplaceFormScreen() {
         form.arrivalMode === 'public_transport'
           ? parseNum(form.tripsPerDay)
           : 0,
+      taxi: isTaxi(form.arrivalMode)
+        ? {
+            phone: form.taxiPhone.trim(),
+            contactName: form.taxiContact.trim() || undefined,
+            reminder: formToReminder(form),
+          }
+        : undefined,
       // שינוי תנאים כספיים חל מתאריך התחולה; דיווחים קודמים נשארים בתנאים הישנים.
     }, effectiveFrom);
     router.back();
@@ -264,6 +389,78 @@ export default function WorkplaceFormScreen() {
           placeholder="מכללה / אוניברסיטה"
           invalid={Boolean(errors.name)}
         />
+      </FormField>
+
+      <FormField label="כתובת" hint="מוצגת בתזכורת לנסיעה">
+        <TextField
+          value={form.address}
+          onChangeText={(t) => set('address', t)}
+          placeholder="רחוב, מספר, עיר"
+        />
+      </FormField>
+
+      <FormField label="אנשי קשר" hint="מזכירות, רכז/ת, מחלקת שכר — טלפון ו/או מייל">
+        <View style={styles.contacts}>
+          {form.contacts.map((c) => (
+            <View key={c.id} style={styles.contactCard}>
+              <View style={styles.phoneRow}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    value={c.description}
+                    onChangeText={(t) => updateContact(c.id, { description: t })}
+                    placeholder="תיאור (למשל מזכירות)"
+                  />
+                </View>
+                <Pressable
+                  onPress={() => removeContact(c.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="הסרת איש הקשר"
+                  style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={styles.removeText}>✕</Text>
+                </Pressable>
+              </View>
+              <TextField
+                value={c.name}
+                onChangeText={(t) => updateContact(c.id, { name: t })}
+                placeholder="שם (רשות)"
+              />
+              <TextField
+                value={c.phone}
+                onChangeText={(t) => updateContact(c.id, { phone: t })}
+                phone
+                placeholder="טלפון"
+              />
+              <TextField
+                value={c.email}
+                onChangeText={(t) => updateContact(c.id, { email: t })}
+                email
+                placeholder="מייל"
+              />
+              {errors.contactErrors?.[c.id] ? (
+                <Text style={styles.contactError}>{errors.contactErrors[c.id]}</Text>
+              ) : null}
+            </View>
+          ))}
+          <View style={styles.chipWrap}>
+            <Pressable
+              onPress={() => addContact()}
+              style={({ pressed }) => [styles.termsChip, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.termsChipText}>+ הוספה ידנית</Text>
+            </Pressable>
+            {contactsSupported ? (
+              <Pressable
+                onPress={importContact}
+                style={({ pressed }) => [styles.termsChip, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.termsChipText}>+ מאנשי הקשר</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
       </FormField>
 
       <FormField label="סוג תשלום">
@@ -330,12 +527,99 @@ export default function WorkplaceFormScreen() {
       </FormField>
 
       <FormField label="אופן הגעה">
-        <SegmentedControl
-          options={ARRIVAL_OPTIONS}
-          value={form.arrivalMode}
-          onChange={(v) => set('arrivalMode', v)}
-        />
+        <View style={styles.chipWrap}>
+          {ARRIVAL_OPTIONS.map((o) => {
+            const on = form.arrivalMode === o.value;
+            return (
+              <Pressable
+                key={o.value}
+                onPress={() => set('arrivalMode', o.value)}
+                style={[styles.termsChip, on && styles.termsChipOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.termsChipText, on && styles.termsChipTextOn]}>{o.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </FormField>
+
+      {isTaxi(form.arrivalMode) ? (
+        <>
+          <FormField
+            label="טלפון להזמנת מונית"
+            hint={
+              form.taxiContact
+                ? `מאנשי הקשר: ${form.taxiContact}`
+                : form.arrivalMode === 'taxi_voucher'
+                  ? 'תחנה / רכז ההסעות שמזמינים דרכו את הפתק'
+                  : 'תחנת מוניות או נהג קבוע'
+            }
+            error={errors.taxiPhone}
+          >
+            <View style={styles.phoneRow}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  value={form.taxiPhone}
+                  onChangeText={(t) => {
+                    set('taxiPhone', t);
+                    set('taxiContact', '');
+                  }}
+                  phone
+                  placeholder="050-0000000"
+                  invalid={Boolean(errors.taxiPhone)}
+                />
+              </View>
+              {contactsSupported ? (
+                <Pressable
+                  onPress={chooseContact}
+                  style={({ pressed }) => [styles.termsChip, styles.contactBtn, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.termsChipText}>מאנשי הקשר</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </FormField>
+
+          <FormField label="תזכורת להזמנת מונית">
+            <SegmentedControl
+              options={TAXI_REMINDER_OPTIONS}
+              value={form.taxiReminderKind}
+              onChange={(v) => set('taxiReminderKind', v)}
+            />
+          </FormField>
+
+          {form.taxiReminderKind === 'hoursBefore' ? (
+            <FormField
+              label="כמה שעות לפני היציאה"
+              hint="שעת היציאה = תחילת הקורס הראשון באותו יום"
+              error={errors.taxiHours}
+            >
+              <TextField
+                value={form.taxiHours}
+                onChangeText={(t) => set('taxiHours', t)}
+                numeric
+                invalid={Boolean(errors.taxiHours)}
+              />
+            </FormField>
+          ) : null}
+
+          {form.taxiReminderKind === 'nightBefore' ? (
+            <FormField
+              label="באיזו שעה להזכיר בערב שלפני"
+              error={errors.taxiNightTime}
+            >
+              <TimeInput
+                value={form.taxiNightTime}
+                onChange={(v) => set('taxiNightTime', v)}
+                invalid={Boolean(errors.taxiNightTime)}
+              />
+            </FormField>
+          ) : null}
+        </>
+      ) : null}
 
       {isPublicTransport ? (
         <>
@@ -511,6 +795,45 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 12,
     color: colors.textMuted,
     textAlign: TEXT_RIGHT,
+  },
+  contacts: {
+    gap: spacing.sm,
+  },
+  contactCard: {
+    gap: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  removeBtn: {
+    width: 44,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeText: {
+    fontSize: 18,
+    color: colors.textMuted,
+  },
+  contactError: {
+    fontSize: 13,
+    color: colors.danger,
+    textAlign: TEXT_RIGHT,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  contactBtn: {
+    height: 48,
   },
   termsRow: {
     flexDirection: 'row',

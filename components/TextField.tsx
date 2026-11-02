@@ -10,6 +10,8 @@ type TextFieldProps = {
   numeric?: boolean;
   /** כתובת מייל: מקלדת מייל, בלי אות גדולה אוטומטית, משמאל לימין */
   email?: boolean;
+  /** מספר טלפון: מקלדת חיוג, משמאל לימין */
+  phone?: boolean;
   invalid?: boolean;
 };
 
@@ -20,6 +22,7 @@ export function TextField({
   placeholder,
   numeric,
   email,
+  phone,
   invalid,
 }: TextFieldProps) {
   const styles = useThemedStyles(makeStyles);
@@ -30,13 +33,13 @@ export function TextField({
       onChangeText={onChangeText}
       placeholder={placeholder}
       placeholderTextColor={colors.textMuted}
-      keyboardType={numeric ? 'numeric' : email ? 'email-address' : 'default'}
-      inputMode={numeric ? 'decimal' : email ? 'email' : 'text'}
+      keyboardType={numeric ? 'numeric' : email ? 'email-address' : phone ? 'phone-pad' : 'default'}
+      inputMode={numeric ? 'decimal' : email ? 'email' : phone ? 'tel' : 'text'}
       autoCapitalize={email ? 'none' : undefined}
       autoCorrect={email ? false : undefined}
       style={[
         styles.input,
-        (numeric || email) && styles.numeric,
+        (numeric || email || phone) && styles.numeric,
         invalid && styles.invalid,
       ]}
     />

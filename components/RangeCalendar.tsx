@@ -19,7 +19,7 @@ const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
 export type DateRangeValue = { from: string; to: string } | null;
 
-function iso(y: number, m: number, d: number): string {
+export function iso(y: number, m: number, d: number): string {
   const dt = new Date(y, m, d);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
@@ -41,6 +41,19 @@ type Props = {
   counts: Record<string, number>;
 };
 
+/**
+ * לחיצה על יום: בלי בחירה — היום הזה; יום יחיד נבחר — אותו יום מנקה,
+ * יום אחר משלים טווח; טווח קיים — מתחיל בחירה חדשה.
+ */
+export function nextRange(range: DateRangeValue, day: string): DateRangeValue {
+  if (!range) return { from: day, to: day };
+  if (range.from === range.to) {
+    if (day === range.from) return null;
+    return day < range.from ? { from: day, to: range.from } : { from: range.from, to: day };
+  }
+  return { from: day, to: day };
+}
+
 export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts }: Props) {
   const styles = useStyles(makeStyles);
   const { isRTL } = useI18n();
@@ -56,14 +69,8 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
   while (cells.length % 7) cells.push(null);
   const today = iso(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
-  function tap(day: string) {
-    if (!range) return onRangeChange({ from: day, to: day });
-    if (range.from === range.to) {
-      if (day === range.from) return onRangeChange(null);
-      return onRangeChange(day < range.from ? { from: day, to: range.from } : { from: range.from, to: day });
-    }
-    onRangeChange({ from: day, to: day });
-  }
+  const tap = (day: string) => onRangeChange(nextRange(range, day));
+  const thisMonth = today.slice(0, 7);
 
   return (
     <View style={styles.wrap} {...swipe}>
@@ -76,6 +83,11 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
             {MONTHS[m - 1]} {y}
           </Text>
           <Text style={styles.titleHeb}>{hebrewMonthSpan(y, m - 1)}</Text>
+          {month !== thisMonth ? (
+            <Pressable onPress={() => onMonthChange(thisMonth)} hitSlop={6} accessibilityRole="button">
+              <Text style={styles.todayLink}>חזרה להיום</Text>
+            </Pressable>
+          ) : null}
         </View>
         <Pressable onPress={() => onMonthChange(shiftMonth(month, 1))} style={styles.nav} accessibilityLabel="חודש הבא">
           <Text style={styles.navText}>{isRTL ? '←' : '→'}</Text>
@@ -152,6 +164,12 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     titleHeb: {
       fontSize: 12,
       color: c.textMuted,
+    },
+    todayLink: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: c.brand,
+      paddingTop: 2,
     },
     dayHeb: {
       fontSize: 9,
