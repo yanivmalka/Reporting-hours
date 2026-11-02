@@ -84,6 +84,12 @@ jobs:
             -Pandroid.injected.signing.key.alias="${{ steps.sign.outputs.alias }}" \
             -Pandroid.injected.signing.key.password="${{ steps.sign.outputs.pass }}"
 
+      - name: Show signing certificate
+        # SHA-1 must match the fingerprint registered in Firebase (malka-apps → Android app), or Google sign-in fails.
+        run: |
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs android/app/build/outputs/apk/release/app-release.apk | grep -E "SHA-1|SHA-256 digest"
+
       - name: Rename APK
         run: |
           mkdir -p out
