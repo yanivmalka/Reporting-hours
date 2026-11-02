@@ -355,14 +355,34 @@ export function netAmount(r: PayrollReport): number {
   return Math.round(grossAmount(r) * (1 - tax / 100));
 }
 
-/** מועד התשלום הצפוי לפי "שוטף +" */
-export const expectedPayment = (w: Workplace, period: PayPeriod) =>
-  expectedPaymentDate(period.end, paymentTermsOf(w));
+/**
+ * האם הדוח הוחמץ: נשלח אחרי היום האחרון לדיווח (סוף התקופה), או שעבר
+ * המועד והוא עוד לא נשלח. דוח כזה משולם רק בחודש שאחרי.
+ */
+export function reportLate(period: Pick<PayPeriod, 'end'>, status: PayrollStatus | undefined, today: Date = new Date()): boolean {
+  if (status?.paidAt) return false;
+  if (status?.sentAt) return isoDate(new Date(status.sentAt)) > period.end;
+  return isoDate(today) > period.end;
+}
+
+/** תאריך ISO + חודש אחד (היום מוגבל לאורך החודש). */
+function plusMonth(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const last = new Date(y, m + 1, 0).getDate();
+  return isoDate(new Date(y, m, Math.min(d, last)));
+}
+
+/**
+ * מועד התשלום הצפוי לפי "שוטף +". דוח שהוחמץ (ראה {@link reportLate}) —
+ * נדחה בחודש.
+ */
+export const expectedPayment = (w: Workplace, period: PayPeriod, status?: PayrollStatus, today: Date = new Date()) =>
+  expectedPaymentDate(reportLate(period, status, today) ? plusMonth(period.end) : period.end, paymentTermsOf(w));
 
 /** דוחות שנשלחו, שמועד התשלום הצפוי שלהם עבר, וטרם סומנו כשולמו. */
 export function overduePayments(items: readonly PayrollItem[], today: Date = new Date()): PayrollItem[] {
   const t = isoDate(today);
   return items.filter(
-    (i) => i.status.sentAt && !i.status.paidAt && expectedPayment(i.workplace, i.period) < t,
+    (i) => i.status.sentAt && !i.status.paidAt && expectedPayment(i.workplace, i.period, i.status, today) < t,
   );
 }

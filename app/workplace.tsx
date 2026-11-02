@@ -29,6 +29,7 @@ import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { parseTime } from '../lib/time';
 import {
   ARRIVAL_MODE_LABELS,
+  deadlineLabel,
   loadWorkplaces,
   paymentTermsLabel,
   taxPercentOf,
@@ -169,6 +170,7 @@ export default function WorkplaceDetailScreen() {
         <InfoRow label="סוג תשלום" value={w.paymentType === 'monthly' ? 'חודשי' : 'שעתי'} />
         <InfoRow label="אחוז מס" value={`${tax}%`} />
         <InfoRow label="תנאי תשלום" value={paymentTermsLabel(w)} />
+        <InfoRow label="יום אחרון לדיווח שכר" value={deadlineLabel(w)} />
         <InfoRow label="תקופת שכר" value={w.payday === 1 ? '1 עד סוף החודש' : `מה־${w.payday} בחודש עד ה־${w.payday - 1} בחודש הבא`} />
         <InfoRow label="אופן הגעה" value={ARRIVAL_MODE_LABELS[w.arrivalMode]} last={!w.address} />
         {w.address ? <InfoRow label="כתובת" value={w.address} last /> : null}

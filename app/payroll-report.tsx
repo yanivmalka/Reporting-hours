@@ -11,7 +11,7 @@ import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { loadCourses } from '../lib/courses';
-import { dateRange } from '../lib/dashboard';
+import { dateRange, shortDate } from '../lib/dashboard';
 import {
   buildPayrollReport,
   expectedPayment,
@@ -176,7 +176,7 @@ export default function PayrollReportScreen() {
   const empty = report.groups.length === 0;
   const termsNow = workplaceAt(workplace, period.end);
   const tax = taxPercentOf(termsNow);
-  const expected = expectedPayment(workplace, period);
+  const expected = expectedPayment(workplace, period, status);
   const rateText =
     report.paymentType === 'monthly'
       ? `משכורת חודשית ${report.rates.map((r) => formatShekels(r)).join(' / ')}`
@@ -204,8 +204,10 @@ export default function PayrollReportScreen() {
             : status.generatedAt
               ? 'נוצר מייל — טרם סומן כנשלח'
               : closed
-                ? 'ממתין לשליחה'
-                : `החודש עדיין פתוח — נסגר בעוד ${period.daysToPayday} ימים`}
+                ? `לא נשלח עד היום האחרון לדיווח (${shortDate(period.end)}) — התשלום יידחה לחודש הבא`
+                : period.daysToPayday <= 1
+                  ? 'היום האחרון לדיווח שכר — יש לשלוח היום'
+                  : `יום אחרון לדיווח: ${shortDate(period.end)} · עוד ${period.daysToPayday - 1} ימים`}
         </Text>
       </View>
 

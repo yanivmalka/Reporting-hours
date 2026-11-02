@@ -102,7 +102,7 @@ const WORKPLACES: DemoWorkplace[] = [
     rate: 6800,
     paymentType: 'monthly',
     payday: 1,
-    arrivalMode: 'walk',
+    arrivalMode: 'car',
     travelCostPerDirection: 0,
     tripsPerDay: 2,
     track: 'history',
