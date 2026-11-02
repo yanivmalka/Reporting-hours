@@ -63,7 +63,7 @@ export default function PaymentsScreen() {
           basis,
           item.status.redeemedMinutes ?? 0,
         ),
-        expected: expectedPayment(item.workplace, item.period),
+        expected: expectedPayment(item.workplace, item.period, item.status),
       })),
     );
   }, [basis]);

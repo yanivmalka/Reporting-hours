@@ -196,13 +196,16 @@ export default function HomeScreen() {
                   key={item.course.id}
                   item={item}
                   onPress={
-                    day.key === 'today' && item.status !== 'reported'
-                      ? () =>
-                          router.push({
-                            pathname: '/report',
-                            params: { course: item.course.id, date: item.date },
-                          })
-                      : undefined
+                    item.reportId
+                      ? // מפגש שדווח — תצוגת הדיווח (עריכה בכפתור, "חזרה" חוזרת לכאן)
+                        () => router.push({ pathname: '/report-view', params: { id: item.reportId } })
+                      : day.key === 'today'
+                        ? () =>
+                            router.push({
+                              pathname: '/report',
+                              params: { course: item.course.id, date: item.date },
+                            })
+                        : undefined
                   }
                 />
               ))

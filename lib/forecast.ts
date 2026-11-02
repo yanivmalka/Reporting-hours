@@ -16,7 +16,7 @@ import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { occurrences, sessionMinutes, type Course } from './courses';
 import { currentPayPeriod, expectedPaymentDate, isoDate, totalsFor, type PayPeriod } from './dashboard';
 import type { PayBasis } from './payBasis';
-import { statusKey, type StatusMap } from './payroll';
+import { expectedPayment, reportLate, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
 import { travelCostForDay } from './travel';
 import { paymentTermsOf, workplaceAt, type Workplace } from './workplaces';
@@ -39,6 +39,8 @@ export type PeriodForecast = {
   reportCount: number;
   planned: number;
   status: PeriodStatus;
+  /** הדוח לא נשלח עד היום האחרון לדיווח — התשלום נדחה בחודש */
+  late: boolean;
   /** תאריך שבו סומן כשולם, אם סומן */
   paidAt?: string;
   /** מתי סומן כנשלח (מילישניות) */
@@ -126,7 +128,8 @@ export function periodForecast(
   return {
     workplace: w,
     period,
-    expected: expectedPaymentDate(period.end, paymentTermsOf(w)),
+    expected: expectedPayment(w, period, st, today),
+    late: (mine.length > 0 || st.sentAt != null) && reportLate(period, st, today),
     reported: t.pay + redeemedPay + t.travel,
     reportedPay: t.pay + redeemedPay,
     reportCount: mine.length,
@@ -202,7 +205,7 @@ export function recentForecasts(
 export const STATUS_LABEL: Record<PeriodStatus, string> = {
   planned: 'מתוכנן',
   open: 'בהכנה',
-  closed: 'ממתין לשליחה',
+  closed: 'לא נשלח בזמן',
   sent: 'נשלח · ממתין לתשלום',
   paid: 'שולם',
 };

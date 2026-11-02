@@ -184,9 +184,29 @@ export const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
   monthly: 'חודשי',
 };
 
+/**
+ * היום האחרון בחודש לדיווח שכר. התקופה ("החודש") של מקום העבודה מסתיימת
+ * ביום הזה, ודוח השכר צריך להישלח עד סופו — דוח שנשלח מאוחר יותר משולם
+ * רק בחודש שאחרי. נשמר כ־`payday` (תחילת התקופה הבאה = היום שאחריו):
+ * יום אחרון 31 ("סוף החודש") ↔ payday 1.
+ */
+export const LAST_DAY = 31;
+export function reportDeadlineDay(w: Pick<Workplace, 'payday'>): number {
+  const p = Math.round(w.payday) || 1;
+  return p <= 1 ? LAST_DAY : p - 1;
+}
+export function paydayFromDeadline(day: number): number {
+  return day >= LAST_DAY ? 1 : day + 1;
+}
+export function deadlineLabel(w: Pick<Workplace, 'payday'>): string {
+  const d = reportDeadlineDay(w);
+  return d === LAST_DAY ? 'סוף החודש' : `ה־${d} בחודש`;
+}
+
+/** "הליכה" הוסרה מהאפשרויות; נשמרת רק לקריאת נתונים ישנים (מומרת ל"רכב" בטעינה). */
 export const ARRIVAL_MODE_LABELS: Record<ArrivalMode, string> = {
-  public_transport: 'תחבורה ציבורית',
   car: 'רכב',
+  public_transport: 'תחבורה ציבורית',
   walk: 'הליכה',
   taxi: 'מונית',
   taxi_voucher: 'מונית פתק',
@@ -215,7 +235,14 @@ export function saveWorkplaces(list: Workplace[]): Promise<void> {
  * (מעל {@link TRASH_RETENTION_DAYS} ימים) ושומר חזרה אם משהו נוקה.
  */
 async function loadAllPruned(): Promise<Workplace[]> {
-  const all = await readJSON<Workplace[]>(STORAGE_KEY, []);
+  const raw = await readJSON<Workplace[]>(STORAGE_KEY, []);
+  // "הליכה" הוסרה — כמו "רכב", בלי החזר נסיעות.
+  const noWalk = (m: ArrivalMode): ArrivalMode => (m === 'walk' ? 'car' : m);
+  const all = raw.map((w) => ({
+    ...w,
+    arrivalMode: noWalk(w.arrivalMode),
+    termsHistory: w.termsHistory?.map((t) => ({ ...t, arrivalMode: noWalk(t.arrivalMode) })),
+  }));
   const now = Date.now();
   const kept = all.filter(
     (w) => w.deletedAt == null || now - w.deletedAt < TRASH_RETENTION_MS,

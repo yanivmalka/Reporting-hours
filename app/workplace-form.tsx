@@ -17,6 +17,8 @@ import { contactsSupported, pickContact, pickContactPhone } from '../lib/contact
 import { parseTime } from '../lib/time';
 import {
   ARRIVAL_MODE_LABELS,
+  paydayFromDeadline,
+  reportDeadlineDay,
   PAYMENT_TYPE_LABELS,
   DEFAULT_TAXI_REMINDER,
   emptyDraft,
@@ -72,9 +74,9 @@ const TERMS_OPTIONS = [0, 15, 30, 45, 60, 90];
 const PAYMENT_OPTIONS = (Object.keys(PAYMENT_TYPE_LABELS) as PaymentType[]).map(
   (value) => ({ value, label: PAYMENT_TYPE_LABELS[value] }),
 );
-const ARRIVAL_OPTIONS = (Object.keys(ARRIVAL_MODE_LABELS) as ArrivalMode[]).map(
-  (value) => ({ value, label: ARRIVAL_MODE_LABELS[value] }),
-);
+const ARRIVAL_OPTIONS = (Object.keys(ARRIVAL_MODE_LABELS) as ArrivalMode[])
+  .filter((value) => value !== 'walk')
+  .map((value) => ({ value, label: ARRIVAL_MODE_LABELS[value] }));
 
 function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
   const reminder = d.taxi?.reminder ?? DEFAULT_TAXI_REMINDER;
@@ -90,7 +92,7 @@ function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
     })),
     rate: String(d.rate),
     paymentType: d.paymentType,
-    payday: String(d.payday),
+    payday: String(reportDeadlineDay(d)),
     paymentTermsDays: String(paymentTermsOf(d)),
     payrollEmail: d.payrollEmail ?? '',
     taxPercent: String(d.taxPercent ?? 0),
@@ -193,9 +195,9 @@ export default function WorkplaceFormScreen() {
     const rate = parseNum(state.rate);
     if (!Number.isFinite(rate) || rate < 0) next.rate = 'יש להזין סכום תקין';
 
-    const payday = parseNum(state.payday);
-    if (!Number.isInteger(payday) || payday < 1 || payday > 31) {
-      next.payday = 'יום בחודש בין 1 ל־31';
+    const deadline = parseNum(state.payday);
+    if (!Number.isInteger(deadline) || deadline < 1 || deadline > 31 || deadline === 29 || deadline === 30) {
+      next.payday = 'יום בין 1 ל־28, או 31 לסוף החודש';
     }
 
     if (state.payrollEmail.trim() && !isEmail(state.payrollEmail.trim())) {
@@ -310,7 +312,7 @@ export default function WorkplaceFormScreen() {
       })),
       rate: parseNum(form.rate),
       paymentType: form.paymentType,
-      payday: parseNum(form.payday),
+      payday: paydayFromDeadline(parseNum(form.payday)),
       paymentTermsDays: parseNum(form.paymentTermsDays),
       payrollEmail: form.payrollEmail.trim(),
       ccEmails: splitEmails(form.ccEmails),
@@ -484,8 +486,8 @@ export default function WorkplaceFormScreen() {
       </FormField>
 
       <FormField
-        label="יום קבלת השכר בחודש"
-        hint="מגדיר את גבולות ה״חודש״ של מקום העבודה לצורך הסיכומים"
+        label="יום אחרון בחודש לדיווח שכר"
+        hint="חשוב: עד היום הזה (כולל) צריך לשלוח את דוח השכר — דוח שנשלח אחריו ישולם רק בחודש שאחרי. התקופה החודשית מסתיימת ביום הזה. 31 = סוף החודש."
         error={errors.payday}
       >
         <TextField

@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { Panel, ShareRow, StatTile, TileGrid } from '../components/Charts';
-import { ForecastChart } from '../components/ForecastChart';
+import { ForecastChart, HEADROOM, realization } from '../components/ForecastChart';
+import { useFlash } from '../components/useFlash';
+import { useSwipe } from '../components/useSwipe';
+import { WorkplaceTile } from '../components/WorkplaceTile';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -42,7 +45,7 @@ import { loadWorkplaces, paymentTermsLabel, type Workplace } from '../lib/workpl
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
-import { familyShades } from '../theme/shades';
+import { distinctShades } from '../theme/shades';
 import { TEXT_RIGHT } from '../theme/align';
 
 type PeriodChoice = 'current' | 'previous';
@@ -88,9 +91,48 @@ export default function DashboardScreen() {
     const d = new Date();
     return { year: d.getFullYear(), month0: d.getMonth() };
   });
-  /** מקום העבודה המודגש; null = כולם */
+  /** מקום העבודה המסונן; null = כולם */
   const [selWp, setSelWp] = useState<string | null>(null);
+  /** חודש מסונן ("YYYY-MM") בתצוגת סמסטר / שנה; null = כל התצוגה */
+  const [selMonth, setSelMonth] = useState<string | null>(null);
   const [mode, setMode] = useState<ForecastMode>('work');
+  /** אריחי מקומות עבודה פתוחים */
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
+  /** כיוון הדפדוף האחרון — לאנימציה */
+  const [navDir, setNavDir] = useState<1 | -1>(1);
+  /** עמוד בלוח הבקרה: 0 — צפי ותשלומים · 1 — החודש הנוכחי לפי תקופת שכר */
+  const [page, setPage] = useState<0 | 1>(0);
+  const [pageDir, setPageDir] = useState<1 | -1>(1);
+  const pageFlash = useFlash(page, pageDir);
+  const pageSwipe = useSwipe(
+    () => {
+      setPageDir(1);
+      setPage(1);
+    },
+    () => {
+      setPageDir(-1);
+      setPage(0);
+    },
+  );
+  const listFlash = useFlash(`${res}|${anchor.year}-${anchor.month0}|${selMonth}|${selWp}`, navDir);
+
+  /** דפדוף — אינו סינון: מאפס רק את החודש המסונן (שכבר לא בתצוגה). */
+  const shift = (d: 1 | -1) => {
+    setNavDir(d);
+    setSelMonth(null);
+    setAnchor((a) => shiftAnchor(res, a, d));
+  };
+  const clearFilter = () => {
+    setSelWp(null);
+    setSelMonth(null);
+  };
+  const goToday = () => {
+    const d = new Date();
+    setNavDir(-1);
+    setSelMonth(null);
+    setRes('month');
+    setAnchor({ year: d.getFullYear(), month0: d.getMonth() });
+  };
 
   /** מעבר ל"הדיווחים שלי" עם סינון מוכן. */
   // n — מזהה ייחודי לכל מעבר, כדי שהסינון יוחל גם כשנכנסים שוב עם אותם ערכים.
@@ -203,7 +245,7 @@ export default function DashboardScreen() {
   const { totals, accumulated } = { totals: view.totals, accumulated: data.accumulated };
 
   // ── צפי: גוונים מאותה משפחה לכל מקום עבודה, וסיכום לחודש / לשנה המסוננים ──
-  const shades = familyShades(colors, data.workplaces.length);
+  const shades = distinctShades(colors, data.workplaces.length);
   const series = data.workplaces.map((w, i) => ({ id: w.id, color: shades[i], name: w.name }));
   const cells = forecast ?? [];
   const now = new Date();
@@ -231,7 +273,6 @@ export default function DashboardScreen() {
           setRes('month');
         },
       };
-  const single = res === 'month';
   const sem = semesterOf(anchor);
   const chartView =
     res === 'month'
@@ -244,46 +285,92 @@ export default function DashboardScreen() {
               ? `${MONTHS_LONG[cells[0].month0]} ${cells[0].year} – ${MONTHS_LONG[cells[cells.length - 1].month0]} ${cells[cells.length - 1].year}`
               : '',
           };
-  const rows = data.workplaces.map((w) => {
+  // ── סינון: מקום עבודה (מסתיר את השאר) וחודש (בסמסטר / שנה) ──
+  const shown = series.filter((s) => !selWp || s.id === selWp);
+  const inView = selMonth ? cells.filter((m) => m.key === selMonth) : cells;
+  const single = res === 'month' || selMonth != null;
+  const listTitle = selMonth
+    ? (() => {
+        const m = cells.find((x) => x.key === selMonth);
+        return m ? `${MONTHS_LONG[m.month0]} ${m.year}` : chartView.title;
+      })()
+    : res === 'year'
+      ? `כל ${anchor.year}`
+      : chartView.title;
+  const rowsAll = data.workplaces.map((w, i) => {
     let reported = 0;
     let planned = 0;
-    const periods = cells.flatMap((m) => {
+    const periods = inView.flatMap((m) => {
       const c = m.byWorkplace[w.id];
       reported += c?.reported ?? 0;
       planned += c?.planned ?? 0;
       return c?.periods ?? [];
     });
     const last = single ? periods[periods.length - 1] : undefined;
-    return {
-      workplace: w,
-      reported,
-      planned,
-      status: (last && (last.reported > 0 || last.planned > 0) ? last.status : null) as PeriodStatus | null,
-      expected: last && (last.reported > 0 || last.planned > 0) ? last.expected : null,
-      workPeriod: last ? monthName(last.period.start.slice(0, 7)) : null,
-    };
+    const active = last && (last.reported > 0 || last.planned > 0) ? last : undefined;
+    return { workplace: w, color: series[i].color, reported, planned, last: active };
   });
-  const scope = {
-    rows,
-    reported: rows.reduce((a, r) => a + r.reported, 0),
-    planned: rows.reduce((a, r) => a + r.planned, 0),
+  const totalAll = {
+    reported: rowsAll.reduce((a, r) => a + r.reported, 0),
+    planned: rowsAll.reduce((a, r) => a + r.planned, 0),
   };
+  const rows = rowsAll
+    .filter((r) => (!selWp || r.workplace.id === selWp) && (r.reported > 0 || r.planned > 0 || r.workplace.id === selWp))
+    .sort((a, b) => b.reported - a.reported || b.planned - a.planned);
+  const sel = selWp ? rowsAll.find((r) => r.workplace.id === selWp) : undefined;
+  const scaleRows = Math.max(0, ...rows.map((r) => r.reported)) * HEADROOM || Math.max(1, ...rows.map((r) => r.planned));
+  const pctTotal = realization(sel ? sel.reported : totalAll.reported, sel ? sel.planned : totalAll.planned);
   const chipTone = (st: PeriodStatus) =>
     st === 'paid'
-      ? { backgroundColor: colors.brandLight, color: colors.brandDark }
+      ? { bg: colors.brandLight, fg: colors.brandDark }
       : st === 'sent'
-        ? { backgroundColor: colors.brandLight, color: colors.brand }
-        : st === 'closed'
-          ? { backgroundColor: colors.background, color: colors.warning }
-          : st === 'open'
-            ? { backgroundColor: colors.background, color: colors.warning }
-            : { backgroundColor: colors.background, color: colors.textMuted };
+        ? { bg: colors.brandLight, fg: colors.brand }
+        : st === 'closed' || st === 'open'
+          ? { bg: colors.background, fg: colors.warning }
+          : { bg: colors.background, fg: colors.textMuted };
+  const detailsOf = (row: (typeof rowsAll)[number]) => {
+    const out: { text: string; tone?: 'warn' | 'muted' }[] = [];
+    if (row.last) {
+      if (mode === 'pay') out.push({ text: `עבור ${monthName(row.last.period.start.slice(0, 7))}` });
+      out.push({
+        text: `יום אחרון לדיווח שכר ${shortDate(row.last.period.end)} · צפי תשלום ${shortDate(row.last.expected)} · ${paymentTermsLabel(row.workplace)}`,
+      });
+      if (row.last.late)
+        out.push({ text: 'הדוח לא נשלח עד היום האחרון — התשלום נדחה בחודש', tone: 'warn' });
+    } else if (!single) {
+      out.push({ text: `סיכום ${listTitle} · לחיצה על חודש בגרף מציגה צפי תשלום` });
+    }
+    if (row.workplace.paymentType === 'monthly') out.push({ text: 'משכורת חודשית קבועה' });
+    return out;
+  };
+  const filtered = selWp != null || selMonth != null;
   const maxWeekday = Math.max(...view.weekdays.map((w) => w.avgAcademicHours), 1);
   const r = view.rounding;
   const roundingTotal = r.exact + r.withLeftover || 1;
+  const goPage = (p: 0 | 1) => {
+    setPageDir(p > page ? 1 : -1);
+    setPage(p);
+  };
 
   return (
     <Screen>
+      <View style={styles.pager} accessibilityRole="tablist">
+        {(['צפי ותשלומים', 'החודש הנוכחי'] as const).map((label, i) => (
+          <Pressable
+            key={label}
+            onPress={() => goPage(i as 0 | 1)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: page === i }}
+            style={[styles.pageTab, page === i && styles.pageTabOn]}
+          >
+            <Text style={[styles.pageTabText, page === i && styles.pageTabTextOn]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Animated.View style={[styles.page, pageFlash]} {...pageSwipe}>
+      {page === 0 ? (
+        <>
       <View style={styles.modeRow}>
         {(
           [
@@ -306,108 +393,86 @@ export default function DashboardScreen() {
       {forecast ? (
         <ForecastChart
           res={res}
-          onResChange={setRes}
+          onResChange={(v) => {
+            setRes(v);
+            setSelMonth(null);
+          }}
           title={chartView.title}
           subtitle={chartView.sub}
-          onPrev={() => setAnchor((a) => shiftAnchor(res, a, -1))}
-          onNext={() => setAnchor((a) => shiftAnchor(res, a, 1))}
+          dir={navDir}
+          onPrev={() => shift(-1)}
+          onNext={() => shift(1)}
           months={forecast}
-          series={series}
-          selectedWp={selWp}
-          onPickWp={(id) => setSelWp((cur) => (cur === id ? null : id))}
-          onPickMonth={(m) => {
-            setAnchor({ year: m.year, month0: m.month0 });
-            setRes('month');
-          }}
+          series={shown}
+          selectedMonth={selMonth}
+          onPickMonth={(m) => setSelMonth((cur) => (cur === m.key ? null : m.key))}
           currentKey={todayISO().slice(0, 7)}
           emptyLink={emptyLink}
-          onClear={
-            selWp != null || !atNow
-              ? () => {
-                  setSelWp(null);
-                  setAnchor(nowRef);
-                  setRes('month');
-                }
-              : undefined
-          }
+          onClearFilter={filtered ? clearFilter : undefined}
+          onToday={!atNow || res !== 'month' ? goToday : undefined}
         />
       ) : null}
 
-      <View style={styles.periodHead}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.periodTitle}>{res === 'year' ? `כל ${anchor.year}` : chartView.title}</Text>
-          <Text style={styles.periodSub}>
-            {res === 'year' ? 'סיכום שנתי' : chartView.sub}
-            {mode === 'pay' ? ' · לפי מועד התשלום הצפוי' : ' · לפי חודש העבודה'}
-          </Text>
-        </View>
-      </View>
+      <Animated.View style={[styles.periodHead, listFlash]}>
+        <Text style={styles.periodTitle}>{listTitle}</Text>
+        <Text style={styles.periodSub}>
+          {mode === 'pay' ? 'לפי מועד התשלום הצפוי' : 'לפי חודש העבודה'}
+          {sel ? ` · מסונן: ${sel.workplace.name}` : ''}
+        </Text>
+      </Animated.View>
 
-      <View style={styles.totalsRow}>
-        <View>
-          <Text style={styles.totalLabel}>דווח</Text>
-          <Text style={styles.totalValue}>{money(scope.reported)}</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.totalLabel}>לפי תכנון</Text>
-          <Text style={[styles.totalValue, styles.totalPlanned]}>{money(scope.planned)}</Text>
-        </View>
-      </View>
-
-      {scope.rows.map((row, i) => {
-        const on = selWp === row.workplace.id;
-        return (
-          <View
-            key={row.workplace.id}
-            style={[
-              styles.wpCard,
-              on && { borderColor: series[i].color, borderWidth: 2 },
-              selWp != null && !on && styles.wpFaded,
-            ]}
-          >
-            <Pressable
-              onPress={() => setSelWp((cur) => (cur === row.workplace.id ? null : row.workplace.id))}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              style={styles.wpMain}
-            >
-              <View style={styles.wpHead}>
-                <View style={[styles.dot, { backgroundColor: series[i].color }]} />
-                <Text style={styles.wpName} numberOfLines={1}>
-                  {row.workplace.name}
-                </Text>
-                {row.status ? (
-                  <View style={[styles.chip, chipTone(row.status)]}>
-                    <Text style={[styles.chipText, { color: chipTone(row.status).color }]}>
-                      {STATUS_LABEL[row.status]}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text style={styles.wpAmounts}>
-                דווח <Text style={styles.bold}>{money(row.reported)}</Text>
-                {'   '}
-                <Text style={styles.muted}>תכנון {money(row.planned)}</Text>
-              </Text>
-              {row.expected ? (
-                <Text style={styles.wpMeta}>
-                  {mode === 'pay' && row.workPeriod ? `עבור ${row.workPeriod} · ` : ''}
-                  צפי תשלום {shortDate(row.expected)} · {paymentTermsLabel(row.workplace)}
-                </Text>
-              ) : null}
-            </Pressable>
-            <Pressable
-              onPress={() => router.push({ pathname: '/workplace', params: { id: row.workplace.id } })}
-              accessibilityRole="button"
-              accessibilityLabel={`פירוט ${row.workplace.name}`}
-              style={({ pressed }) => [styles.drill, pressed && styles.pressed]}
-            >
-              <Icon name="chevron-left" size={24} color={colors.brandDark} />
-            </Pressable>
+      <View style={styles.totalsBox}>
+        <View style={styles.totalsRow}>
+          <View>
+            <Text style={styles.totalLabel}>{sel ? 'דווח במקום הנבחר' : 'דווח'}</Text>
+            <Text style={styles.totalValue}>{money(sel ? sel.reported : totalAll.reported)}</Text>
+            {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.reported)} בכל המקומות</Text> : null}
           </View>
-        );
-      })}
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.totalLabel}>פוטנציאל</Text>
+            <Text style={[styles.totalValue, styles.totalPlanned]}>{money(sel ? sel.planned : totalAll.planned)}</Text>
+            {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.planned)}</Text> : null}
+          </View>
+        </View>
+        <Text style={styles.totalPct}>
+          {pctTotal == null
+            ? 'אין תכנון קורסים לתקופה'
+            : pctTotal > 100
+              ? `${pctTotal}% — הדיווח עולה על התכנון`
+              : `מימוש ${pctTotal}% מהפוטנציאל`}
+        </Text>
+      </View>
 
+      {rows.map((row) => (
+        <WorkplaceTile
+          key={row.workplace.id}
+          name={row.workplace.name}
+          color={row.color}
+          reported={row.reported}
+          planned={row.planned}
+          scale={scaleRows}
+          expanded={open.has(row.workplace.id)}
+          onToggle={() =>
+            setOpen((cur) => {
+              const next = new Set(cur);
+              if (next.has(row.workplace.id)) next.delete(row.workplace.id);
+              else next.add(row.workplace.id);
+              return next;
+            })
+          }
+          status={row.last ? { label: STATUS_LABEL[row.last.status], ...chipTone(row.last.status) } : null}
+          details={detailsOf(row)}
+          filtered={selWp === row.workplace.id}
+          onFilter={() => setSelWp((cur) => (cur === row.workplace.id ? null : row.workplace.id))}
+          onOpen={() => router.push({ pathname: '/workplace', params: { id: row.workplace.id } })}
+        />
+      ))}
+      {rows.length === 0 ? <Text style={styles.periodSub}>אין מקומות עבודה עם נתונים בתקופה.</Text> : null}
+
+      <Button label="החודש הנוכחי ←" variant="secondary" onPress={() => goPage(1)} />
+        </>
+      ) : (
+        <>
       <Text style={styles.sectionTitle}>החודש הנוכחי לפי תקופת שכר</Text>
 
       <SegmentedControl<PeriodChoice>
@@ -504,6 +569,10 @@ export default function DashboardScreen() {
         />
         <Button label="למונה הדקות המצטברות" variant="secondary" onPress={() => router.push('/settings')} />
       </Panel>
+      <Button label="→ צפי ותשלומים" variant="secondary" onPress={() => goPage(0)} />
+        </>
+      )}
+      </Animated.View>
     </Screen>
   );
 }
@@ -523,17 +592,36 @@ const makeStyles = (colors: AppColors) =>
     modeChipOn: { backgroundColor: colors.brand, borderColor: colors.brand },
     modeText: { fontSize: 14, fontWeight: '600', color: colors.text },
     modeTextOn: { color: colors.textOnBrand },
-    periodHead: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginTop: spacing.sm },
+    periodHead: { gap: 2, marginTop: spacing.xs },
     periodTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     periodSub: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
     link: { fontSize: 14, fontWeight: '700', color: colors.brand },
-    totalsRow: {
+    pager: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      padding: 3,
+      gap: 2,
+      borderRadius: 22,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pageTab: { flex: 1, minHeight: 40, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+    pageTabOn: { backgroundColor: colors.brand },
+    pageTabText: { fontSize: 14, fontWeight: '700', color: colors.text },
+    pageTabTextOn: { color: colors.textOnBrand },
+    page: { gap: spacing.md },
+    totalsBox: {
       backgroundColor: colors.brandLight,
       borderRadius: radius.md,
       padding: spacing.md,
+      gap: spacing.xs,
     },
+    totalsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    totalOf: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    totalPct: { fontSize: 13, fontWeight: '700', color: colors.brandDark, textAlign: TEXT_RIGHT },
     totalLabel: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     totalValue: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     totalPlanned: { color: colors.brandDark },

@@ -7,10 +7,10 @@
  */
 import type { Href } from 'expo-router';
 import { accumulatedTotal, redeemableHours, entryOf, type AccumulatedState } from './accumulated';
-import { courseReported, coursesOn, timeRange, type Course } from './courses';
-import { currentPeriods, isoDate } from './dashboard';
+import { courseReport, courseReported, coursesOn, timeRange, type Course } from './courses';
+import { currentPayPeriod, currentPeriods, isoDate } from './dashboard';
 import type { PayBasis } from './payBasis';
-import { overduePayments, payrollItems, pendingPayroll, type StatusMap } from './payroll';
+import { isLocked, overduePayments, payrollItems, pendingPayroll, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
 import { parseTime } from './time';
 import { isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
@@ -56,6 +56,8 @@ export type AgendaItem = {
   workplace: Workplace;
   date: string;
   status: SessionStatus;
+  /** הדיווח שמכסה את המפגש (כשדווח) — לפתיחת תצוגת הדיווח */
+  reportId?: string;
   /** "09:00–12:15" בבידוד LTR */
   time: string;
 };
@@ -84,15 +86,17 @@ export function agenda(
       const workplace = byId.get(course.workplaceId);
       if (!workplace) continue;
       let status: SessionStatus = 'tomorrow';
+      let reportId: string | undefined;
       if (key === 'today') {
         const s = parseTime(course.start) ?? 0;
         const e = parseTime(course.end) ?? 0;
-        if (courseReported(course, date, reports)) status = 'reported';
+        reportId = courseReport(course, date, reports)?.id;
+        if (reportId) status = 'reported';
         else if (nowMin >= e) status = 'pending';
         else if (nowMin >= s) status = 'now';
         else status = 'later';
       }
-      items.push({ course, workplace, date, status, time: timeRange(course.start, course.end) });
+      items.push({ course, workplace, date, status, reportId, time: timeRange(course.start, course.end) });
     }
     return { key, label: key === 'today' ? 'היום' : 'מחר', date, dayLabel: longDayLabel(d), items };
   };
@@ -245,14 +249,34 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
       action: { label: 'מעקב תשלומים', href: '/payments' },
     });
   }
+  // היום האחרון לדיווח שכר מתקרב (עד 3 ימים) — דוח שלא יישלח עד סופו ישולם רק בחודש הבא.
+  for (const w of workplaces) {
+    const p = currentPayPeriod(w.payday, now);
+    const left = p.daysToPayday - 1; // ימים עד סוף התקופה (0 = היום)
+    if (left > 3) continue;
+    if (isLocked(input.payroll[statusKey(w.id, p.start)])) continue;
+    const any =
+      reports.some((r) => r.workplaceId === w.id && r.date >= p.start && r.date <= p.end) ||
+      courses.some((c) => c.workplaceId === w.id && c.from <= p.end && c.to >= p.start);
+    if (!any) continue;
+    out.push({
+      key: `deadline|${w.id}|${p.end}`,
+      icon: 'calendar-alert',
+      tone: left <= 1 ? 'danger' : 'warn',
+      title: `${left === 0 ? 'היום' : left === 1 ? 'מחר' : `בעוד ${left} ימים`} — יום אחרון לדיווח שכר · ${w.name}`,
+      body: `יש לשלוח את דוח השכר עד ${shortDate(p.end)}. דוח שיישלח אחר כך ישולם רק בחודש הבא.`,
+      action: { label: 'לדוח השכר', href: { pathname: '/payroll-report', params: { wp: w.id, start: p.start } } },
+    });
+  }
+
   const pending = pendingPayroll(items);
   if (pending.length) {
     out.push({
       key: `pending|${pending.map((p) => p.workplace.id).join(',')}`,
       icon: 'email-fast-outline',
       tone: 'warn',
-      title: pending.length === 1 ? 'דוח שכר ממתין לשליחה' : `${pending.length} דוחות שכר ממתינים לשליחה`,
-      body: names(pending.map((p) => p.workplace.name)),
+      title: pending.length === 1 ? 'דוח שכר לא נשלח בזמן' : `${pending.length} דוחות שכר לא נשלחו בזמן`,
+      body: `${names(pending.map((p) => p.workplace.name))} — עבר היום האחרון לדיווח; התשלום יידחה בחודש. כדאי לשלוח בהקדם.`,
       action: { label: 'לדוחות השכר', href: '/payroll' },
     });
   }
