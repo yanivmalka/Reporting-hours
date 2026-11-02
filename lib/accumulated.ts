@@ -13,8 +13,13 @@ import { readJSON, writeJSON } from './storage';
 export type AccumulatedEntry = {
   /** דקות עבודה שנצברו ועדיין לא נפדו (0 ומעלה) */
   minutes: number;
-  /** שעות אקדמיות שנפדו מן המונה עד כה */
+  /** שעות אקדמיות שלמות שנפדו מן המונה עד כה */
   redeemedHours: number;
+  /**
+   * דקות שנפדו כ"השלמה לשעה שלמה" בדוח שכר (lib/redeem.ts) — לא בהכרח
+   * כפולה של 45. סך הנפדה בשעות = redeemedHours + redeemedMinutes ÷ 45.
+   */
+  redeemedMinutes?: number;
 };
 
 export type AccumulatedState = {
@@ -35,8 +40,13 @@ const toCount = (value: unknown) =>
 function sanitize(state: Partial<AccumulatedState> | null): AccumulatedState {
   const byWorkplace: Record<string, AccumulatedEntry> = {};
   for (const [id, entry] of Object.entries(state?.byWorkplace ?? {})) {
-    const clean = { minutes: toCount(entry?.minutes), redeemedHours: toCount(entry?.redeemedHours) };
-    if (clean.minutes > 0 || clean.redeemedHours > 0) byWorkplace[id] = clean;
+    const clean: AccumulatedEntry = {
+      minutes: toCount(entry?.minutes),
+      redeemedHours: toCount(entry?.redeemedHours),
+    };
+    const rm = toCount(entry?.redeemedMinutes);
+    if (rm > 0) clean.redeemedMinutes = rm;
+    if (clean.minutes > 0 || clean.redeemedHours > 0 || rm > 0) byWorkplace[id] = clean;
   }
   return { byWorkplace };
 }
@@ -48,9 +58,38 @@ export function entryOf(state: AccumulatedState, workplaceId: string): Accumulat
 
 /** סכום כל המונים — לתצוגה כוללת. */
 export function accumulatedTotal(state: AccumulatedState): AccumulatedEntry {
-  return Object.values(state.byWorkplace).reduce(
-    (acc, e) => ({ minutes: acc.minutes + e.minutes, redeemedHours: acc.redeemedHours + e.redeemedHours }),
-    { minutes: 0, redeemedHours: 0 },
+  return Object.values(state.byWorkplace).reduce<AccumulatedEntry>(
+    (acc, e) => ({
+      minutes: acc.minutes + e.minutes,
+      redeemedHours: acc.redeemedHours + e.redeemedHours,
+      redeemedMinutes: (acc.redeemedMinutes ?? 0) + (e.redeemedMinutes ?? 0),
+    }),
+    { minutes: 0, redeemedHours: 0, redeemedMinutes: 0 },
+  );
+}
+
+/** סך השעות האקדמיות שנפדו ממונה (כולל השלמות חלקיות), כשבר עשרוני. */
+export function redeemedAcademicHours(entry: AccumulatedEntry): number {
+  return entry.redeemedHours + (entry.redeemedMinutes ?? 0) / ACADEMIC_HOUR_MINUTES;
+}
+
+/**
+ * פדיון מספר דקות מדויק מן המונה (להשלמת דוח שכר לשעה שלמה): מוריד את
+ * הדקות מהמונה ומוסיף אותן ל־`redeemedMinutes`. לא יורד מתחת ל־0.
+ */
+export async function redeemMinutesFromCounter(
+  workplaceId: string,
+  minutes: number,
+): Promise<AccumulatedState> {
+  const current = await loadAccumulated();
+  const take = Math.min(entryOf(current, workplaceId).minutes, Math.max(0, Math.round(minutes)));
+  if (take <= 0) return current;
+  return saveAccumulated(
+    withEntry(current, workplaceId, (e) => ({
+      ...e,
+      minutes: e.minutes - take,
+      redeemedMinutes: (e.redeemedMinutes ?? 0) + take,
+    })),
   );
 }
 

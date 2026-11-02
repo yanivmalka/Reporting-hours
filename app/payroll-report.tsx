@@ -82,8 +82,9 @@ export default function PayrollReportScreen() {
             return;
           }
           const period = periodStartingAt(w, params.start);
-          setReport(buildPayrollReport(w, period, reports, courses, basis));
-          setStatus(st[statusKey(w.id, period.start)] ?? {});
+          const own = st[statusKey(w.id, period.start)] ?? {};
+          setReport(buildPayrollReport(w, period, reports, courses, basis, own.redeemedMinutes ?? 0));
+          setStatus(own);
         },
       );
       return () => {
@@ -255,6 +256,16 @@ export default function PayrollReportScreen() {
           </View>
         ))
       )}
+
+      {report.redeemedMinutes > 0 ? (
+        <View style={styles.card}>
+          <View style={styles.groupHead}>
+            <Text style={styles.groupName}>פדיון דקות מצטברות</Text>
+            <Text style={styles.groupHours}>{academic(report.redeemedMinutes)} שע׳ אקד׳</Text>
+          </View>
+          <Text style={styles.cc}>{report.redeemedMinutes} דק׳ מהמונה המצטבר נכללו בדוח</Text>
+        </View>
+      ) : null}
 
       <View style={styles.totals}>
         <View style={styles.totalRow}>

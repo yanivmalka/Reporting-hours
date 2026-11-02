@@ -298,8 +298,15 @@ function AlertCard({
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const fg = alert.tone === 'danger' ? colors.danger : alert.tone === 'warn' ? colors.warning : colors.brand;
+  // כשיש להתראה פעולה — כל האריח לחיץ (לא רק טקסט הפעולה); ✕ נשאר מעליו.
   return (
-    <View style={styles.alert}>
+    <Pressable
+      onPress={alert.action ? onAction : undefined}
+      disabled={!alert.action}
+      accessibilityRole={alert.action ? 'button' : undefined}
+      accessibilityLabel={alert.action ? `${alert.title} — ${alert.action.label}` : undefined}
+      style={({ pressed }) => [styles.alert, pressed && styles.pressed]}
+    >
       <View style={[styles.alertIcon, { borderColor: fg }]}>
         <Icon name={alert.icon} size={20} color={fg} />
       </View>
@@ -307,10 +314,10 @@ function AlertCard({
         <Text style={styles.alertTitle}>{alert.title}</Text>
         <Text style={styles.alertBody}>{alert.body}</Text>
         {alert.action ? (
-          <Pressable onPress={onAction} accessibilityRole="button" style={styles.alertAction} hitSlop={6}>
+          <View style={styles.alertAction}>
             {alert.action.tel ? <Icon name="phone" size={16} color={colors.brand} /> : null}
             <Text style={styles.alertActionText}>{alert.action.label}</Text>
-          </Pressable>
+          </View>
         ) : null}
       </View>
       <Pressable
@@ -322,7 +329,7 @@ function AlertCard({
       >
         <Icon name="close" size={18} color={colors.textMuted} />
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 

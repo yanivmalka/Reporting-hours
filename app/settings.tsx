@@ -11,11 +11,22 @@ import {
   accumulatedTotal,
   entryOf,
   loadAccumulated,
-  redeemAccumulated,
-  redeemableHours,
+  redeemedAcademicHours,
   resetAccumulated,
   type AccumulatedState,
 } from '../lib/accumulated';
+import { formatHours } from '../lib/pay';
+import { loadPayrollStatus, periodTitle, type StatusMap } from '../lib/payroll';
+import {
+  minutesLabel,
+  planRedeem,
+  redeemIntoPayroll,
+  redeemTarget,
+  REDEEM_MODE_LABELS,
+  useRedeemMode,
+  type RedeemMode,
+} from '../lib/redeem';
+import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
@@ -33,16 +44,23 @@ export default function SettingsScreen() {
   const [state, setState] = useState<AccumulatedState | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [reports, setReports] = useState<WorkReport[]>([]);
+  const [statuses, setStatuses] = useState<StatusMap>({});
+  const [mode, setMode] = useRedeemMode();
   const confirm = useConfirm();
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([loadAccumulated(), loadWorkplaces()]).then(([next, list]) => {
-        if (!active) return;
-        setState(next);
-        setWorkplaces(list);
-      });
+      Promise.all([loadAccumulated(), loadWorkplaces(), loadReports(), loadPayrollStatus()]).then(
+        ([next, list, reps, st]) => {
+          if (!active) return;
+          setState(next);
+          setWorkplaces(list);
+          setReports(reps);
+          setStatuses(st);
+        },
+      );
       return () => {
         active = false;
       };
@@ -51,16 +69,36 @@ export default function SettingsScreen() {
 
   const nameOf = (id: string) => workplaces.find((w) => w.id === id)?.name ?? 'מקום עבודה שנמחק';
 
-  async function handleRedeem(workplaceId?: string) {
-    setBusy(workplaceId ?? 'all');
-    const { state: next, redeemed } = await redeemAccumulated(workplaceId);
+  /** תכנית הפדיון של מקום עבודה: לאיזה דוח, וכמה דקות — לפי האופן שנבחר. */
+  function planFor(workplace: Workplace | undefined, counter: number) {
+    if (!workplace || workplace.paymentType !== 'hourly' || basis !== 'academic') return null;
+    const target = redeemTarget(workplace, reports, statuses);
+    if (!target) return null;
+    return { target, plan: planRedeem(counter, target.inReport, mode) };
+  }
+
+  async function handleRedeem(ids: string[]) {
+    setBusy(ids.length === 1 ? ids[0] : 'all');
+    let st = statuses;
+    let total = 0;
+    let next = state;
+    for (const id of ids) {
+      const w = workplaces.find((x) => x.id === id);
+      const p = planFor(w, entryOf(next ?? { byWorkplace: {} }, id).minutes);
+      if (!p || p.plan.minutes <= 0) continue;
+      const res = await redeemIntoPayroll(id, p.target.period.start, p.plan.minutes, st);
+      st = res.statuses;
+      next = res.state;
+      total += res.redeemed;
+    }
+    setStatuses(st);
     setState(next);
     setBusy(null);
-    if (redeemed > 0) {
+    if (total > 0) {
       showToast(
-        workplaceId
-          ? `נפדו ${redeemed} שע׳ אקדמיות ב${nameOf(workplaceId)}`
-          : `נפדו ${redeemed} שע׳ אקדמיות בכל הסמינרים`,
+        ids.length === 1
+          ? `נפדו ${minutesLabel(total)} אקד׳ לדוח של ${nameOf(ids[0])}`
+          : `נפדו ${minutesLabel(total)} אקד׳ בכל הסמינרים`,
       );
     }
   }
@@ -89,14 +127,17 @@ export default function SettingsScreen() {
   }
 
   const total = accumulatedTotal(state);
+  const exampleMinutes = mode === 'complete' ? 27 : 45;
   // כל מקומות העבודה הפעילים, וגם מונים של מקומות שנמחקו — מהגדול לקטן.
   const ids = [
     ...new Set([...workplaces.map((w) => w.id), ...Object.keys(state.byWorkplace)]),
   ];
   const rows = ids
     .map((id) => ({ id, entry: entryOf(state, id), workplace: workplaces.find((w) => w.id === id) }))
-    .sort((a, b) => b.entry.minutes - a.entry.minutes || b.entry.redeemedHours - a.entry.redeemedHours);
-  const totalRedeemable = rows.reduce((n, r) => n + redeemableHours(r.entry), 0);
+    .sort((a, b) => b.entry.minutes - a.entry.minutes || b.entry.redeemedHours - a.entry.redeemedHours)
+    .map((r) => ({ ...r, p: planFor(r.workplace, r.entry.minutes) }));
+  const readyIds = rows.filter((r) => (r.p?.plan.minutes ?? 0) > 0).map((r) => r.id);
+  const totalRedeemable = rows.reduce((n, r) => n + (r.p?.plan.minutes ?? 0), 0);
 
   return (
     <Screen>
@@ -128,30 +169,77 @@ export default function SettingsScreen() {
       <View style={styles.card}>
         <Text style={styles.cardLabel}>סה״כ בכל הסמינרים</Text>
         <Text style={styles.bigNumber}>{total.minutes}</Text>
-        <Text style={styles.unit}>דקות · {total.redeemedHours} שע׳ אקדמיות נפדו עד כה</Text>
-        {totalRedeemable > 0 ? (
+        <Text style={styles.unit}>
+          דקות · {formatHours(Math.round(redeemedAcademicHours(total) * 100) / 100)} שע׳ אקדמיות נפדו עד כה
+        </Text>
+        {basis !== 'academic' ? (
+          <Text style={styles.cardHint}>
+            בבסיס "שעות רגילות" כל זמן העבודה נטו כבר משולם — אין מה לפדות.
+          </Text>
+        ) : readyIds.length > 1 ? (
           <Button
-            label={`פדיון כל השעות הזמינות (${totalRedeemable})`}
-            onPress={() => handleRedeem()}
+            label={`פדיון בכל הסמינרים (${minutesLabel(totalRedeemable)})`}
+            onPress={() => handleRedeem(readyIds)}
             loading={busy === 'all'}
             disabled={busy != null}
           />
-        ) : (
+        ) : readyIds.length === 0 ? (
           <Text style={styles.cardHint}>
-            אין כרגע סמינר עם {ACADEMIC_HOUR_MINUTES} דקות לפחות לפדיון.
+            {mode === 'complete'
+              ? 'אין כרגע מספיק דקות כדי להשלים דוח לשעה שלמה.'
+              : `אין כרגע סמינר עם ${ACADEMIC_HOUR_MINUTES} דקות לפחות לפדיון.`}
           </Text>
-        )}
+        ) : null}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>אופן הפדיון</Text>
+        <SegmentedControl<RedeemMode>
+          options={[
+            { value: 'complete', label: `${REDEEM_MODE_LABELS.complete} (מומלץ)` },
+            { value: 'whole', label: REDEEM_MODE_LABELS.whole },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
+        <View style={styles.explain}>
+          <Text style={styles.note}>
+            {mode === 'complete'
+              ? 'מהמונה נלקחות קודם בדיוק הדקות שחסרות לדוח השכר כדי להגיע לשעה אקדמית שלמה, ורק אחר כך שעות שלמות נוספות. כך בדוח אין שבר עשרוני.'
+              : `נפדות רק שעות שלמות (${ACADEMIC_HOUR_MINUTES} דק׳ כל אחת), בלי קשר לסך הדוח. שבר שכבר יש בדוח נשאר בו.`}
+          </Text>
+          <Text style={styles.example}>
+            {`דוגמה: בדוח 22 שע׳ ו־18 דק׳ (22.4), במונה 70 דק׳ ← נפדות ${exampleMinutes} דק׳; הדוח: ${
+              mode === 'complete' ? '23 שע׳ בדיוק' : '23.4 שע׳'
+            }; נשארות במונה ${70 - exampleMinutes} דק׳.`}
+          </Text>
+          <Text style={styles.note}>
+            הפדיון נכנס לדוח השכר הבא שיישלח (או לדוח של החודש הנוכחי) ומשולם בתעריף של הסמינר.
+          </Text>
+        </View>
       </View>
 
       <Text style={styles.sectionLabel}>פירוט לפי סמינר</Text>
       <View style={styles.list}>
-        {rows.map(({ id, entry, workplace }) => {
-          const canRedeem = redeemableHours(entry);
+        {rows.map(({ id, entry, workplace, p }) => {
           const toNext = ACADEMIC_HOUR_MINUTES - (entry.minutes % ACADEMIC_HOUR_MINUTES);
+          const redeemedH = redeemedAcademicHours(entry);
           const value =
-            workplace && workplace.paymentType === 'hourly' && entry.redeemedHours > 0
-              ? ` · שווי ${formatShekels(entry.redeemedHours * workplace.rate)}`
+            workplace && workplace.paymentType === 'hourly' && redeemedH > 0
+              ? ` · שווי ${formatShekels(redeemedH * workplace.rate)}`
               : '';
+          const target = p ? `${p.target.closed ? 'לדוח ' : 'לדוח החודש · '}${periodTitle(p.target.period)}` : '';
+          const status = !p
+            ? entry.minutes > 0
+              ? workplace?.paymentType === 'monthly'
+                ? 'משכורת חודשית — אין פדיון לשכר'
+                : `${entry.minutes} דק׳ במונה`
+              : 'אין דקות במונה'
+            : p.plan.minutes > 0
+              ? `${minutesLabel(p.plan.minutes)} לפדיון ${target}`
+              : p.plan.missing > 0
+                ? `חסרות ${p.plan.missing} דק׳ להשלמת ${target} לשעה שלמה`
+                : `עוד ${toNext} דק׳ לשעה אקדמית`;
           return (
             <View key={id} style={styles.row}>
               <View style={styles.rowHead}>
@@ -162,18 +250,14 @@ export default function SettingsScreen() {
               </View>
               <ProgressBar fraction={(entry.minutes % ACADEMIC_HOUR_MINUTES) / ACADEMIC_HOUR_MINUTES} thin />
               <Text style={styles.note}>
-                {canRedeem > 0
-                  ? `${canRedeem} שע׳ זמינות לפדיון`
-                  : entry.minutes > 0
-                    ? `עוד ${toNext} דק׳ לשעה אקדמית`
-                    : 'אין דקות במונה'}
-                {` · נפדו ${entry.redeemedHours} שע׳${value}`}
+                {status}
+                {` · נפדו ${formatHours(Math.round(redeemedH * 100) / 100)} שע׳${value}`}
               </Text>
-              {canRedeem > 0 ? (
+              {p && p.plan.minutes > 0 ? (
                 <Button
-                  label={`פדיון ${canRedeem} שע׳ אקדמיות`}
+                  label={`פדיון ${minutesLabel(p.plan.minutes)} אקד׳`}
                   variant="secondary"
-                  onPress={() => handleRedeem(id)}
+                  onPress={() => handleRedeem([id])}
                   loading={busy === id}
                   disabled={busy != null}
                 />
@@ -290,6 +374,20 @@ const makeStyles = (colors: AppColors) =>
   note: {
     fontSize: 12,
     color: colors.textMuted,
+    textAlign: TEXT_RIGHT,
+  },
+  explain: {
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  example: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.text,
     textAlign: TEXT_RIGHT,
   },
 });
