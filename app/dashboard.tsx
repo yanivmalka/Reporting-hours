@@ -206,6 +206,31 @@ export default function DashboardScreen() {
   const shades = familyShades(colors, data.workplaces.length);
   const series = data.workplaces.map((w, i) => ({ id: w.id, color: shades[i], name: w.name }));
   const cells = forecast ?? [];
+  const now = new Date();
+  const nowRef: MonthRef = { year: now.getFullYear(), month0: now.getMonth() };
+  const atNow = anchor.year === nowRef.year && anchor.month0 === nowRef.month0;
+  // בלי נתונים בתצוגה: קישור לחודש של הדיווח האחרון (של המקום המסונן, אם יש), או לחודש הנוכחי.
+  const lastDate = data.reports
+    .filter((r) => !selWp || r.workplaceId === selWp)
+    .reduce<string | null>((m, r) => (m == null || r.date > m ? r.date : m), null);
+  const lastRef: MonthRef | null = lastDate
+    ? { year: Number(lastDate.slice(0, 4)), month0: Number(lastDate.slice(5, 7)) - 1 }
+    : null;
+  const emptyLink = lastRef
+    ? {
+        label: `לחודש הדיווח האחרון · ${MONTHS_LONG[lastRef.month0]} ${lastRef.year}`,
+        onPress: () => {
+          setAnchor(lastRef);
+          setRes('month');
+        },
+      }
+    : {
+        label: 'לחודש הנוכחי',
+        onPress: () => {
+          setAnchor(nowRef);
+          setRes('month');
+        },
+      };
   const single = res === 'month';
   const sem = semesterOf(anchor);
   const chartView =
@@ -295,6 +320,16 @@ export default function DashboardScreen() {
             setRes('month');
           }}
           currentKey={todayISO().slice(0, 7)}
+          emptyLink={emptyLink}
+          onClear={
+            selWp != null || !atNow
+              ? () => {
+                  setSelWp(null);
+                  setAnchor(nowRef);
+                  setRes('month');
+                }
+              : undefined
+          }
         />
       ) : null}
 

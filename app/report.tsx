@@ -489,6 +489,13 @@ export default function ReportScreen() {
 
   function goBack() {
     setErrors({});
+    // עריכה נפתחת מתצוגת הדיווח ישר בשלב השעות — "חזרה" ממנו מחזירה לתצוגה
+    // (ולא לשלבי הבחירה של דיווח חדש). שינויים שלא נשמרו — עם אזהרה.
+    if (editId && step === 'times') {
+      if (navigation.canGoBack()) navigation.goBack();
+      else router.replace({ pathname: '/report-view', params: { id: editId } });
+      return;
+    }
     if (step === 'course' || step === 'workplace') {
       if (step === 'workplace' && activeCourses.length > 0) setStep('course');
       else setStep('date');
@@ -506,7 +513,7 @@ export default function ReportScreen() {
   swipeRef.current = {
     next: swipeNext,
     back: () => {
-      if (step !== 'date' && step !== 'done') goBack();
+      if (step !== 'date' && step !== 'done' && !(editId && step === 'times')) goBack();
     },
   };
 
@@ -715,19 +722,6 @@ export default function ReportScreen() {
                       {ARRIVAL_MODE_LABELS[w.arrivalMode]}
                     </Text>
                   </View>
-                  <Pressable
-                    onPress={() => router.push({ pathname: '/workplace-form', params: { id: w.id } })}
-                    hitSlop={6}
-                    style={({ pressed }) => [
-                      styles.editBtn,
-                      selected && styles.editBtnSelected,
-                      pressed && { opacity: 0.6 },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`עריכת ${w.name}`}
-                  >
-                    <Text style={[styles.editIcon, selected && styles.choiceTextSelected]}>✎</Text>
-                  </Pressable>
                 </Pressable>
               );
             })}
@@ -941,7 +935,7 @@ export default function ReportScreen() {
       {step === 'done' ? (
         <View style={styles.nav}>
           {editId ? (
-            <Button label="חזרה להדיווחים שלי" onPress={() => router.back()} />
+            <Button label="חזרה לדיווח" onPress={() => router.back()} />
           ) : (
             <Button label="דיווח נוסף" onPress={anotherReport} />
           )}

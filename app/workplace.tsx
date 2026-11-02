@@ -189,7 +189,7 @@ export default function WorkplaceDetailScreen() {
           return (
             <Pressable
               key={c.id}
-              onPress={() => router.push({ pathname: '/course-form', params: { id: c.id } })}
+              onPress={() => router.push({ pathname: '/course-form', params: { id: c.id, view: '1' } })}
               style={({ pressed }) => [styles.card, styles.courseCard, pressed && styles.pressed]}
             >
               <Text style={styles.courseName}>{c.name}</Text>
@@ -281,7 +281,7 @@ export default function WorkplaceDetailScreen() {
                   return (
                     <Pressable
                       key={r.id}
-                      onPress={() => router.push({ pathname: '/report', params: { id: r.id } })}
+                      onPress={() => router.push({ pathname: '/report-view', params: { id: r.id } })}
                       style={({ pressed }) => [styles.reportRow, pressed && styles.pressed]}
                     >
                       <DayBox date={r.date} />

@@ -73,16 +73,14 @@ export default function WorkplacesScreen() {
               key={workplace.id}
               workplace={workplace}
               stats={workplaceMonthStats(workplace, reports, courses)}
-              onPress={() =>
-                router.push({ pathname: '/workplace-form', params: { id: workplace.id } })
-              }
+              onPress={() => router.push({ pathname: '/workplace', params: { id: workplace.id } })}
             />
           ))}
         </View>
       )}
 
       <Text style={styles.hint}>
-        העברה לאשפה — מתוך מסך העריכה. מהאשפה אפשר לשחזר תוך 30 יום.
+        עריכה והעברה לאשפה — מתוך מסך מקום העבודה, בכפתור "עריכה". מהאשפה אפשר לשחזר תוך 30 יום.
       </Text>
 
       <View style={styles.action}>
