@@ -21,9 +21,8 @@ type ReportCardProps = {
   travel?: number | null;
   /** הדוח לשכר של החודש נשלח — הדיווח נעול לעריכה */
   locked?: boolean;
-  onEdit?: () => void;
-  /** בדיווח נעול: מעבר לדוח השכר (שם אפשר לבטל אותו) */
-  onLocked?: () => void;
+  /** לחיצה על האריח — מעבר לתצוגת הדיווח (העריכה משם, בכפתור "עריכה") */
+  onPress?: () => void;
 };
 
 /** תיאור השעות האקדמיות בדיווח, למשל "6 שע׳ אקדמיות ו־30 דק׳". */
@@ -37,13 +36,19 @@ function academicText(report: WorkReport): string {
 }
 
 /** שורת רשימה לדיווח יום עבודה: מקום, תאריך, טווח שעות, הפסקות, זמן נטו, שעות אקדמיות ושכר. */
-export function ReportCard({ report, workplaceName, pay, travel, locked, onEdit, onLocked }: ReportCardProps) {
+export function ReportCard({ report, workplaceName, pay, travel, locked, onPress }: ReportCardProps) {
   const styles = useThemedStyles(makeStyles);
   const breakTotal = totalBreakMinutes(report.breaks);
   const net = netMinutes(report);
 
   return (
-    <View style={styles.card}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`${workplaceName} · ${formatISODate(report.date)}${locked ? ' · נעול' : ''}`}
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+    >
       <View style={styles.headerRow}>
         <Text style={styles.name}>{workplaceName}</Text>
         <View style={styles.dateBox}>
@@ -65,7 +70,7 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onEdit,
           {report.carriedMinutes} דק׳ הועברו למונה "דקות עבודה מצטברות"
         </Text>
       ) : null}
-      {/* שורת שכר ונסיעות, ומשמאלה כפתור אייקון לעריכה (בגובה שתי השורות) */}
+      {/* שורת שכר ונסיעות, ומשמאלה סימון נעילה כשהדוח לשכר נשלח */}
       <View style={styles.bottomRow}>
         <View style={styles.bottomTexts}>
           {typeof pay === 'number' ? (
@@ -79,29 +84,13 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onEdit,
             <Text style={styles.carried}>נסיעות היום נספרו בדיווח אחר</Text>
           ) : null}
         </View>
-        {onEdit || onLocked ? (
-          locked ? (
-            <Pressable
-              onPress={onLocked}
-              style={[styles.iconBtn, styles.iconBtnLocked]}
-              accessibilityRole="button"
-              accessibilityLabel="הדוח לשכר נשלח — מעבר לביטול הדוח"
-            >
-              <Text style={styles.iconText}>🔒</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={onEdit}
-              style={styles.iconBtn}
-              accessibilityRole="button"
-              accessibilityLabel="עריכת הדיווח"
-            >
-              <Text style={[styles.iconText, styles.iconEdit]}>✎</Text>
-            </Pressable>
-          )
+        {locked ? (
+          <View style={styles.lockChip}>
+            <Text style={styles.lockText}>🔒 נשלח לשכר</Text>
+          </View>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -122,26 +111,16 @@ const makeStyles = (colors: AppColors) =>
       flex: 1,
       gap: spacing.xs,
     },
-    iconBtn: {
-      width: 48,
-      height: 48,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.brand,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    iconBtnLocked: {
-      borderColor: colors.border,
+    pressed: { opacity: 0.85 },
+    lockChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
       backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
-    iconText: {
-      fontSize: 20,
-    },
-    iconEdit: {
-      color: colors.brand,
-      fontWeight: '700',
-    },
+    lockText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
     actions: {
       flexDirection: 'row',
       marginTop: spacing.xs,

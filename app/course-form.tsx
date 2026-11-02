@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
 import { ActivityIndicator, Keyboard, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
@@ -11,6 +12,7 @@ import { TextField } from '../components/TextField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
 import {
   WEEKDAY_NAMES,
+  courseScheduleLabel,
   deleteCourse,
   loadCourses,
   occurrences,
@@ -18,6 +20,7 @@ import {
   sessionAcademicHours,
   upsertCourse,
 } from '../lib/courses';
+import { dateRange } from '../lib/dashboard';
 import { formatHours } from '../lib/pay';
 import { parseTime } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
@@ -46,8 +49,13 @@ export default function CourseFormScreen() {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const confirm = useConfirm();
-  const params = useLocalSearchParams<{ id?: string; workplaceId?: string }>();
+  const params = useLocalSearchParams<{ id?: string; workplaceId?: string; view?: string }>();
   const id = params.id || undefined;
+  /** הגיעו ממצב תצוגה (?view=1): מציגים קודם קריאה בלבד; עריכה — בכפתור */
+  const fromView = Boolean(id && params.view === '1');
+  const [viewing, setViewing] = useState(fromView);
+  /** הערכים השמורים — לשחזור בחזרה מעריכה לתצוגה בלי שמירה */
+  const savedRef = useRef<Form | null>(null);
   const [workplaceId, setWorkplaceId] = useState(params.workplaceId ?? '');
   const [workplaceName, setWorkplaceName] = useState('');
   const presets = periodPresets();
@@ -77,6 +85,15 @@ export default function CourseFormScreen() {
       setWorkplaceId(wpId);
       setWorkplaceName(workplaces.find((w) => w.id === wpId)?.name ?? '');
       if (course) {
+        savedRef.current = {
+          name: course.name,
+          weekday: course.weekday,
+          start: course.start,
+          end: course.end,
+          breakMinutes: String(course.breakMinutes),
+          from: course.from,
+          to: course.to,
+        };
         setForm({
           name: course.name,
           weekday: course.weekday,
@@ -92,6 +109,19 @@ export default function CourseFormScreen() {
       active = false;
     };
   }, [id, params.workplaceId]);
+
+  // עריכה שנפתחה מהתצוגה: "חזרה" (כותרת / אנדרואיד) מחזירה לתצוגה, לא למסך הקודם.
+  const [leaving, setLeaving] = useState(false);
+  usePreventRemove(fromView && !viewing && !leaving, () => backToView());
+  useEffect(() => {
+    if (leaving) router.back();
+  }, [leaving, router]);
+
+  function backToView() {
+    if (savedRef.current) setForm(savedRef.current);
+    setErrors({});
+    setViewing(true);
+  }
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -140,7 +170,11 @@ export default function CourseFormScreen() {
       from: form.from,
       to: form.to,
     });
-    router.back();
+    setSaving(false);
+    if (fromView) {
+      savedRef.current = form;
+      setViewing(true);
+    } else router.back();
   }
 
   function handleDelete() {
@@ -151,7 +185,7 @@ export default function CourseFormScreen() {
       confirmLabel: 'מחיקת הקורס',
       onConfirm: async () => {
         await deleteCourse(id);
-        router.back();
+        setLeaving(true); // משחרר את חסימת היציאה, והאפקט חוזר אחורה
       },
     });
   }
@@ -167,6 +201,35 @@ export default function CourseFormScreen() {
     form.from,
     form.to,
   ).length;
+
+  if (viewing) {
+    const rows: [string, string][] = [
+      ['מקום עבודה', workplaceName || '—'],
+      ['מועד', courseScheduleLabel(form)],
+      ['הפסקה', Number(form.breakMinutes) > 0 ? `${form.breakMinutes} דק׳` : 'ללא'],
+      ['תקופה', dateRange(form.from, form.to, true)],
+      [
+        'שעות אקדמיות',
+        `${formatHours(Math.round(perSession * 100) / 100)} למפגש · ${sessions} מפגשים`,
+      ],
+    ];
+    return (
+      <Screen>
+        <Stack.Screen options={{ title: 'קורס' }} />
+        <Text style={styles.viewTitle}>{form.name}</Text>
+        <View style={styles.viewCard}>
+          {rows.map(([label, value], i) => (
+            <View key={label} style={[styles.viewRow, i === rows.length - 1 && styles.viewRowLast]}>
+              <Text style={styles.dateLabel}>{label}</Text>
+              <Text style={styles.viewValue}>{value}</Text>
+            </View>
+          ))}
+        </View>
+        <Button label="עריכה" onPress={() => setViewing(false)} />
+        <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen keyboardFooter>
@@ -283,6 +346,7 @@ export default function CourseFormScreen() {
       ) : null}
 
       <Button label={id ? 'שמירת שינויים' : 'הוספת הקורס'} onPress={handleSave} loading={saving} />
+      {fromView ? <Button label="חזרה" variant="secondary" onPress={backToView} /> : null}
       {id ? <Button label="מחיקת הקורס" variant="danger" onPress={handleDelete} /> : null}
       {confirm.dialog}
     </Screen>
@@ -356,6 +420,24 @@ const makeStyles = (colors: AppColors) =>
       borderRadius: radius.md,
       padding: spacing.md,
     },
+    viewTitle: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
+    viewCard: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      paddingHorizontal: spacing.md,
+    },
+    viewRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    viewRowLast: { borderBottomWidth: 0 },
+    viewValue: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     summaryText: {
       fontSize: 13,
       color: colors.brandDark,

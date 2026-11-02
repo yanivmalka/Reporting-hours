@@ -73,6 +73,7 @@ function Chrome() {
           <Stack.Screen name="dashboard" options={{ title: t('nav.dashboard') }} />
           <Stack.Screen name="report" options={{ title: t('nav.report') }} />
           <Stack.Screen name="reports" options={{ title: t('nav.reports') }} />
+          <Stack.Screen name="report-view" options={{ title: 'דיווח' }} />
           <Stack.Screen name="workplaces" options={{ title: t('nav.workplaces') }} />
           <Stack.Screen name="workplace" options={{ title: t('nav.workplaceForm') }} />
           <Stack.Screen

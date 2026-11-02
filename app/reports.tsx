@@ -346,16 +346,7 @@ export default function ReportsScreen() {
               pay={payOf(report)}
               travel={travelOf(report)}
               locked={lockOf(report) != null}
-              onEdit={() => router.push({ pathname: '/report', params: { id: report.id } })}
-              onLocked={() => {
-                const start = lockOf(report);
-                if (start) {
-                  router.push({
-                    pathname: '/payroll-report',
-                    params: { wp: report.workplaceId, start },
-                  });
-                }
-              }}
+              onPress={() => router.push({ pathname: '/report-view', params: { id: report.id } })}
             />
           ))}
         </View>
