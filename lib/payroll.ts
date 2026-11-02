@@ -34,6 +34,8 @@ export type PayrollStatus = {
   paidAt?: string;
   /** הסכום שהתקבל בפועל (₪) */
   paidAmount?: number;
+  /** דקות שנפדו מן המונה המצטבר ונכללות בדוח הזה (lib/redeem.ts) */
+  redeemedMinutes?: number;
 };
 
 /** האם הדוח נעול לעריכה (נשלח לשכר ולא בוטל). */
@@ -155,7 +157,10 @@ export type PayrollReport = {
   workplace: Workplace;
   period: PayPeriod;
   groups: PayrollGroup[];
+  /** סך הדקות בדוח — מפגשים + דקות שנפדו מהמונה */
   netMinutes: number;
+  /** דקות שנפדו מהמונה המצטבר לתוך הדוח (lib/redeem.ts) */
+  redeemedMinutes: number;
   days: number;
   travel: number;
   /** שכר מחושב (ברוטו, לפי התעריפים שחלו בכל תאריך) */
@@ -188,6 +193,8 @@ export function buildPayrollReport(
   reports: readonly WorkReport[],
   courses: readonly Course[],
   basis: PayBasis = 'academic',
+  /** דקות שנפדו מהמונה לתוך הדוח (מצב הדוח, `redeemedMinutes`) */
+  redeemedMinutes = 0,
 ): PayrollReport {
   const mine = reports
     .filter((r) => r.workplaceId === workplace.id && r.date >= period.start && r.date <= period.end)
@@ -197,7 +204,8 @@ export function buildPayrollReport(
   for (const r of mine) {
     const name = courseOf(r, courses);
     const g = groups.get(name) ?? { name, sessions: [], netMinutes: 0 };
-    const net = netMinutes(r) ?? 0;
+    // בשעות אקדמיות — הדקות שהועברו למונה אינן חלק מהדוח (הן ייכנסו כשייפדו).
+    const net = Math.max(0, (netMinutes(r) ?? 0) - (basis === 'academic' ? r.carriedMinutes ?? 0 : 0));
     g.sessions.push({
       date: r.date,
       start: r.start,
@@ -213,8 +221,14 @@ export function buildPayrollReport(
   const rates = [...new Set(mine.map((r) => workplaceAt(workplace, r.date).rate))];
   const last = mine[mine.length - 1];
   const paymentType = workplaceAt(workplace, last?.date).paymentType;
+  const redeemed = basis === 'academic' ? Math.max(0, Math.round(redeemedMinutes)) : 0;
+  const atEnd = workplaceAt(workplace, period.end);
+  const redeemedPay =
+    atEnd.paymentType === 'hourly' ? (Math.max(0, atEnd.rate) * redeemed) / ACADEMIC_HOUR_MINUTES : 0;
+  const sessionsMinutes = [...groups.values()].reduce((s, g) => s + g.netMinutes, 0);
   return {
-    pay: workplacePay(workplace, mine, basis),
+    pay: workplacePay(workplace, mine, basis) + redeemedPay,
+    redeemedMinutes: redeemed,
     rates: rates.length ? rates : [workplace.rate],
     paymentType,
     workplace,
@@ -222,7 +236,7 @@ export function buildPayrollReport(
     groups: [...groups.values()].sort((a, b) =>
       a.name === NO_COURSE ? 1 : b.name === NO_COURSE ? -1 : a.name.localeCompare(b.name, 'he'),
     ),
-    netMinutes: mine.reduce((s, r) => s + (netMinutes(r) ?? 0), 0),
+    netMinutes: sessionsMinutes + redeemed,
     days,
     travel,
   };
@@ -290,6 +304,12 @@ export function payrollBody(report: PayrollReport, profile?: Profile): string {
       ];
       lines.push(row.map((c, k) => pad(c, W[k])).join(' | '));
     }
+  }
+  if (report.redeemedMinutes > 0) {
+    lines.push('');
+    lines.push(
+      `■ פדיון דקות עבודה מצטברות (דקות עודפות מחודשים קודמים) — ${academic(report.redeemedMinutes)} שעות אקדמיות (${report.redeemedMinutes} דק׳)`,
+    );
   }
   lines.push('');
   lines.push('──────────');

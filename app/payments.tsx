@@ -55,7 +55,14 @@ export default function PaymentsScreen() {
     setRows(
       items.map((item) => ({
         item,
-        report: buildPayrollReport(item.workplace, item.period, r as WorkReport[], c as Course[], basis),
+        report: buildPayrollReport(
+          item.workplace,
+          item.period,
+          r as WorkReport[],
+          c as Course[],
+          basis,
+          item.status.redeemedMinutes ?? 0,
+        ),
         expected: expectedPayment(item.workplace, item.period),
       })),
     );

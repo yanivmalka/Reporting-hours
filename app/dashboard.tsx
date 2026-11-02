@@ -21,8 +21,18 @@ import {
   workplaceShares,
 } from '../lib/dashboard';
 import { loadCourses, type Course } from '../lib/courses';
-import { forecastYear, STATUS_LABEL, type ForecastMode, type PeriodStatus } from '../lib/forecast';
-import { hebrewMonthNames } from '../lib/hebrewDate';
+import {
+  forecastMonths,
+  monthsInView,
+  semesterOf,
+  shiftAnchor,
+  STATUS_LABEL,
+  type ChartResolution,
+  type ForecastMode,
+  type MonthRef,
+  type PeriodStatus,
+} from '../lib/forecast';
+import { hebrewMonthNames, hebrewYearSpan } from '../lib/hebrewDate';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { usePayBasis } from '../lib/payBasis';
 import { todayISO } from '../lib/time';
@@ -71,9 +81,13 @@ export default function DashboardScreen() {
   } | null>(null);
   const [which, setWhich] = useState<PeriodChoice>('current');
   // ── צפי תשלומים ──
-  const [year, setYear] = useState(() => new Date().getFullYear());
-  /** החודש המסונן (0–11); null = כל השנה */
-  const [month, setMonth] = useState<number | null>(() => new Date().getMonth());
+  /** רזולוציית הגרף — ברירת מחדל: החודש הנוכחי, עמודה לכל מקום עבודה */
+  const [res, setRes] = useState<ChartResolution>('month');
+  /** חודש העוגן של התצוגה */
+  const [anchor, setAnchor] = useState<MonthRef>(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month0: d.getMonth() };
+  });
   /** מקום העבודה המודגש; null = כולם */
   const [selWp, setSelWp] = useState<string | null>(null);
   const [mode, setMode] = useState<ForecastMode>('work');
@@ -147,9 +161,17 @@ export default function DashboardScreen() {
   const forecast = useMemo(
     () =>
       data
-        ? forecastYear(data.workplaces, data.reports, data.courses, data.statuses, basis, year, mode)
+        ? forecastMonths(
+            monthsInView(res, anchor),
+            data.workplaces,
+            data.reports,
+            data.courses,
+            data.statuses,
+            basis,
+            mode,
+          )
         : null,
-    [data, basis, year, mode],
+    [data, basis, res, anchor, mode],
   );
 
   if (!data || !view) {
@@ -182,8 +204,21 @@ export default function DashboardScreen() {
 
   // ── צפי: גוונים מאותה משפחה לכל מקום עבודה, וסיכום לחודש / לשנה המסוננים ──
   const shades = familyShades(colors, data.workplaces.length);
-  const series = data.workplaces.map((w, i) => ({ id: w.id, color: shades[i] }));
-  const cells = forecast ? (month == null ? forecast : [forecast[month]]) : [];
+  const series = data.workplaces.map((w, i) => ({ id: w.id, color: shades[i], name: w.name }));
+  const cells = forecast ?? [];
+  const single = res === 'month';
+  const sem = semesterOf(anchor);
+  const chartView =
+    res === 'month'
+      ? { title: `${MONTHS_LONG[anchor.month0]} ${anchor.year}`, sub: hebrewMonthNames(anchor.year, anchor.month0).join('–') }
+      : res === 'year'
+        ? { title: String(anchor.year), sub: hebrewYearSpan(anchor.year) }
+        : {
+            title: `${sem.name} ${sem.start.year}${sem.start.month0 + sem.count > 12 ? `–${String(sem.start.year + 1).slice(2)}` : ''}`,
+            sub: cells.length
+              ? `${MONTHS_LONG[cells[0].month0]} ${cells[0].year} – ${MONTHS_LONG[cells[cells.length - 1].month0]} ${cells[cells.length - 1].year}`
+              : '',
+          };
   const rows = data.workplaces.map((w) => {
     let reported = 0;
     let planned = 0;
@@ -193,7 +228,7 @@ export default function DashboardScreen() {
       planned += c?.planned ?? 0;
       return c?.periods ?? [];
     });
-    const last = month != null ? periods[periods.length - 1] : undefined;
+    const last = single ? periods[periods.length - 1] : undefined;
     return {
       workplace: w,
       reported,
@@ -245,35 +280,32 @@ export default function DashboardScreen() {
 
       {forecast ? (
         <ForecastChart
-          year={year}
-          onYearChange={(y) => {
-            setYear(y);
-            setMonth(null);
-          }}
+          res={res}
+          onResChange={setRes}
+          title={chartView.title}
+          subtitle={chartView.sub}
+          onPrev={() => setAnchor((a) => shiftAnchor(res, a, -1))}
+          onNext={() => setAnchor((a) => shiftAnchor(res, a, 1))}
           months={forecast}
           series={series}
-          selectedMonth={month}
-          onPickMonth={(m) => setMonth((cur) => (cur === m ? null : m))}
           selectedWp={selWp}
+          onPickWp={(id) => setSelWp((cur) => (cur === id ? null : id))}
+          onPickMonth={(m) => {
+            setAnchor({ year: m.year, month0: m.month0 });
+            setRes('month');
+          }}
           currentKey={todayISO().slice(0, 7)}
         />
       ) : null}
 
       <View style={styles.periodHead}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.periodTitle}>
-            {month == null ? `כל ${year}` : `${MONTHS_LONG[month]} ${year}`}
-          </Text>
+          <Text style={styles.periodTitle}>{res === 'year' ? `כל ${anchor.year}` : chartView.title}</Text>
           <Text style={styles.periodSub}>
-            {month == null ? 'סיכום שנתי' : hebrewMonthNames(year, month).join('–')}
+            {res === 'year' ? 'סיכום שנתי' : chartView.sub}
             {mode === 'pay' ? ' · לפי מועד התשלום הצפוי' : ' · לפי חודש העבודה'}
           </Text>
         </View>
-        {month != null ? (
-          <Pressable onPress={() => setMonth(null)} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.link}>כל השנה</Text>
-          </Pressable>
-        ) : null}
       </View>
 
       <View style={styles.totalsRow}>

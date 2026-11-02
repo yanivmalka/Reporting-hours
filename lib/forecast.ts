@@ -108,6 +108,12 @@ export function periodForecast(
   const mine = reports.filter((r) => r.workplaceId === w.id && r.date >= period.start && r.date <= period.end);
   const t = totalsFor([w], mine, basis);
   const st = statuses[statusKey(w.id, period.start)] ?? {};
+  // דקות שנפדו מהמונה לתוך הדוח — בתעריף שחל בסוף התקופה (כמו בדוח השכר).
+  const atEnd = workplaceAt(w, period.end);
+  const redeemedPay =
+    basis === 'academic' && atEnd.paymentType === 'hourly'
+      ? (Math.max(0, atEnd.rate) * (st.redeemedMinutes ?? 0)) / ACADEMIC_HOUR_MINUTES
+      : 0;
   const status: PeriodStatus = st.paidAt
     ? 'paid'
     : st.sentAt
@@ -121,8 +127,8 @@ export function periodForecast(
     workplace: w,
     period,
     expected: expectedPaymentDate(period.end, paymentTermsOf(w)),
-    reported: t.pay + t.travel,
-    reportedPay: t.pay,
+    reported: t.pay + redeemedPay + t.travel,
+    reportedPay: t.pay + redeemedPay,
     reportCount: mine.length,
     planned: plannedFor(w, courses, period, basis),
     status,
@@ -200,3 +206,65 @@ export const STATUS_LABEL: Record<PeriodStatus, string> = {
   sent: 'נשלח · ממתין לתשלום',
   paid: 'שולם',
 };
+
+// ───────────────────────── רזולוציות תצוגה ─────────────────────────
+
+/** רזולוציית הגרף: חודש (עמודה לכל מקום עבודה) · סמסטר · שנה (לפי חודשים) */
+export type ChartResolution = 'month' | 'semester' | 'year';
+
+export type MonthRef = { year: number; month0: number };
+
+const addMonths = (r: MonthRef, n: number): MonthRef => {
+  const d = new Date(r.year, r.month0 + n, 1);
+  return { year: d.getFullYear(), month0: d.getMonth() };
+};
+
+/**
+ * הסמסטר שחודש שייך אליו (שנה אקדמית ישראלית):
+ * א׳ — אוקטובר–פברואר · ב׳ — מרץ–יולי · קיץ — אוגוסט–ספטמבר.
+ */
+export function semesterOf(r: MonthRef): { start: MonthRef; count: number; name: string } {
+  const m = r.month0;
+  if (m >= 9) return { start: { year: r.year, month0: 9 }, count: 5, name: 'סמסטר א׳' };
+  if (m <= 1) return { start: { year: r.year - 1, month0: 9 }, count: 5, name: 'סמסטר א׳' };
+  if (m <= 6) return { start: { year: r.year, month0: 2 }, count: 5, name: 'סמסטר ב׳' };
+  return { start: { year: r.year, month0: 7 }, count: 2, name: 'סמסטר קיץ' };
+}
+
+/** החודשים שבתצוגה, לפי הרזולוציה וחודש העוגן. */
+export function monthsInView(res: ChartResolution, anchor: MonthRef): MonthRef[] {
+  if (res === 'month') return [anchor];
+  if (res === 'year') return Array.from({ length: 12 }, (_, m) => ({ year: anchor.year, month0: m }));
+  const s = semesterOf(anchor);
+  return Array.from({ length: s.count }, (_, i) => addMonths(s.start, i));
+}
+
+/** מעבר לתצוגה הקודמת / הבאה באותה רזולוציה. */
+export function shiftAnchor(res: ChartResolution, anchor: MonthRef, dir: 1 | -1): MonthRef {
+  if (res === 'month') return addMonths(anchor, dir);
+  if (res === 'year') return { year: anchor.year + dir, month0: anchor.month0 };
+  const s = semesterOf(anchor);
+  return dir > 0 ? addMonths(s.start, s.count) : addMonths(s.start, -1);
+}
+
+/** נתוני צפי לרשימת חודשים (גם כשהיא חוצה שנה לועזית). */
+export function forecastMonths(
+  refs: readonly MonthRef[],
+  workplaces: readonly Workplace[],
+  reports: readonly WorkReport[],
+  courses: readonly Course[],
+  statuses: StatusMap,
+  basis: PayBasis,
+  mode: ForecastMode,
+  today: Date = new Date(),
+): ForecastMonth[] {
+  const years = new Map<number, ForecastMonth[]>();
+  return refs.map((r) => {
+    let y = years.get(r.year);
+    if (!y) {
+      y = forecastYear(workplaces, reports, courses, statuses, basis, r.year, mode, today);
+      years.set(r.year, y);
+    }
+    return y[r.month0];
+  });
+}
