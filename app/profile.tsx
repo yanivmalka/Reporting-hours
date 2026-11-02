@@ -27,7 +27,6 @@ export default function ProfileScreen() {
     setSaving(true);
     await saveProfile({
       fullName: p.fullName.trim(),
-      idNumber: p.idNumber.replace(/\D/g, ''),
       phone: p.phone.trim(),
       email: p.email.trim(),
       address: p.address.trim(),
@@ -43,15 +42,12 @@ export default function ProfileScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>פרטים אישיים</Text>
         <Text style={styles.subtitle}>
-          מופיעים בחתימת המיילים ובדוחות לשכר. נשמרים במכשיר בלבד.
+          מופיעים בחתימת המיילים ובדוחות לשכר. נשמרים במכשיר, וכשמחוברים — גם בחשבון שלך.
         </Text>
       </View>
 
       <FormField label="שם מלא">
         <TextField value={p.fullName} onChangeText={set('fullName')} placeholder="ישראל ישראלי" />
-      </FormField>
-      <FormField label="תעודת זהות">
-        <TextField value={p.idNumber} onChangeText={set('idNumber')} numeric />
       </FormField>
       <FormField label="טלפון">
         <TextField value={p.phone} onChangeText={set('phone')} numeric />

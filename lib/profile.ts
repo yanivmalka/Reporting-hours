@@ -1,13 +1,11 @@
 /**
  * פרטים אישיים של המרצה — לשימוש בדוחות ובמיילים לשכר (חתימה וזיהוי).
- * נשמרים במכשיר בלבד.
+ * נשמרים במכשיר, ומסונכרנים לחשבון כשהמשתמש מחובר (lib/sync.ts).
  */
 import { readJSON, writeJSON } from './storage';
 
 export type Profile = {
   fullName: string;
-  /** מספר תעודת זהות */
-  idNumber: string;
   phone: string;
   email: string;
   address: string;
@@ -15,25 +13,28 @@ export type Profile = {
 
 const KEY = 'reporting-hours/profile/v1';
 
-export const EMPTY_PROFILE: Profile = { fullName: '', idNumber: '', phone: '', email: '', address: '' };
+export const EMPTY_PROFILE: Profile = { fullName: '', phone: '', email: '', address: '' };
 
 export async function loadProfile(): Promise<Profile> {
-  return { ...EMPTY_PROFILE, ...(await readJSON<Partial<Profile>>(KEY, {})) };
+  const saved = await readJSON<Partial<Profile> & { idNumber?: string }>(KEY, {});
+  // שדה תעודת הזהות הוסר: מוחקים ערך ישן מהמכשיר (ומשם, בסנכרון, גם מהענן).
+  if ('idNumber' in saved) {
+    const { idNumber: _removed, ...rest } = saved;
+    await writeJSON(KEY, rest);
+    return { ...EMPTY_PROFILE, ...rest };
+  }
+  return { ...EMPTY_PROFILE, ...saved };
 }
 
 export async function saveProfile(p: Profile): Promise<void> {
   await writeJSON(KEY, p);
 }
 
-/** חתימת מייל: שם, ת"ז, טלפון, מייל ומספר עובד (כשקיימים). */
+/** חתימת מייל: שם, מספר עובד, טלפון ומייל (כשקיימים). */
 export function signatureLines(p: Profile, employeeNumber?: string): string[] {
   const lines: string[] = [];
   if (p.fullName) lines.push(p.fullName);
-  const ids = [
-    p.idNumber ? `ת״ז ${p.idNumber}` : '',
-    employeeNumber ? `מספר עובד ${employeeNumber}` : '',
-  ].filter(Boolean);
-  if (ids.length) lines.push(ids.join(' · '));
+  if (employeeNumber) lines.push(`מספר עובד ${employeeNumber}`);
   const contact = [p.phone, p.email].filter(Boolean);
   if (contact.length) lines.push(contact.join(' · '));
   return lines;

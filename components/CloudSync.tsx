@@ -22,6 +22,7 @@ import { useI18n } from '../lib/i18n';
 import { cloudSupported, signInWithGoogle, signOutCloud, watchUser, type CloudUser } from '../lib/firebase';
 import { cloudHasData, flush, getSyncStatus, onRemoteChange, onSyncStatus, pull, setSyncUser, type SyncStatus } from '../lib/sync';
 import { isDemoLoaded, onDataChanged, removeDemoData } from '../lib/demo';
+import { loadProfile } from '../lib/profile';
 import { spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -54,7 +55,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [revision, setRevision] = useState(0);
 
   useEffect(() => onSyncStatus(setStatus), []);
-  useEffect(() => onRemoteChange(() => setRevision((r) => r + 1)), []);
+  useEffect(
+    () =>
+      onRemoteChange(() => {
+        void loadProfile(); // נתונים ממכשיר עם גרסה ישנה עלולים להחזיר את שדה הת״ז
+        setRevision((r) => r + 1);
+      }),
+    [],
+  );
 
   useEffect(
     () =>
@@ -66,6 +74,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           // מסירים את ההדגמה כדי שהנתונים האמיתיים ייטענו (הסרה מפעילה משיכה).
           await setSyncUser(u);
           if (u && (await isDemoLoaded()) && (await cloudHasData())) await removeDemoData();
+          await loadProfile(); // מנקה שדות שהוסרו (ת״ז) גם מהעותק שהגיע מהענן
         })();
       }),
     [],
