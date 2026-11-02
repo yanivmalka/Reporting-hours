@@ -49,3 +49,17 @@ function iso(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+
+/** שמות החודשים העבריים שחלים בחודש לועזי, בלי שנה — ["חשון", "כסלו"]. */
+export function hebrewMonthNames(year: number, month0: number): string[] {
+  const a = parts(iso(new HDate(new Date(year, month0, 1)).greg()));
+  const b = parts(iso(new HDate(new Date(year, month0 + 1, 0)).greg()));
+  return a.month === b.month ? [a.month] : [a.month, b.month];
+}
+
+/** שנות העברית שחלות בשנה לועזית — "תשפ״ו–תשפ״ז". */
+export function hebrewYearSpan(year: number): string {
+  const a = parts(iso(new HDate(new Date(year, 0, 1)).greg())).year;
+  const b = parts(iso(new HDate(new Date(year, 11, 31)).greg())).year;
+  return a === b ? a : `${a}–${b}`;
+}
