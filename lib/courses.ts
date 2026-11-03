@@ -168,6 +168,7 @@ type ReportLike = {
   end: string;
   note?: string;
   courseId?: string;
+  extraKind?: string;
 };
 
 /**
@@ -176,6 +177,8 @@ type ReportLike = {
  */
 function covers(course: Pick<Course, 'id' | 'workplaceId' | 'name' | 'start' | 'end'>, date: string, r: ReportLike): boolean {
   if (r.date !== date || r.workplaceId !== course.workplaceId) return false;
+  // מפגש נוסף (השלמה, הגשה…) לא מכסה את המפגש הקבוע של אותו יום.
+  if (r.extraKind) return false;
   if (r.courseId) return r.courseId === course.id;
   if (r.note === course.name) return true;
   const cs = parseTime(course.start) ?? 0;
