@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { dateRange, type WorkplaceMonthStats } from '../lib/dashboard';
 import { formatHours } from '../lib/pay';

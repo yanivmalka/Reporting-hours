@@ -3,7 +3,8 @@
  * הסכום מוצע מראש: הסכום לתשלום בניכוי אחוז המס של מקום העבודה — וניתן לעריכה.
  */
 import { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { todayISO } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { TEXT_RIGHT } from '../theme/align';

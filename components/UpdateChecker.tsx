@@ -17,7 +17,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { useI18n } from '../lib/i18n';
 import {
   checkForUpdate,

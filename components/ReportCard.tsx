@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { academicOf, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { hebrewDate } from '../lib/hebrewDate';

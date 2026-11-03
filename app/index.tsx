@@ -6,7 +6,8 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { Animated, Linking, StyleSheet, Text, View } from 'react-native';
+import { Animated, Linking, StyleSheet, View } from 'react-native';
+import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';

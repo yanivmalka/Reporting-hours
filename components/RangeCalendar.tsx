@@ -6,7 +6,9 @@
  * - לחיצה על היום הנבחר היחיד, או "ניקוי": חזרה לכל החודש.
  * ימים שיש בהם דיווחים מסומנים במספר הדיווחים.
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useI18n } from '../lib/i18n';
@@ -54,46 +56,90 @@ export function nextRange(range: DateRangeValue, day: string): DateRangeValue {
   return { from: day, to: day };
 }
 
+/** מרוחב זה ומעלה — שני חודשים זה לצד זה (הקודם והנוכחי). */
+const TWO_MONTHS_MIN_WIDTH = 600;
+/** רוחב מרבי לחודש אחד — כדי שהתאים לא יימתחו במסך רחב. */
+const MONTH_MAX_WIDTH = 340;
+
 export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts }: Props) {
   const styles = useStyles(makeStyles);
   const { isRTL } = useI18n();
+  const [width, setWidth] = useState(0);
   const swipe = useSwipe(
     () => onMonthChange(shiftMonth(month, 1)),
     () => onMonthChange(shiftMonth(month, -1)),
   );
+  const today = iso(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  const thisMonth = today.slice(0, 7);
+  const two = width >= TWO_MONTHS_MIN_WIDTH;
+  // במסך רחב: החודש הקודם לצד החודש המוצג (בעברית — הקודם מימין).
+  const months = two ? [shiftMonth(month, -1), month] : [month];
+  const tap = (day: string) => onRangeChange(nextRange(range, day));
+
+  return (
+    <View style={styles.wrap} {...swipe} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      <View style={styles.head}>
+        <Pressable onPress={() => onMonthChange(shiftMonth(month, -1))} style={styles.nav} accessibilityLabel="חודש קודם">
+          <Text style={styles.navText}>{isRTL ? '→' : '←'}</Text>
+        </Pressable>
+        <Pressable onPress={() => onMonthChange(shiftMonth(month, 1))} style={styles.nav} accessibilityLabel="חודש הבא">
+          <Text style={styles.navText}>{isRTL ? '←' : '→'}</Text>
+        </Pressable>
+      </View>
+      <View style={styles.months}>
+        {months.map((mk) => (
+          <MonthGrid
+            key={mk}
+            month={mk}
+            active={two && mk === month}
+            range={range}
+            counts={counts}
+            today={today}
+            onTap={tap}
+          />
+        ))}
+      </View>
+      {month !== thisMonth ? (
+        <Pressable onPress={() => onMonthChange(thisMonth)} hitSlop={6} accessibilityRole="button" style={styles.todayRow}>
+          <Text style={styles.todayLink}>חזרה לחודש הנוכחי</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function MonthGrid({
+  month,
+  active,
+  range,
+  counts,
+  today,
+  onTap,
+}: {
+  month: string;
+  /** החודש שהרשימה מציגה (כשמוצגים שניים) */
+  active: boolean;
+  range: DateRangeValue;
+  counts: Record<string, number>;
+  today: string;
+  onTap: (day: string) => void;
+}) {
+  const styles = useStyles(makeStyles);
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y, m - 1, 1).getDay();
   const days = new Date(y, m, 0).getDate();
   const cells: (string | null)[] = Array.from({ length: first }, () => null);
   for (let d = 1; d <= days; d++) cells.push(iso(y, m - 1, d));
   while (cells.length % 7) cells.push(null);
-  const today = iso(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-
-  const tap = (day: string) => onRangeChange(nextRange(range, day));
-  const thisMonth = today.slice(0, 7);
 
   return (
-    <View style={styles.wrap} {...swipe}>
-      <View style={styles.head}>
-        <Pressable onPress={() => onMonthChange(shiftMonth(month, -1))} style={styles.nav} accessibilityLabel="חודש קודם">
-          <Text style={styles.navText}>{isRTL ? '→' : '←'}</Text>
-        </Pressable>
-        <View style={styles.titleBox}>
-          <Text style={styles.title}>
-            {MONTHS[m - 1]} {y}
-          </Text>
-          <Text style={styles.titleHeb}>{hebrewMonthSpan(y, m - 1)}</Text>
-          {month !== thisMonth ? (
-            <Pressable onPress={() => onMonthChange(thisMonth)} hitSlop={6} accessibilityRole="button">
-              <Text style={styles.todayLink}>חזרה להיום</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <Pressable onPress={() => onMonthChange(shiftMonth(month, 1))} style={styles.nav} accessibilityLabel="חודש הבא">
-          <Text style={styles.navText}>{isRTL ? '←' : '→'}</Text>
-        </Pressable>
+    <View style={styles.month}>
+      <View style={styles.titleBox}>
+        <Text style={[styles.title, active && styles.titleActive]}>
+          {MONTHS[m - 1]} {y}
+        </Text>
+        <Text style={styles.titleHeb}>{hebrewMonthSpan(y, m - 1)}</Text>
       </View>
-
       <View style={styles.week}>
         {WEEKDAYS.map((w) => (
           <Text key={w} style={styles.weekday}>
@@ -101,7 +147,6 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
           </Text>
         ))}
       </View>
-
       <View style={styles.grid}>
         {cells.map((cell, i) => {
           if (!cell) return <View key={`e${i}`} style={styles.cell} />;
@@ -109,7 +154,7 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
           const isEdge = range != null && (cell === range.from || cell === range.to);
           const count = counts[cell] ?? 0;
           return (
-            <Pressable key={cell} style={styles.cell} onPress={() => tap(cell)} accessibilityLabel={cell}>
+            <Pressable key={cell} style={styles.cell} onPress={() => onTap(cell)} accessibilityLabel={cell}>
               <View
                 style={[
                   styles.day,
@@ -146,6 +191,21 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       flexDirection: layout.rowStart,
       alignItems: 'center',
       justifyContent: 'space-between',
+      marginBottom: -36,
+      zIndex: 1,
+    },
+    months: {
+      flexDirection: layout.rowStart,
+      justifyContent: 'center',
+      gap: spacing.lg,
+    },
+    month: {
+      flex: 1,
+      maxWidth: MONTH_MAX_WIDTH,
+      gap: 2,
+    },
+    titleActive: {
+      color: c.brand,
     },
     nav: {
       width: 44,
@@ -160,6 +220,9 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     },
     titleBox: {
       alignItems: 'center',
+      minHeight: 40,
+      justifyContent: 'center',
+      marginBottom: 2,
     },
     titleHeb: {
       fontSize: 12,
@@ -169,7 +232,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       fontSize: 12,
       fontWeight: '700',
       color: c.brand,
-      paddingTop: 2,
+    },
+    todayRow: {
+      alignSelf: 'center',
+      paddingVertical: 2,
     },
     dayHeb: {
       fontSize: 9,
@@ -178,7 +244,7 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     },
     title: {
       fontSize: 16,
-      fontWeight: '800',
+      fontWeight: '700',
       color: c.text,
     },
     week: {
@@ -201,8 +267,8 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       paddingVertical: 2,
     },
     day: {
-      width: 40,
-      height: 42,
+      width: 38,
+      height: 38,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',

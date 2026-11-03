@@ -16,7 +16,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AppState, Platform, Text, View } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
+import { Text } from './Text';
 import { Button } from './Button';
 import { useI18n } from '../lib/i18n';
 import { cloudSupported, signInWithGoogle, signOutCloud, watchUser, type CloudUser } from '../lib/firebase';

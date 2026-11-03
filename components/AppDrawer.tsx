@@ -25,7 +25,8 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter, type Href } from 'expo-router';
-import { Animated, Modal, Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { SafeAreaView } from 'react-native-safe-area-context';
