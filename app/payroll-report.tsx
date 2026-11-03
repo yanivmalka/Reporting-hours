@@ -3,6 +3,7 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-rou
 import { ActivityIndicator, Linking, Modal, Share, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
+import { Pressable } from '../components/Pressable';
 import { PaymentDialog } from '../components/PaymentDialog';
 import { TextField } from '../components/TextField';
 import { usePayBasis } from '../lib/payBasis';
@@ -190,7 +191,13 @@ export default function PayrollReportScreen() {
       <Stack.Screen options={{ title: 'דוח שכר' }} />
 
       <View style={styles.header}>
-        <Text style={styles.title}>{workplace.name}</Text>
+        <Pressable
+          onPress={() => router.push({ pathname: '/workplace', params: { id: workplace.id } })}
+          accessibilityRole="link"
+          style={({ pressed }) => pressed && { opacity: 0.6 }}
+        >
+          <Text style={styles.title}>{workplace.name} ‹</Text>
+        </Pressable>
         <Text style={styles.subtitle}>
           {periodTitle(period)} · {dateRange(period.start, period.end, true)}
         </Text>
@@ -242,7 +249,12 @@ export default function PayrollReportScreen() {
               {g.sessions.length} מפגשים · {hm(g.netMinutes)} שעות נטו
             </Text>
             {g.sessions.map((s) => (
-              <View key={`${s.date}${s.start}`} style={styles.session}>
+              <Pressable
+                key={`${s.date}${s.start}`}
+                onPress={() => router.push({ pathname: '/report-view', params: { id: s.reportId } })}
+                accessibilityRole="link"
+                style={({ pressed }) => [styles.session, pressed && { opacity: 0.6 }]}
+              >
                 <View style={styles.sessionDateBox}>
                   <Text style={styles.sessionDate}>
                     {weekday(s.date)} {formatISODate(s.date).slice(0, 5)}
@@ -254,7 +266,7 @@ export default function PayrollReportScreen() {
                   {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
                 </Text>
                 <Text style={styles.sessionHours}>{academic(s.netMinutes)}</Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         ))

@@ -41,7 +41,17 @@ export type WorkplaceDeletion = {
   courses: number;
   /** דוחות שכר שנשלחו או שולמו — אם יש, אי אפשר למחוק (רק ארכיון) */
   lockedPayrolls: number;
+  /** אותם דוחות — תחילת התקופה ומצבם, לניווט אליהם, מהחדש לישן */
+  lockedPeriods: { start: string; paid: boolean }[];
 };
+
+/** דוחות השכר הנעולים של מקום עבודה (נשלחו או שולמו). */
+function lockedPeriodsOf(workplaceId: string, statuses: StatusMap): { start: string; paid: boolean }[] {
+  return Object.entries(statuses)
+    .filter(([key, st]) => key.startsWith(`${workplaceId}|`) && Boolean(st.sentAt || st.paidAt))
+    .map(([key, st]) => ({ start: key.slice(workplaceId.length + 1), paid: Boolean(st.paidAt) }))
+    .sort((a, b) => b.start.localeCompare(a.start));
+}
 
 /** דוחות השכר של מקום עבודה שנשלחו או שולמו. */
 function lockedPayrollsOf(workplaceId: string, statuses: StatusMap): number {
@@ -57,6 +67,7 @@ export async function workplaceDeletion(workplaceId: string): Promise<WorkplaceD
     reports: reports.filter((r) => r.workplaceId === workplaceId).length,
     courses: courses.filter((c) => c.workplaceId === workplaceId).length,
     lockedPayrolls: lockedPayrollsOf(workplaceId, statuses),
+    lockedPeriods: lockedPeriodsOf(workplaceId, statuses),
   };
 }
 

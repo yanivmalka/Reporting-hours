@@ -8,6 +8,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
+import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useSessionCancel } from '../components/SessionCancelDialog';
@@ -110,6 +111,15 @@ export default function ReportViewScreen() {
   const ac = academicOf(report);
   const pay = workplace ? reportPay(report, workplace, basis) : null;
 
+  // שורות לחיצות — מעבר לרשומות הקשורות (מקום עבודה, קורס, דוח שכר).
+  const period = workplace ? currentPayPeriod(workplace.payday, new Date(y, m - 1, d)) : null;
+  const links: Partial<Record<string, () => void>> = {};
+  if (workplace) links['מקום עבודה'] = () => router.push({ pathname: '/workplace', params: { id: workplace.id } });
+  if (course) links['קורס / נושא'] = () => router.push({ pathname: '/course-form', params: { id: course.id, view: '1' } });
+  if (workplace && period)
+    links['דוח שכר'] = () =>
+      router.push({ pathname: '/payroll-report', params: { wp: workplace.id, start: period.start } });
+
   const rows: [string, string][] = [
     ['מקום עבודה', workplace?.name ?? 'מקום עבודה שנמחק'],
     ['תאריך', `יום ${weekday} · ${formatISODate(report.date)} · ${hebrewDate(report.date, false)}`],
@@ -130,17 +140,37 @@ export default function ReportViewScreen() {
       ? ([['למונה המצטבר', `${report.carriedMinutes} דק׳`]] as [string, string][])
       : []),
     ['שכר', typeof pay === 'number' ? formatShekels(pay) : 'משכורת חודשית קבועה'],
+    ...(period ? ([['דוח שכר', periodTitle(period)]] as [string, string][]) : []),
   ];
 
   return (
     <Screen>
       <View style={styles.card}>
-        {rows.map(([label, value], i) => (
-          <View key={label} style={[styles.row, i === rows.length - 1 && styles.rowLast]}>
-            <Text style={styles.label}>{label}</Text>
-            <Text style={styles.value}>{value}</Text>
-          </View>
-        ))}
+        {rows.map(([label, value], i) => {
+          const onPress = links[label];
+          const body = (
+            <>
+              <Text style={styles.label}>{label}</Text>
+              <Text style={[styles.value, onPress && styles.valueLink]}>{value}</Text>
+              {onPress ? <Text style={styles.chevron}>‹</Text> : null}
+            </>
+          );
+          const style = [styles.row, i === rows.length - 1 && styles.rowLast];
+          return onPress ? (
+            <Pressable
+              key={label}
+              onPress={onPress}
+              accessibilityRole="link"
+              style={({ pressed }) => [...style, pressed && styles.pressed]}
+            >
+              {body}
+            </Pressable>
+          ) : (
+            <View key={label} style={style}>
+              {body}
+            </View>
+          );
+        })}
       </View>
 
       {lockedStart && workplace ? (
@@ -224,6 +254,9 @@ const makeStyles = (colors: AppColors) =>
       borderBottomColor: colors.border,
     },
     rowLast: { borderBottomWidth: 0 },
+    valueLink: { color: colors.brand },
+    chevron: { fontSize: 18, color: colors.textMuted, alignSelf: 'center' },
+    pressed: { opacity: 0.6 },
     label: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
     value: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     muted: { fontSize: 14, lineHeight: 20, color: colors.textMuted, textAlign: TEXT_RIGHT },

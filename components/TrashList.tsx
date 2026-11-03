@@ -45,7 +45,7 @@ export function TrashList() {
   /** מה נמחק יחד עם המקום ("2 קורסים ו־14 דיווחים") */
   function withData(id: string): string {
     const t = items?.find((w) => w.id === id)?.trashed;
-    return t ? deletionSummary({ courses: t.courses.length, reports: t.reports.length, lockedPayrolls: 0 }) : '';
+    return t ? deletionSummary({ courses: t.courses.length, reports: t.reports.length, lockedPayrolls: 0, lockedPeriods: [] }) : '';
   }
 
   async function handleRestore(id: string) {

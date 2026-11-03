@@ -142,6 +142,8 @@ function isoDate(d: Date): string {
 // ───────────────────────── תוכן הדוח ─────────────────────────
 
 export type PayrollSession = {
+  /** הדיווח שממנו המפגש — לניווט לתצוגת הדיווח */
+  reportId: string;
   date: string;
   start: string;
   end: string;
@@ -214,6 +216,7 @@ export function buildPayrollReport(
     // בשעות אקדמיות — הדקות שהועברו למונה אינן חלק מהדוח (הן ייכנסו כשייפדו).
     const net = Math.max(0, (netMinutes(r) ?? 0) - (basis === 'academic' ? r.carriedMinutes ?? 0 : 0));
     g.sessions.push({
+      reportId: r.id,
       date: r.date,
       start: r.start,
       end: r.end,

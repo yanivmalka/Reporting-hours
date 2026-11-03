@@ -57,6 +57,12 @@
 - הסרת נתוני ההדגמה (`removeDemoData` ב־`lib/demo.ts`) שומרת מקום הדגמה וקורס הדגמה שיש עליהם דיווח אמיתי, והופכת אותם לרגילים.
 - המסך: `app/archive.tsx`, עם בורר ארכיון / אשפה. רשימת האשפה ב־`components/TrashList.tsx`, וההצעות ב־`lib/recommend.ts`. הנתיב `app/trash.tsx` מפנה ללשונית האשפה.
 
+## ניווט בין רשומות
+
+- `app/report-view.tsx`: שורות לחיצות למקום העבודה (`/workplace`), לקורס (`/course-form?view=1`) ולדוח השכר של התקופה (`/payroll-report`).
+- `app/payroll-report.tsx`: שם מקום העבודה ← `/workplace`; כל מפגש ← `/report-view` (לפי `PayrollSession.reportId`).
+- `app/workplace-form.tsx`: כשהמחיקה חסומה, רשימת הדוחות הנעולים (`WorkplaceDeletion.lockedPeriods`) עם מעבר לכל אחד, ובמקום הדגמה ← `/data`.
+
 ## מסכים (`app/`)
 
 | קובץ | מה יש בו |
