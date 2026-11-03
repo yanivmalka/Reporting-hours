@@ -27,6 +27,12 @@ type ScreenProps = {
   overlay?: ReactNode;
 };
 
+/**
+ * רוחב מקסימלי לתוכן המסך. במסך רחב (דפדפן במחשב) התוכן ממורכז ברוחב
+ * הזה, כדי שפקדים ואריחים לא יימתחו לכל רוחב החלון.
+ */
+export const CONTENT_MAX_WIDTH = 760;
+
 /** גובה מינימלי לפוטר בכל מסך (מעבר לשוליים הבטוחים של המערכת). */
 const FOOTER_MIN = 12;
 
@@ -89,7 +95,11 @@ export function Screen({ children, scroll = true, keyboardFooter = false, onScro
       ) : (
         inner
       )}
-      {overlay ? <View style={styles.overlay}>{overlay}</View> : null}
+      {overlay ? (
+        <View style={styles.overlay} pointerEvents="box-none">
+          <View style={styles.overlayInner}>{overlay}</View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -108,9 +118,17 @@ const makeStyles = (colors: AppColors) =>
       top: 0,
       left: 0,
       right: 0,
+      alignItems: 'center',
+    },
+    overlayInner: {
+      width: '100%',
+      maxWidth: CONTENT_MAX_WIDTH,
     },
     content: {
       flex: 1,
+      width: '100%',
+      maxWidth: CONTENT_MAX_WIDTH,
+      alignSelf: 'center',
       padding: spacing.lg,
       gap: spacing.md,
     },
