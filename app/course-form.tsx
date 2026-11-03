@@ -14,7 +14,6 @@ import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
 import {
   WEEKDAY_NAMES,
   courseScheduleLabel,
-  deleteCourse,
   loadCourses,
   occurrences,
   periodPresets,
@@ -23,8 +22,12 @@ import {
 } from '../lib/courses';
 import { dateRange } from '../lib/dashboard';
 import { formatHours } from '../lib/pay';
-import { parseTime } from '../lib/time';
+import { parseTime, todayISO } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
+import { loadReports } from '../lib/reports';
+import { deleteOrEndCourse } from '../lib/trash';
+import { reportsOfCourse, type Course } from '../lib/courses';
+import { useToast } from '../components/Toast';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -50,6 +53,10 @@ export default function CourseFormScreen() {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const confirm = useConfirm();
+  const { showToast } = useToast();
+  /** הקורס כפי שנטען, ומספר הדיווחים שלו — קובעים מחיקה או סיום */
+  const [loaded, setLoaded] = useState<Course | null>(null);
+  const [reportCount, setReportCount] = useState(0);
   const params = useLocalSearchParams<{ id?: string; workplaceId?: string; view?: string }>();
   const id = params.id || undefined;
   /** הגיעו ממצב תצוגה (?view=1): מציגים קודם קריאה בלבד; עריכה — בכפתור */
@@ -79,9 +86,11 @@ export default function CourseFormScreen() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([loadCourses(), loadWorkplaces()]).then(([courses, workplaces]) => {
+    Promise.all([loadCourses(), loadWorkplaces(), loadReports()]).then(([courses, workplaces, reports]) => {
       if (!active) return;
       const course = id ? courses.find((c) => c.id === id) : undefined;
+      setLoaded(course ?? null);
+      setReportCount(course ? reportsOfCourse(course, reports).length : 0);
       const wpId = course?.workplaceId ?? params.workplaceId ?? '';
       setWorkplaceId(wpId);
       setWorkplaceName(workplaces.find((w) => w.id === wpId)?.name ?? '');
@@ -178,18 +187,25 @@ export default function CourseFormScreen() {
     } else router.back();
   }
 
+  /** בלי דיווחים — מחיקה; עם דיווחים — סיום הקורס (ארכיון), כדי לשמור את ההיסטוריה. */
   function handleDelete() {
-    if (!id) return;
+    if (!id || !loaded) return;
+    const ending = reportCount > 0;
     confirm({
-      title: 'למחוק את הקורס?',
-      message: `"${form?.name ?? ''}" יוסר מהמערכת השבועית. דיווחים שכבר נשמרו לא ייפגעו.`,
-      confirmLabel: 'מחיקת הקורס',
+      title: ending ? 'לסיים את הקורס?' : 'למחוק את הקורס?',
+      message: ending
+        ? `ל"${loaded.name}" יש ${reportCount === 1 ? 'דיווח אחד' : `${reportCount} דיווחים`}, ולכן הוא לא נמחק אלא מסתיים: הוא יוסר מהמערכת השבועית ויעבור לארכיון הקורסים. הדיווחים והתכנון של החודשים שעברו נשמרים.`
+        : `"${loaded.name}" יוסר מהמערכת השבועית. אין עליו דיווחים.`,
+      confirmLabel: ending ? 'סיום הקורס' : 'מחיקת הקורס',
+      destructive: !ending,
       onConfirm: async () => {
-        await deleteCourse(id);
+        const result = await deleteOrEndCourse(loaded);
+        showToast(result === 'ended' ? 'הקורס הסתיים ועבר לארכיון' : 'הקורס נמחק');
         setLeaving(true); // משחרר את חסימת היציאה, והאפקט חוזר אחורה
       },
     });
   }
+
 
   const preview = {
     start: form.start,
@@ -348,7 +364,15 @@ export default function CourseFormScreen() {
 
       <Button label={id ? 'שמירת שינויים' : 'הוספת הקורס'} onPress={handleSave} loading={saving} />
       {fromView ? <Button label="חזרה" variant="secondary" onPress={backToView} /> : null}
-      {id ? <Button label="מחיקת הקורס" variant="danger" onPress={handleDelete} /> : null}
+      {id && loaded ? (
+        reportCount > 0 ? (
+          loaded.to >= todayISO() ? (
+            <Button label="סיום הקורס (מעבר לארכיון)" variant="secondary" onPress={handleDelete} />
+          ) : null
+        ) : (
+          <Button label="מחיקת הקורס" variant="danger" onPress={handleDelete} />
+        )
+      ) : null}
       {confirm.dialog}
     </Screen>
   );

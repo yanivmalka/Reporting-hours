@@ -97,6 +97,12 @@ export type Workplace = {
    * והתשלומים שלו נשארים בחישובים ובהיסטוריה. אפשר להחזיר אותו בכל עת.
    */
   archivedAt?: number;
+  /**
+   * כשמקום העבודה באשפה: הנתונים שהועברו איתו (קורסים, דיווחים, סימוני
+   * מפגשים ומונה הדקות) — מוחזרים בשחזור, ונמחקים איתו במחיקה הסופית.
+   * הטיפוסים המלאים ב־lib/trash.ts.
+   */
+  trashed?: { courses: unknown[]; reports: unknown[]; marks: unknown[]; accumulated?: unknown };
   /** מקום עבודה שנוצר כנתוני הדגמה (lib/demo.ts) */
   demo?: boolean;
 };
@@ -161,7 +167,7 @@ export function taxPercentOf(w: Pick<Workplace, 'taxPercent'>): number {
 }
 
 /** נתוני טופס לפני שמירה — כמו Workplace אך בלי מזהה ובלי שדות מערכת. */
-export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'archivedAt' | 'demo' | 'termsHistory'>;
+export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'archivedAt' | 'demo' | 'termsHistory' | 'trashed'>;
 
 const STORAGE_KEY = 'reporting-hours/workplaces/v1';
 
@@ -240,7 +246,7 @@ export function saveWorkplaces(list: Workplace[]): Promise<void> {
  * טוען את הרשימה המלאה (פעילים + אשפה), מנקה מהאשפה פריטים שפג תוקפם
  * (מעל {@link TRASH_RETENTION_DAYS} ימים) ושומר חזרה אם משהו נוקה.
  */
-async function loadAllPruned(): Promise<Workplace[]> {
+export async function loadAllPruned(): Promise<Workplace[]> {
   const raw = await readJSON<Workplace[]>(STORAGE_KEY, []);
   // "הליכה" הוסרה — כמו "רכב", בלי החזר נסיעות.
   const noWalk = (m: ArrivalMode): ArrivalMode => (m === 'walk' ? 'car' : m);
@@ -280,6 +286,8 @@ export async function setWorkplaceArchived(id: string, archived: boolean): Promi
     all.map((w) => (w.id === id ? { ...w, archivedAt: archived ? Date.now() : undefined } : w)),
   );
 }
+
+// העברה לאשפה, שחזור ומחיקה סופית — עם הקורסים והדיווחים: lib/trash.ts.
 
 /** מקומות העבודה שבאשפה, מהנמחק אחרון לראשון. */
 export async function loadDeletedWorkplaces(): Promise<Workplace[]> {
@@ -334,36 +342,8 @@ export async function upsertWorkplace(
   return next.filter((w) => w.deletedAt == null);
 }
 
-/**
- * מעביר מקום עבודה לאשפה (מחיקה רכה). ניתן לשחזר אותו תוך
- * {@link TRASH_RETENTION_DAYS} ימים. מחזיר את רשימת הפעילים המעודכנת.
- */
-export async function trashWorkplace(id: string): Promise<Workplace[]> {
-  const all = await loadAllPruned();
-  const next = all.map((w) =>
-    w.id === id && w.deletedAt == null ? { ...w, deletedAt: Date.now() } : w,
-  );
-  await saveWorkplaces(next);
-  return next.filter((w) => w.deletedAt == null);
-}
 
-/** מוציא מקום עבודה מהאשפה ומחזיר אותו לרשימה הפעילה. מחזיר את רשימת האשפה המעודכנת. */
-export async function restoreWorkplace(id: string): Promise<Workplace[]> {
-  const all = await loadAllPruned();
-  const next: Workplace[] = all.map((w) =>
-    w.id === id ? { ...w, deletedAt: undefined } : w,
-  );
-  await saveWorkplaces(next);
-  return next.filter((w) => w.deletedAt != null);
-}
 
-/** מחיקה סופית של מקום עבודה (מתוך האשפה). מחזיר את רשימת האשפה המעודכנת. */
-export async function deleteWorkplace(id: string): Promise<Workplace[]> {
-  const all = await loadAllPruned();
-  const next = all.filter((w) => w.id !== id);
-  await saveWorkplaces(next);
-  return next.filter((w) => w.deletedAt != null);
-}
 
 /** עדכון תיאום מס לשנה לועזית: תאריך שליחה, או null לביטול. */
 export async function setTaxCoordination(

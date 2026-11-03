@@ -337,7 +337,9 @@ export default function PayrollReportScreen() {
 
       <Button label="יצירת מייל לשליחה" onPress={createEmail} disabled={empty} />
       <Button label="שיתוף / העתקה" variant="secondary" onPress={share} disabled={empty} />
-      {status.sentAt ? (
+      {status.paidAt ? (
+        <Text style={styles.paidLock}>הדוח שולם ולכן נעול לצמיתות — אי אפשר לבטל את השליחה או לערוך את הדיווחים.</Text>
+      ) : status.sentAt ? (
         <Button label="ביטול הדוח שנשלח (לתיקון)" variant="danger" onPress={() => setCancelOpen(true)} />
       ) : (
         <Button label="סימון כנשלח" variant="secondary" onPress={() => setSent(true)} disabled={empty} />
@@ -379,6 +381,7 @@ export default function PayrollReportScreen() {
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    paidLock: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
     totalBig: { fontSize: 17, fontWeight: '800', color: colors.brandDark, textAlign: TEXT_RIGHT },
     totalNote: { fontSize: 12, color: colors.brandDark, textAlign: TEXT_RIGHT },
     backdrop: {

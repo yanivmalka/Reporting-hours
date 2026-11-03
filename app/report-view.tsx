@@ -17,7 +17,7 @@ import { currentPayPeriod } from '../lib/dashboard';
 import { hebrewDate } from '../lib/hebrewDate';
 import { reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
-import { isLocked, loadPayrollStatus, periodTitle, statusKey } from '../lib/payroll';
+import { isLocked, isPaid, loadPayrollStatus, periodTitle, statusKey } from '../lib/payroll';
 import { academicOf, deleteReport, loadReports, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
@@ -39,6 +39,8 @@ export default function ReportViewScreen() {
     report: WorkReport | null;
     workplace?: Workplace;
     lockedStart: string | null;
+    /** הדוח שולם — נעול לצמיתות */
+    paid: boolean;
     /** הקורס שהדיווח מכסה (אם יש) — לסימון "השיעור לא התקיים" */
     course?: Course;
   } | null>(null);
@@ -53,17 +55,20 @@ export default function ReportViewScreen() {
         const report = reports.find((r) => r.id === id) ?? null;
         const workplace = report ? wps.find((w) => w.id === report.workplaceId) : undefined;
         let lockedStart: string | null = null;
+        let paid = false;
         if (report && workplace) {
           const [y, m, d] = report.date.split('-').map(Number);
           const p = currentPayPeriod(workplace.payday, new Date(y, m - 1, d));
-          if (isLocked(st[statusKey(workplace.id, p.start)])) lockedStart = p.start;
+          const status = st[statusKey(workplace.id, p.start)];
+          if (isLocked(status)) lockedStart = p.start;
+          paid = isPaid(status);
         }
         const course = report
           ? coursesOn(crs, report.date, report.workplaceId, NO_CANCEL).find((c) =>
               courseReport(c, report.date, [report]),
             )
           : undefined;
-        setData({ report, workplace, lockedStart, course });
+        setData({ report, workplace, lockedStart, paid, course });
       });
       return () => {
         active = false;
@@ -81,7 +86,7 @@ export default function ReportViewScreen() {
     );
   }
 
-  const { report, workplace, lockedStart, course } = data;
+  const { report, workplace, lockedStart, paid, course } = data;
   if (!report) {
     return (
       <Screen>
@@ -133,8 +138,10 @@ export default function ReportViewScreen() {
       {lockedStart && workplace ? (
         <>
           <Text style={styles.muted}>
-            🔒 הדוח לשכר של {periodTitle(currentPayPeriod(workplace.payday, new Date(y, m - 1, d)))} כבר נשלח —
-            כדי לערוך, מבטלים קודם את הדוח שנשלח.
+            🔒 הדוח לשכר של {periodTitle(currentPayPeriod(workplace.payday, new Date(y, m - 1, d)))}{' '}
+            {paid
+              ? 'כבר שולם — הדיווח נעול לצמיתות.'
+              : 'כבר נשלח — כדי לערוך או למחוק, מבטלים קודם את הדוח שנשלח.'}
           </Text>
           <Button
             label="לדוח השכר"

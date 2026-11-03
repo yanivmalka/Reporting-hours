@@ -14,6 +14,14 @@ import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { TimeInput } from '../components/TimeInput';
+import { useToast } from '../components/Toast';
+import {
+  canDeleteWorkplace,
+  deletionSummary,
+  trashWorkplaceWithData,
+  workplaceDeletion,
+  type WorkplaceDeletion,
+} from '../lib/trash';
 import { contactsSupported, pickContact, pickContactPhone } from '../lib/contacts';
 import { parseTime } from '../lib/time';
 import {
@@ -29,7 +37,7 @@ import {
   termsChanged,
   type Workplace,
   loadWorkplaces,
-  trashWorkplace,
+  setWorkplaceArchived,
   upsertWorkplace,
   type ArrivalMode,
   type PaymentType,
@@ -151,6 +159,9 @@ export default function WorkplaceFormScreen() {
   /** מאיזה תאריך חל שינוי בתנאים הכספיים */
   const [effectiveFrom, setEffectiveFrom] = useState(todayISO());
   const confirm = useConfirm();
+  const { showToast } = useToast();
+  /** מה יימחק עם מקום העבודה, והאם מותר (דוח שנשלח / שולם — רק ארכיון) */
+  const [deletion, setDeletion] = useState<WorkplaceDeletion | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
 
   // הקורסים של מקום העבודה — נטען מחדש בחזרה מטופס הקורס.
@@ -170,11 +181,12 @@ export default function WorkplaceFormScreen() {
   useEffect(() => {
     if (!id) return;
     let active = true;
-    loadWorkplaces().then((list) => {
+    Promise.all([loadWorkplaces(), workplaceDeletion(id)]).then(([list, del]) => {
       if (!active) return;
       const found = list.find((w) => w.id === id);
       setOriginal(found ?? null);
       setForm(found ? draftToForm(found) : draftToForm(emptyDraft()));
+      setDeletion(del);
     });
     return () => {
       active = false;
@@ -340,15 +352,41 @@ export default function WorkplaceFormScreen() {
     router.back();
   }
 
-  function handleDelete() {
+  /** אי אפשר למחוק (דוח שכר נשלח / שולם) — מציעים ארכיון. */
+  function handleArchive() {
     if (!id) return;
     confirm({
-      title: 'להעביר לאשפה?',
-      message: `"${form?.name ?? ''}" יועבר לאשפה. אפשר לשחזר אותו משם תוך 30 יום.`,
-      confirmLabel: 'העברה לאשפה',
+      title: 'להעביר לארכיון?',
+      message:
+        'דוחות שכר של מקום העבודה כבר נשלחו או שולמו, ולכן אי אפשר למחוק אותו. בארכיון הוא לא יוצג בלו״ז, בתזכורות ובבחירה לדיווח חדש — והדיווחים, דוחות השכר והתשלומים נשמרים. אפשר להחזיר אותו בכל עת.',
+      confirmLabel: 'העברה לארכיון',
+      destructive: false,
+      onConfirm: async () => {
+        await setWorkplaceArchived(id, true);
+        showToast('מקום העבודה הועבר לארכיון');
+        router.back();
+      },
+    });
+  }
+
+  function handleDelete() {
+    if (!id || !deletion) return;
+    if (!canDeleteWorkplace(deletion)) return handleArchive();
+    const withData = deletionSummary(deletion);
+    confirm({
+      title: deletion.reports > 0 ? 'למחוק את מקום העבודה ואת כל הדיווחים שלו?' : 'להעביר לאשפה?',
+      message:
+        deletion.reports > 0
+          ? `"${form?.name ?? ''}" יועבר לאשפה יחד עם ${withData}. אפשר לשחזר את הכול מהאשפה תוך 30 יום, ואחר כך הם נמחקים לצמיתות.\n\nאם רק הפסקת לעבוד שם — עדיף "העברה לארכיון" במסך מקום העבודה: הדיווחים נשמרים.`
+          : `"${form?.name ?? ''}" יועבר לאשפה${withData ? ` יחד עם ${withData}` : ''}. אפשר לשחזר משם תוך 30 יום.`,
+      confirmLabel: deletion.reports > 0 ? 'מחיקה עם הדיווחים' : 'העברה לאשפה',
       onConfirm: async () => {
         setSaving(true);
-        await trashWorkplace(id);
+        const ok = await trashWorkplaceWithData(id);
+        if (!ok) {
+          setSaving(false);
+          return handleArchive();
+        }
         // חוזרים לרשימת מקומות העבודה — מסך הצפייה של המקום שהועבר לאשפה כבר לא קיים.
         router.dismissTo('/workplaces');
       },
@@ -771,13 +809,22 @@ export default function WorkplaceFormScreen() {
           onPress={handleSave}
           loading={saving}
         />
-        {isEdit ? (
-          <Button
-            label="העברת מקום העבודה לאשפה"
-            variant="danger"
-            onPress={handleDelete}
-            disabled={saving}
-          />
+        {isEdit && deletion ? (
+          canDeleteWorkplace(deletion) ? (
+            <Button
+              label={deletion.reports > 0 ? 'מחיקת מקום העבודה עם כל הדיווחים' : 'העברת מקום העבודה לאשפה'}
+              variant="danger"
+              onPress={handleDelete}
+              disabled={saving}
+            />
+          ) : (
+            <>
+              <Button label="העברה לארכיון" variant="secondary" onPress={handleArchive} disabled={saving} />
+              <Text style={styles.deleteNote}>
+                אי אפשר למחוק: {deletion.lockedPayrolls === 1 ? 'דוח שכר אחד נשלח' : `${deletion.lockedPayrolls} דוחות שכר נשלחו`} או שולמו.
+              </Text>
+            </>
+          )
         ) : null}
       </View>
       {confirm.dialog}
@@ -789,6 +836,11 @@ const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
   courses: {
     gap: spacing.sm,
+  },
+  deleteNote: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: TEXT_RIGHT,
   },
   course: {
     backgroundColor: colors.surface,

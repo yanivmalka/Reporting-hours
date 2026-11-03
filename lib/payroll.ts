@@ -38,8 +38,11 @@ export type PayrollStatus = {
   redeemedMinutes?: number;
 };
 
-/** האם הדוח נעול לעריכה (נשלח לשכר ולא בוטל). */
-export const isLocked = (st: PayrollStatus | undefined) => Boolean(st?.sentAt);
+/** האם הדוח נעול לעריכה: נשלח לשכר (ולא בוטל), או שולם. */
+export const isLocked = (st: PayrollStatus | undefined) => Boolean(st?.sentAt || st?.paidAt);
+
+/** האם הדוח שולם — אז הוא נעול לצמיתות, בלי ביטול שליחה. */
+export const isPaid = (st: PayrollStatus | undefined) => Boolean(st?.paidAt);
 
 export type StatusMap = Record<string, PayrollStatus>;
 
@@ -174,6 +177,10 @@ export const NO_COURSE = 'עבודה שלא במסגרת קורס קבוע';
 
 /** לאיזה קורס שייך דיווח: קורס של אותו מקום שמתקיים בתאריך וחופף בשעות; אחרת לפי הנושא. */
 function courseOf(report: WorkReport, courses: readonly Course[]): string {
+  if (report.courseId) {
+    const byId = courses.find((c) => c.id === report.courseId);
+    if (byId) return byId.name;
+  }
   const s = parseTime(report.start) ?? 0;
   const e = parseTime(report.end) ?? 0;
   const match = courses.find((c) => {

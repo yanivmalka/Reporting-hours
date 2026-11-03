@@ -7,13 +7,12 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
 import {
   TRASH_RETENTION_DAYS,
-  deleteWorkplace,
   loadDeletedWorkplaces,
-  restoreWorkplace,
   trashDaysLeft,
   type Workplace,
 } from '../lib/workplaces';
 import { formatDateWithHebrew } from '../lib/time';
+import { deleteWorkplaceForever, deletionSummary, restoreWorkplaceWithData } from '../lib/trash';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -43,8 +42,14 @@ export default function TrashScreen() {
     }, []),
   );
 
+  /** מה נמחק יחד עם המקום ("2 קורסים ו־14 דיווחים") */
+  function withData(id: string): string {
+    const t = items?.find((w) => w.id === id)?.trashed;
+    return t ? deletionSummary({ courses: t.courses.length, reports: t.reports.length, lockedPayrolls: 0 }) : '';
+  }
+
   async function handleRestore(id: string) {
-    const next = await restoreWorkplace(id);
+    const next = await restoreWorkplaceWithData(id);
     setItems(next);
   }
 
@@ -52,9 +57,9 @@ export default function TrashScreen() {
     const name = items?.find((w) => w.id === id)?.name ?? '';
     confirm({
       title: 'למחוק לצמיתות?',
-      message: `"${name}" יימחק לצמיתות. לא ניתן יהיה לשחזר אותו.`,
+      message: `"${name}"${withData(id) ? ` יחד עם ${withData(id)}` : ''} יימחק לצמיתות. לא ניתן יהיה לשחזר.`,
       confirmLabel: 'מחיקה לצמיתות',
-      onConfirm: async () => setItems(await deleteWorkplace(id)),
+      onConfirm: async () => setItems(await deleteWorkplaceForever(id)),
     });
   }
 
@@ -74,8 +79,8 @@ export default function TrashScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>אשפה</Text>
         <Text style={styles.subtitle}>
-          מקומות עבודה שנמחקו נשמרים כאן {TRASH_RETENTION_DAYS} יום וניתן לשחזר
-          אותם. אחרי כן הם נמחקים לצמיתות.
+          מקומות עבודה שנמחקו נשמרים כאן {TRASH_RETENTION_DAYS} יום, יחד עם הקורסים והדיווחים
+          שלהם, וניתן לשחזר אותם. אחרי כן הם נמחקים לצמיתות.
         </Text>
       </View>
 
@@ -97,6 +102,7 @@ export default function TrashScreen() {
                     ? `נותרו ${daysLeft} ימים לשחזור`
                     : 'יימחק בקרוב'}
                 </Text>
+                {withData(item.id) ? <Text style={styles.meta}>כולל {withData(item.id)}</Text> : null}
                 <View style={styles.actions}>
                   <Pressable
                     onPress={() => handleRestore(item.id)}

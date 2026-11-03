@@ -167,7 +167,9 @@ export default function ReportScreen() {
             setBreaks(r.breaks.map((b) => ({ id: b.id, minutes: String(b.minutes) })));
             setNote(r.note ?? '');
             setLeftoverChoice(r.carriedMinutes > 0 ? 'carry' : 'include');
-            const c = crs.find((x) => x.workplaceId === r.workplaceId && x.name === r.note);
+            const c =
+              (r.courseId ? crs.find((x) => x.id === r.courseId) : undefined) ??
+              crs.find((x) => x.workplaceId === r.workplaceId && x.name === r.note);
             setCourseId(c?.id ?? null);
             setViaCourse(Boolean(c));
             setStep('times');
@@ -311,6 +313,8 @@ export default function ReportScreen() {
         .filter((b) => b.minutes > 0),
       carriedMinutes: carried,
       ...(note.trim() ? { note: note.trim() } : {}),
+      // הקורס שנבחר — רק אם הדיווח עדיין שייך למקום העבודה שלו.
+      ...(selectedCourse && selectedCourse.workplaceId === id ? { courseId: selectedCourse.id } : {}),
     };
     const saved = editing
       ? await updateReport(editing.id, draftReport)
@@ -359,8 +363,8 @@ export default function ReportScreen() {
         <View style={styles.intro}>
           <Text style={styles.title}>🔒 הדיווח נעול לעריכה</Text>
           <Text style={styles.subtitle}>
-            הדוח לשכר של החודש הזה כבר נשלח. כדי לערוך, יש לבטל קודם את הדוח שנשלח (עם סיבת ביטול)
-            — ואז לשלוח אותו מחדש.
+            הדוח לשכר של החודש הזה כבר נשלח או שולם. דוח שנשלח: כדי לערוך או למחוק, מבטלים קודם את
+            השליחה (עם סיבה) ואז שולחים מחדש. דוח ששולם — נעול לצמיתות.
           </Text>
         </View>
         <Button
