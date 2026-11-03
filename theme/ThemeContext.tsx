@@ -7,6 +7,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { useColorScheme } from 'react-native';
+import { useHydrated } from '../lib/useHydrated';
 import { readJSON, writeJSON } from '../lib/storage';
 import { fallbackColors } from './colors';
 import {
@@ -70,7 +71,10 @@ function isThemeMode(value: unknown): value is ThemeMode {
 }
 
 export function ThemeProvider({ children }: PropsWithChildren) {
-  const systemScheme = useColorScheme();
+  // ברינדור מראש (web) אין מצב מערכת — עד סיום ה־hydration מצב בהיר, כמו בשרת.
+  const hydrated = useHydrated();
+  const deviceScheme = useColorScheme();
+  const systemScheme = hydrated ? deviceScheme : 'light';
   const [paletteId, setPaletteId] = useState<PaletteId>(DEFAULT_PALETTE_ID);
   const [mode, setMode] = useState<ThemeMode>('system');
   const [loaded, setLoaded] = useState(false);

@@ -25,7 +25,7 @@ export type ColorScheme = {
   danger: string;
 };
 
-export type PaletteId = 'teal' | 'indigo' | 'sunset' | 'forest' | 'rose';
+export type PaletteId = 'teal' | 'indigo' | 'ocean' | 'forest' | 'sunset' | 'graphite';
 
 /** מצב התצוגה שהמשתמש בחר; 'system' נגזר מהגדרת מערכת ההפעלה. */
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -38,10 +38,18 @@ export type Palette = {
   dark: ColorScheme;
 };
 
+/*
+ * עקרונות העיצוב (2026):
+ * - בהיר: רקע ניטרלי קריר כמעט־לבן, משטחים לבנים, גבולות עדינים; צבע המותג
+ *   בגוון 700 (ניגודיות של 4.5:1 לפחות מול טקסט לבן).
+ * - כהה: לא שחור מוחלט — רקע כהה עם נגיעה מהגוון, משטחים מוגבהים מעט
+ *   בהירים יותר; צבע המותג בגוון 300–400 עם טקסט כהה עליו.
+ * - אותם צבעי סטטוס בכל הערכות, מכוילים לכל מצב.
+ */
 const STATUS_LIGHT = {
-  success: '#2E7D32',
-  warning: '#B26A00',
-  danger: '#C62828',
+  success: '#15803D',
+  warning: '#B45309',
+  danger: '#DC2626',
 } as const;
 
 const STATUS_DARK = {
@@ -50,33 +58,43 @@ const STATUS_DARK = {
   danger: '#F87171',
 } as const;
 
+/** ניטרליים משותפים — אפור־כחלחל (slate) קריר. */
+const NEUTRAL_LIGHT = {
+  background: '#F6F8FA',
+  surface: '#FFFFFF',
+  border: '#E2E8F0',
+  text: '#0F172A',
+  textMuted: '#526070',
+  textOnBrand: '#FFFFFF',
+} as const;
+
+/** ניטרליים כהים: רקע עם נגיעה מגוון המותג, משטח מוגבה, טקסט רך. */
+const darkNeutrals = (background: string, surface: string, border: string) => ({
+  background,
+  surface,
+  border,
+  text: '#E8ECF1',
+  textMuted: '#9AA6B4',
+});
+
 export const PALETTES: readonly Palette[] = [
   {
     id: 'teal',
     labelHe: 'טורקיז',
     labelEn: 'Teal',
     light: {
-      brand: '#0E7C7B',
-      brandDark: '#0A5C5B',
-      brandLight: '#E3F1F1',
-      background: '#F5F7F7',
-      surface: '#FFFFFF',
-      border: '#E2E6E6',
-      text: '#1A2323',
-      textMuted: '#5C6B6B',
-      textOnBrand: '#FFFFFF',
+      brand: '#0F766E',
+      brandDark: '#115E59',
+      brandLight: '#E0F2EF',
+      ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
     dark: {
-      brand: '#2AA7A5',
-      brandDark: '#6FD9D6',
-      brandLight: '#123230',
-      background: '#0E1514',
-      surface: '#172120',
-      border: '#2A3634',
-      text: '#E7EEED',
-      textMuted: '#9DB0AE',
-      textOnBrand: '#04211F',
+      brand: '#2DD4BF',
+      brandDark: '#5EEAD4',
+      brandLight: '#0F2F2C',
+      ...darkNeutrals('#0B1214', '#131C1F', '#24313A'),
+      textOnBrand: '#042F2E',
       ...STATUS_DARK,
     },
   },
@@ -87,112 +105,100 @@ export const PALETTES: readonly Palette[] = [
     light: {
       brand: '#4F46E5',
       brandDark: '#3730A3',
-      brandLight: '#E8E7FB',
-      background: '#F6F6FB',
-      surface: '#FFFFFF',
-      border: '#E4E4ED',
-      text: '#1B1B2B',
-      textMuted: '#5B5B72',
-      textOnBrand: '#FFFFFF',
+      brandLight: '#EAE9FD',
+      ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
     dark: {
-      brand: '#8B85F0',
-      brandDark: '#B7B3F7',
-      brandLight: '#201F3A',
-      background: '#0F0F1A',
-      surface: '#1A1A2B',
-      border: '#2C2C42',
-      text: '#EAEAF4',
-      textMuted: '#A6A6C2',
-      textOnBrand: '#12102E',
+      brand: '#A5B4FC',
+      brandDark: '#C7D2FE',
+      brandLight: '#1F2147',
+      ...darkNeutrals('#0C0E18', '#151827', '#272B40'),
+      textOnBrand: '#1E1B4B',
       ...STATUS_DARK,
     },
   },
   {
-    id: 'sunset',
-    labelHe: 'שקיעה',
-    labelEn: 'Sunset',
+    id: 'ocean',
+    labelHe: 'כחול',
+    labelEn: 'Ocean',
     light: {
-      brand: '#C2410C',
-      brandDark: '#9A3412',
-      brandLight: '#FBE8DE',
-      background: '#FAF7F5',
-      surface: '#FFFFFF',
-      border: '#ECE4DF',
-      text: '#2A1E17',
-      textMuted: '#6E5B50',
-      textOnBrand: '#FFFFFF',
+      brand: '#1D4ED8',
+      brandDark: '#1E3A8A',
+      brandLight: '#E3ECFD',
+      ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
     dark: {
-      brand: '#F97316',
-      brandDark: '#FDBA74',
-      brandLight: '#3A2416',
-      background: '#17110D',
-      surface: '#221913',
-      border: '#38291F',
-      text: '#F2E9E2',
-      textMuted: '#C0A794',
-      textOnBrand: '#2A1206',
+      brand: '#60A5FA',
+      brandDark: '#93C5FD',
+      brandLight: '#13254A',
+      ...darkNeutrals('#0A101C', '#121A29', '#233046'),
+      textOnBrand: '#0A1A3A',
       ...STATUS_DARK,
     },
   },
   {
     id: 'forest',
-    labelHe: 'יער',
-    labelEn: 'Forest',
+    labelHe: 'אזמרגד',
+    labelEn: 'Emerald',
     light: {
-      brand: '#15803D',
-      brandDark: '#14532D',
-      brandLight: '#DEF1E3',
-      background: '#F5F8F5',
-      surface: '#FFFFFF',
-      border: '#E1E8E1',
-      text: '#182018',
-      textMuted: '#556655',
-      textOnBrand: '#FFFFFF',
+      brand: '#047857',
+      brandDark: '#065F46',
+      brandLight: '#DDF3EA',
+      ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
     dark: {
-      brand: '#34D058',
-      brandDark: '#86EFAC',
-      brandLight: '#14311E',
-      background: '#0D140F',
-      surface: '#161F19',
-      border: '#263528',
-      text: '#E7EFE8',
-      textMuted: '#9FB4A3',
-      textOnBrand: '#052611',
+      brand: '#34D399',
+      brandDark: '#6EE7B7',
+      brandLight: '#0E2E22',
+      ...darkNeutrals('#0A1310', '#121D19', '#23332C'),
+      textOnBrand: '#022C22',
       ...STATUS_DARK,
     },
   },
   {
-    id: 'rose',
-    labelHe: 'ורד',
-    labelEn: 'Rose',
+    id: 'sunset',
+    labelHe: 'ענבר',
+    labelEn: 'Amber',
     light: {
-      brand: '#BE185D',
-      brandDark: '#9D174D',
-      brandLight: '#FBE3EC',
-      background: '#FBF6F8',
-      surface: '#FFFFFF',
-      border: '#EEE1E7',
-      text: '#2A1721',
-      textMuted: '#6E5460',
-      textOnBrand: '#FFFFFF',
+      brand: '#C2410C',
+      brandDark: '#9A3412',
+      brandLight: '#FDEBDD',
+      ...NEUTRAL_LIGHT,
+      background: '#F8F7F5',
+      border: '#E7E3DE',
+      text: '#1C1917',
+      textMuted: '#5F5852',
       ...STATUS_LIGHT,
     },
     dark: {
-      brand: '#F472B6',
-      brandDark: '#F9A8D4',
-      brandLight: '#3A1A2A',
-      background: '#171014',
-      surface: '#22161D',
-      border: '#382330',
-      text: '#F3E7EE',
-      textMuted: '#C29CB0',
-      textOnBrand: '#2A0A1B',
+      brand: '#FB923C',
+      brandDark: '#FDBA74',
+      brandLight: '#35200F',
+      ...darkNeutrals('#13100D', '#1D1814', '#342A22'),
+      textOnBrand: '#431407',
+      ...STATUS_DARK,
+    },
+  },
+  {
+    id: 'graphite',
+    labelHe: 'גרפיט',
+    labelEn: 'Graphite',
+    light: {
+      brand: '#334155',
+      brandDark: '#1E293B',
+      brandLight: '#E8ECF1',
+      ...NEUTRAL_LIGHT,
+      ...STATUS_LIGHT,
+    },
+    dark: {
+      brand: '#CBD5E1',
+      brandDark: '#E2E8F0',
+      brandLight: '#232B36',
+      ...darkNeutrals('#0D1014', '#161A20', '#2A313B'),
+      textOnBrand: '#0F172A',
       ...STATUS_DARK,
     },
   },
