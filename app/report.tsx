@@ -24,9 +24,12 @@ import {
   loadReports,
   makeBreakId,
   updateReport,
+  EXTRA_SESSION_LABELS,
+  type ExtraSessionKind,
   type WorkReport,
 } from '../lib/reports';
-import { courseReported, coursesOn, loadCourses, timeRange, type Course } from '../lib/courses';
+import { SelectField } from '../components/SelectField';
+import { courseReported, courseScheduleLabel, coursesOn, loadCourses, timeRange, type Course } from '../lib/courses';
 import { currentPayPeriod } from '../lib/dashboard';
 import { isLocked, loadPayrollStatus, statusKey } from '../lib/payroll';
 import { formatShekels, hasTravelCost, travelCostForDay } from '../lib/travel';
@@ -101,6 +104,8 @@ export default function ReportScreen() {
   const [courses, setCourses] = useState<Course[]>([]);
   /** הקורס שנבחר (כשיש כמה קורסים בטווח השעות) */
   const [courseId, setCourseId] = useState<string | null>(null);
+  /** מפגש נוסף לקורס (השלמה, הגשה…) — מחוץ למועד הקבוע; null = דיווח רגיל */
+  const [extraKind, setExtraKind] = useState<ExtraSessionKind | null>(null);
   /** שלב באשף: תאריך → קורס (או מקום עבודה) → שעות → סיכום → נשמר */
   const [step, setStep] = useState<Step>('date');
   /** האם הגענו לשעות דרך בחירת קורס (קובע לאן "חזרה") */
@@ -171,7 +176,9 @@ export default function ReportScreen() {
               (r.courseId ? crs.find((x) => x.id === r.courseId) : undefined) ??
               crs.find((x) => x.workplaceId === r.workplaceId && x.name === r.note);
             setCourseId(c?.id ?? null);
-            setViaCourse(Boolean(c));
+            setExtraKind(c && r.extraKind ? r.extraKind : null);
+            // מפגש נוסף נערך דרך שדה השיוך לקורס, ולא כקורס מהמערכת השבועית.
+            setViaCourse(Boolean(c) && !r.extraKind);
             setStep('times');
           }
           return;
@@ -315,6 +322,7 @@ export default function ReportScreen() {
       ...(note.trim() ? { note: note.trim() } : {}),
       // הקורס שנבחר — רק אם הדיווח עדיין שייך למקום העבודה שלו.
       ...(selectedCourse && selectedCourse.workplaceId === id ? { courseId: selectedCourse.id } : {}),
+      ...(selectedCourse && selectedCourse.workplaceId === id && extraKind ? { extraKind } : {}),
     };
     const saved = editing
       ? await updateReport(editing.id, draftReport)
@@ -444,6 +452,7 @@ export default function ReportScreen() {
    */
   function applyCourse(c: Course, keepTimes = false) {
     setCourseId(c.id);
+    setExtraKind(null);
     setWorkplaceId(c.workplaceId);
     setNote(c.name);
     setTouched(true);
@@ -463,6 +472,25 @@ export default function ReportScreen() {
   const reportedCourse = (c: Course) => courseReported(c, date, existing, editing?.id);
   const workplaceName = (id: string | null) => workplaces.find((w) => w.id === id)?.name ?? '';
   const selectedCourse = courses.find((c) => c.id === courseId) ?? null;
+  // שיוך מפגש נוסף: קורסים של מקום העבודה שהתאריך בתוך תקופתם (לא רק ביום הקבוע).
+  const extraCandidates = workplaceId
+    ? courses.filter((c) => c.workplaceId === workplaceId && date >= c.from && date <= c.to)
+    : [];
+
+  /** שיוך הדיווח לקורס כמפגש נוסף, או ביטול השיוך. */
+  function chooseExtraCourse(id: string | null) {
+    setTouched(true);
+    if (!id) {
+      setCourseId(null);
+      setExtraKind(null);
+      return;
+    }
+    const c = courses.find((x) => x.id === id);
+    if (!c) return;
+    setCourseId(c.id);
+    setExtraKind((k) => k ?? 'makeup');
+    if (!note.trim() || courses.some((x) => x.name === note.trim())) setNote(c.name);
+  }
 
   function goNext() {
     if (step === 'date') {
@@ -529,6 +557,7 @@ export default function ReportScreen() {
   function chooseWorkplace(id: string) {
     setWorkplaceId(id);
     setCourseId(null);
+    setExtraKind(null);
     setViaCourse(false);
     setTouched(true);
     setErrors({});
@@ -738,7 +767,7 @@ export default function ReportScreen() {
           <Text style={styles.stepTitle}>
             {selectedCourse ? 'השעות לפי הקורס — אפשר לעדכן' : 'מתי עבדת?'}
           </Text>
-          {selectedCourse && !editId ? (
+          {selectedCourse && !editId && !extraKind ? (
             <Pressable
               onPress={() =>
                 sessionDialog.open({
@@ -753,6 +782,33 @@ export default function ReportScreen() {
             >
               <Text style={styles.linkText}>השיעור לא התקיים? סימון כבוטל</Text>
             </Pressable>
+          ) : null}
+          {!viaCourse && extraCandidates.length > 0 ? (
+            <FormField label="מפגש נוסף לקורס (רשות)">
+              <SelectField<string | null>
+                title="שיוך לקורס"
+                value={extraKind ? courseId : null}
+                options={[
+                  { value: null, label: 'לא משויך לקורס' },
+                  ...extraCandidates.map((c) => ({
+                    value: c.id as string | null,
+                    label: c.name,
+                    sub: courseScheduleLabel(c),
+                  })),
+                ]}
+                onChange={chooseExtraCourse}
+              />
+              {extraKind ? (
+                <SegmentedControl<ExtraSessionKind>
+                  options={(Object.keys(EXTRA_SESSION_LABELS) as ExtraSessionKind[]).map((k) => ({
+                    value: k,
+                    label: EXTRA_SESSION_LABELS[k],
+                  }))}
+                  value={extraKind}
+                  onChange={setExtraKind}
+                />
+              ) : null}
+            </FormField>
           ) : null}
           <View style={styles.timesRow}>
             <View style={styles.timeCol}>

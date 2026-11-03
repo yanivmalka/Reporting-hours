@@ -26,7 +26,7 @@ import { formatISODate, parseTime, todayISO } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
 import { loadReports } from '../lib/reports';
 import { deleteOrEndCourse } from '../lib/trash';
-import { courseReport, occursOn, reportsOfCourse, type Course, type CourseDraft } from '../lib/courses';
+import { courseReport, courseReported, occursOn, reportsOfCourse, type Course, type CourseDraft } from '../lib/courses';
 import type { WorkReport } from '../lib/reports';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../theme/ThemeContext';
@@ -60,6 +60,8 @@ export default function CourseFormScreen() {
   const [reportCount, setReportCount] = useState(0);
   /** הדיווחים של הקורס — לבדיקה בשמירה אם השינוי מנתק חלק מהם */
   const [courseReports, setCourseReports] = useState<WorkReport[]>([]);
+  /** כל הדיווחים — לחישוב מפגשי עבר שיישארו בלי דיווח אחרי השינוי */
+  const [allReports, setAllReports] = useState<WorkReport[]>([]);
   const params = useLocalSearchParams<{ id?: string; workplaceId?: string; view?: string }>();
   const id = params.id || undefined;
   /** הגיעו ממצב תצוגה (?view=1): מציגים קודם קריאה בלבד; עריכה — בכפתור */
@@ -95,6 +97,7 @@ export default function CourseFormScreen() {
       setLoaded(course ?? null);
       const mine = course ? reportsOfCourse(course, reports) : [];
       setCourseReports(mine);
+      setAllReports(reports);
       setReportCount(mine.length);
       const wpId = course?.workplaceId ?? params.workplaceId ?? '';
       setWorkplaceId(wpId);
@@ -183,26 +186,46 @@ export default function CourseFormScreen() {
       from: form.from,
       to: form.to,
     };
-    // דיווחים קיימים שלא יתאימו למועד החדש (יום, שעות, תקופה) — מתריעים לפני שמירה.
-    const next: Course = { ...draft, id: id ?? '' };
-    const detached = id
-      ? courseReports.filter((r) => !(occursOn(next, r.date) && courseReport(next, r.date, [r])))
-      : [];
-    if (detached.length > 0) {
-      const dates = detached
-        .map((r) => r.date)
-        .sort()
-        .slice(0, 5)
-        .map(formatISODate)
-        .join(', ');
-      const more = detached.length > 5 ? ` ועוד ${detached.length - 5}` : '';
-      confirm({
-        title: 'השינוי ינתק דיווחים מהקורס',
-        message: `${detached.length === 1 ? 'דיווח אחד' : `${detached.length} דיווחים`} של הקורס (${dates}${more}) כבר לא יתאימו למועד החדש. הדיווחים והשכר שלהם נשמרים, אבל הם לא ייספרו במפגשי הקורס ובמימוש התכנון. כדי לשמור עליהם, אפשר לסיים את הקורס הזה ולפתוח קורס חדש עם המועד החדש.`,
-        confirmLabel: 'שמירה בכל זאת',
-        onConfirm: () => save(draft),
-      });
-      return;
+    // שינוי מועד (יום, שעות, תקופה) בקורס קיים — מתריעים לפני שמירה על שני דברים:
+    //  1. דיווחים ישנים בלי `courseId` שמשויכים לפי יום ושעות, ויתנתקו מהקורס.
+    //     דיווח עם מזהה נשאר משויך בכל מקרה (ומחוץ למועד — כמפגש נוסף).
+    //  2. מפגשי עבר במועד החדש שאין עליהם דיווח — יופיעו כ"דיווחים חסרים".
+    if (id && loaded) {
+      const next: Course = { ...draft, id };
+      const detached = courseReports.filter(
+        (r) => !r.courseId && !(occursOn(next, r.date) && courseReport(next, r.date, [r])),
+      );
+      const today = todayISO();
+      const pastMissing = (c: Course) =>
+        occurrences(c, c.from, today < c.to ? today : c.to).filter(
+          (d) => d < today && !courseReported(c, d, allReports),
+        );
+      const before = new Set(pastMissing(loaded));
+      const newlyMissing = pastMissing(next).filter((d) => !before.has(d));
+      if (detached.length > 0 || newlyMissing.length > 0) {
+        const list = (dates: string[]) => {
+          const shown = [...dates].sort().slice(0, 4).map(formatISODate).join(', ');
+          return dates.length > 4 ? `${shown} ועוד ${dates.length - 4}` : shown;
+        };
+        const parts: string[] = [];
+        if (detached.length > 0) {
+          parts.push(
+            `${detached.length === 1 ? 'דיווח ישן אחד' : `${detached.length} דיווחים ישנים`} (${list(detached.map((r) => r.date))}) משויכים לקורס רק לפי היום והשעות, ויתנתקו ממנו. הדיווחים והשכר שלהם נשמרים.`,
+          );
+        }
+        if (newlyMissing.length > 0) {
+          parts.push(
+            `${newlyMissing.length === 1 ? 'מפגש שעבר' : `${newlyMissing.length} מפגשים שעברו`} במועד החדש (${list(newlyMissing)}) ${newlyMissing.length === 1 ? 'יופיע' : 'יופיעו'} כחסרי דיווח. אפשר לדווח עליהם או לסמן אותם כבוטלו.`,
+          );
+        }
+        confirm({
+          title: 'לשמור את השינוי במועד?',
+          message: parts.join('\n\n'),
+          confirmLabel: 'שמירה',
+          onConfirm: () => save(draft),
+        });
+        return;
+      }
     }
     await save(draft);
   }

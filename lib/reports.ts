@@ -15,6 +15,16 @@ export type BreakEntry = {
   minutes: number;
 };
 
+/** סוגי מפגש נוסף לקורס. */
+export type ExtraSessionKind = 'makeup' | 'submission' | 'midterm' | 'other';
+
+export const EXTRA_SESSION_LABELS: Record<ExtraSessionKind, string> = {
+  makeup: 'שיעור השלמה',
+  submission: 'הגשה',
+  midterm: 'הגשת ביניים',
+  other: 'אחר',
+};
+
 export type WorkReport = {
   id: string;
   /** מזהה מקום העבודה שאליו שייך הדיווח */
@@ -39,6 +49,11 @@ export type WorkReport = {
    * השדה משויכים לפי שם הקורס או חפיפה בשעות (lib/courses.ts).
    */
   courseId?: string;
+  /**
+   * מפגש נוסף לקורס, מחוץ למועד הקבוע (שיעור השלמה, הגשה…). נשמר רק יחד עם
+   * `courseId`. נספר בקורס ובדוח השכר, ואינו "מכסה" מפגש מתוכנן.
+   */
+  extraKind?: ExtraSessionKind;
   /** דיווח שנוצר כנתוני הדגמה (lib/demo.ts) — נמחק ב"איפוס נתוני הדגמה" */
   demo?: boolean;
   /** חותמת יצירה (מילישניות) — לסידור דיווחים באותו תאריך */
@@ -120,8 +135,8 @@ export async function updateReport(id: string, draft: WorkReportDraft): Promise<
   const list = await loadReports();
   const next = list.map((r) => {
     if (r.id !== id) return r;
-    const { note: _n, courseId: _c, ...rest } = r;
-    // note ו־courseId נמחקים כשהוסרו בטופס — לכן בונים מחדש בלי הישנים.
+    const { note: _n, courseId: _c, extraKind: _k, ...rest } = r;
+    // note, courseId ו־extraKind נמחקים כשהוסרו בטופס — לכן בונים מחדש בלי הישנים.
     return { ...rest, ...draft, id: r.id, createdAt: r.createdAt };
   });
   await saveReports(next);

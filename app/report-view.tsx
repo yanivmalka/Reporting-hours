@@ -18,7 +18,7 @@ import { hebrewDate } from '../lib/hebrewDate';
 import { reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
 import { isLocked, isPaid, loadPayrollStatus, periodTitle, statusKey } from '../lib/payroll';
-import { academicOf, deleteReport, loadReports, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
+import { academicOf, deleteReport, EXTRA_SESSION_LABELS, loadReports, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -112,6 +112,7 @@ export default function ReportViewScreen() {
     ['מקום עבודה', workplace?.name ?? 'מקום עבודה שנמחק'],
     ['תאריך', `יום ${weekday} · ${formatISODate(report.date)} · ${hebrewDate(report.date, false)}`],
     ...(report.note ? ([['קורס / נושא', report.note]] as [string, string][]) : []),
+    ...(report.extraKind ? ([['סוג מפגש', `מפגש נוסף · ${EXTRA_SESSION_LABELS[report.extraKind]}`]] as [string, string][]) : []),
     ['שעות', `⁦${report.start}–${report.end}⁩`],
     ['הפסקות', breaks > 0 ? formatDuration(breaks) : 'ללא'],
     ['זמן עבודה נטו', net == null ? '—' : formatDuration(net)],
@@ -158,7 +159,7 @@ export default function ReportViewScreen() {
       ) : (
         <>
           <Button label="עריכה" onPress={() => router.push({ pathname: '/report', params: { id: report.id } })} />
-          {course ? (
+          {course && !report.extraKind ? (
             <Button
               label="השיעור לא התקיים — סימון כבוטל"
               variant="secondary"
