@@ -43,8 +43,12 @@ function SyncedTree({ children }: { children: ReactNode }) {
 
 /** קליפת האפליקציה — כותרת, ניווט ותפריט ההמבורגר — תלויי ערכת צבעים ושפה. */
 function Chrome() {
-  const { colors } = useTheme();
+  const { colors, resolvedScheme } = useTheme();
   const { t } = useI18n();
+  // במצב כהה: סרגל עליון בצבע משטח (Material 3) ולא צבע מותג בוהק.
+  const dark = resolvedScheme === 'dark';
+  const barBg = dark ? colors.surface : colors.brand;
+  const barFg = dark ? colors.text : colors.textOnBrand;
   const wide = useWideLayout();
 
   return (
@@ -59,19 +63,19 @@ function Chrome() {
           <View style={{ flex: 1 }}>
             <Stack
               screenOptions={{
-                headerStyle: { backgroundColor: colors.brand },
-                headerTintColor: colors.textOnBrand,
+                headerStyle: { backgroundColor: barBg },
+                headerTintColor: barFg,
                 headerTitleStyle: { fontWeight: '700' },
                 headerBackTitle: t('common.back'),
                 contentStyle: { backgroundColor: colors.background },
                 // דפוס אנדרואיד/Google בעברית: headerLeft מוצג מימין — ☰ במסך הראשי,
                 // חץ חזרה במסכים פנימיים; headerRight מוצג משמאל — ⋮ במסכים פנימיים.
                 headerLeft: (props) => (
-                  <HeaderStart canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? colors.textOnBrand)} />
+                  <HeaderStart canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
                 ),
                 headerBackVisible: false,
                 headerRight: (props) => (
-                  <HeaderEnd canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? colors.textOnBrand)} />
+                  <HeaderEnd canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
                 ),
               }}
             >

@@ -84,7 +84,7 @@ export function useWideLayout(): boolean {
 }
 
 /** כפתור ההמבורגר לכותרת הניווט. */
-export function DrawerToggle() {
+export function DrawerToggle({ tintColor }: { tintColor?: string }) {
   const { open } = useDrawer();
   const { colors } = useTheme();
   const { t } = useI18n();
@@ -96,7 +96,7 @@ export function DrawerToggle() {
       hitSlop={10}
       style={styles.iconBtn}
     >
-      <Icon name="menu" size={26} color={colors.textOnBrand} />
+      <Icon name="menu" size={26} color={tintColor ?? colors.textOnBrand} />
     </Pressable>
   );
 }
@@ -109,7 +109,7 @@ export function HeaderStart({ canGoBack, tintColor }: { canGoBack?: boolean; tin
   const router = useRouter();
   const { isRTL } = useI18n();
   const wide = useWideLayout();
-  if (!canGoBack) return wide ? null : <DrawerToggle />;
+  if (!canGoBack) return wide ? null : <DrawerToggle tintColor={tintColor} />;
   return (
     <Pressable
       onPress={() => router.back()}
