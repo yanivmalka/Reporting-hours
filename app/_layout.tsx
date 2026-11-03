@@ -10,6 +10,7 @@ import { ExitGuard } from '../components/ExitGuard';
 import { ToastProvider } from '../components/Toast';
 import { UpdateProvider } from '../components/UpdateChecker';
 import { DemoSeeder } from '../components/DemoSeeder';
+import { BackupScheduler } from '../components/BackupScheduler';
 import { SyncProvider, useCloudSync } from '../components/CloudSync';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
@@ -56,6 +57,7 @@ function Chrome() {
       <DrawerProvider>
         <StatusBar style="light" />
         <DemoSeeder />
+        <BackupScheduler />
         <ExitGuard />
         {/* במסך רחב: תפריט קבוע בצד ההתחלה (ימין בעברית) והניווט לצדו */}
         <View style={{ flex: 1, flexDirection: 'row' }}>

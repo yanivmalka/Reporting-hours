@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
+import { BackupSection } from '../components/BackupSection';
 import { Button } from '../components/Button';
 import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
@@ -66,7 +67,7 @@ export default function DataScreen() {
     },
     resetAll: {
       title: 'למחוק את כל המידע?',
-      message: 'כל הדיווחים, מקומות העבודה (כולל האשפה), המונים וההעדפות יימחקו. לא ניתן לשחזר.',
+      message: 'כל הדיווחים, מקומות העבודה (כולל האשפה), המונים וההעדפות יימחקו. אפשר לשחזר מגיבוי (הגיבויים לא נמחקים).',
       confirmLabel: 'מחיקת הכול',
       destructive: true,
     },
@@ -106,8 +107,8 @@ export default function DataScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>ניהול נתונים</Text>
         <Text style={styles.subtitle}>
-          כל הנתונים נשמרים במכשיר בלבד. כאן אפשר לטעון נתוני הדגמה, למחוק אותם,
-          או להתחיל מאפס.
+          הנתונים נשמרים במכשיר (וכשמחוברים לחשבון גוגל — מסונכרנים גם לענן). כאן אפשר
+          לגבות ולשחזר, לטעון נתוני הדגמה, למחוק אותם, או להתחיל מאפס.
         </Text>
       </View>
 
@@ -118,6 +119,8 @@ export default function DataScreen() {
           <Stat label="מקומות עבודה" value={stats.workplaces} styles={styles} />
         </View>
       ) : null}
+
+      <BackupSection />
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>נתוני הדגמה</Text>
@@ -154,7 +157,7 @@ export default function DataScreen() {
         <Text style={styles.cardTitle}>איפוס כל המידע</Text>
         <Text style={styles.cardText}>
           מוחק הכול: דיווחים, מקומות עבודה (כולל האשפה), מונה הדקות המצטברות
-          וההעדפות. לא ניתן לשחזר.
+          וההעדפות. הגיבויים לא נמחקים — אפשר לשחזר מהם.
         </Text>
         <Button
           label={label('resetAll', 'איפוס כל המידע')}

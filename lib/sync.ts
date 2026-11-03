@@ -14,7 +14,7 @@
  * - במצב הדגמה (נתוני דמו טעונים) הסנכרון מושהה, כדי שהדמו לא יעלה לחשבון.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, deleteDoc, doc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { APP_ID, firestore, type CloudUser } from './firebase';
 
 const PREFIX = 'reporting-hours/';
@@ -263,6 +263,60 @@ function mergeLists(localRaw: string | null, cloudRaw: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** המשתמש המחובר כרגע (או null) — לגיבויים בענן. */
+export function syncUser(): CloudUser | null {
+  return user;
+}
+
+/** האם נתוני הדגמה טעונים (ואז לא מעלים לענן). */
+export function isDemoActive(): Promise<boolean> {
+  return demoActive();
+}
+
+/**
+ * החלפת כל נתוני המשתמש — בשרת ובמכשיר — בתמונת מצב (שחזור מגיבוי).
+ *
+ * בשרת: כל מפתח בתמונה נכתב עם חותמת "עכשיו", ומפתחות שאינם בה נמחקים —
+ * כך השחזור גובר על כל מכשיר אחר ומגיע אליו במשיכה הבאה. במכשיר: אותו דבר,
+ * ונתוני ההדגמה (אם נטענו) יורדים. לבסוף כל העץ נטען מחדש.
+ */
+export async function replaceAllUserData(snapshot: Record<string, string>): Promise<void> {
+  if (!user) throw new Error('not-signed-in');
+  const uid = user.uid;
+  const col = kvCollection(uid);
+  const db = firestore();
+  if (!col || !db) throw new Error('cloud-unavailable');
+  await loadMeta();
+  const now = Date.now();
+  const entries = Object.entries(snapshot).filter(([k]) => isSyncedKey(k));
+  const keep = new Set(entries.map(([k]) => k));
+
+  // שרת — באצווה אחת (אטומית).
+  const existing = await getDocs(col);
+  const batch = writeBatch(db);
+  existing.forEach((d) => {
+    const key = fromDocId(d.id);
+    if (isSyncedKey(key) && !keep.has(key)) batch.delete(d.ref);
+  });
+  for (const [k, v] of entries) {
+    const ref = kvDoc(uid, k);
+    if (ref) batch.set(ref, { v, updated: now });
+  }
+  await batch.commit();
+
+  // מכשיר.
+  const localKeys = (await AsyncStorage.getAllKeys()).filter(isSyncedKey);
+  const stale = localKeys.filter((k) => !keep.has(k));
+  if (stale.length) await AsyncStorage.multiRemove(stale);
+  await AsyncStorage.multiSet(entries);
+  await AsyncStorage.removeItem(DEMO_META_KEY).catch(() => {});
+  meta = { uid, stamps: Object.fromEntries(entries.map(([k]) => [k, now])) };
+  dirty.clear();
+  await saveMeta();
+  setStatus('synced');
+  remoteListeners.forEach((l) => l());
 }
 
 /** נקרא מה־SyncProvider בכל שינוי התחברות. */
