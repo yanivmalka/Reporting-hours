@@ -91,6 +91,12 @@ export type Workplace = {
    * מוצג ברשימות הרגילות. אחרי {@link TRASH_RETENTION_DAYS} ימים הוא נמחק לצמיתות.
    */
   deletedAt?: number;
+  /**
+   * חותמת העברה לארכיון (מילישניות). מקום עבודה לא פעיל: לא מוצג בלו״ז,
+   * בתזכורות ובבחירת מקום עבודה לדיווח חדש — אבל הדיווחים, דוחות השכר
+   * והתשלומים שלו נשארים בחישובים ובהיסטוריה. אפשר להחזיר אותו בכל עת.
+   */
+  archivedAt?: number;
   /** מקום עבודה שנוצר כנתוני הדגמה (lib/demo.ts) */
   demo?: boolean;
 };
@@ -155,7 +161,7 @@ export function taxPercentOf(w: Pick<Workplace, 'taxPercent'>): number {
 }
 
 /** נתוני טופס לפני שמירה — כמו Workplace אך בלי מזהה ובלי שדות מערכת. */
-export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'demo' | 'termsHistory'>;
+export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'archivedAt' | 'demo' | 'termsHistory'>;
 
 const STORAGE_KEY = 'reporting-hours/workplaces/v1';
 
@@ -255,6 +261,24 @@ async function loadAllPruned(): Promise<Workplace[]> {
 export async function loadWorkplaces(): Promise<Workplace[]> {
   const all = await loadAllPruned();
   return all.filter((w) => w.deletedAt == null);
+}
+
+/** האם מקום העבודה בארכיון (לא פעיל). */
+export function isArchived(w: Pick<Workplace, 'archivedAt'>): boolean {
+  return w.archivedAt != null;
+}
+
+/** מקומות העבודה הפעילים מתוך רשימה (בלי הארכיון). */
+export function activeWorkplaces<W extends Pick<Workplace, 'archivedAt'>>(list: readonly W[]): W[] {
+  return list.filter((w) => !isArchived(w));
+}
+
+/** העברה לארכיון (true) או החזרה ממנו (false). */
+export async function setWorkplaceArchived(id: string, archived: boolean): Promise<void> {
+  const all = await loadAllPruned();
+  await saveWorkplaces(
+    all.map((w) => (w.id === id ? { ...w, archivedAt: archived ? Date.now() : undefined } : w)),
+  );
 }
 
 /** מקומות העבודה שבאשפה, מהנמחק אחרון לראשון. */

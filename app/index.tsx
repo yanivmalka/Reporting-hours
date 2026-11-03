@@ -11,6 +11,7 @@ import { Pressable } from '../components/Pressable';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
 import { useFlash } from '../components/useFlash';
+import { useSessionCancel } from '../components/SessionCancelDialog';
 import { useSwipe } from '../components/useSwipe';
 import { useCloudSync } from '../components/CloudSync';
 import { loadAccumulated } from '../lib/accumulated';
@@ -61,6 +62,9 @@ export default function HomeScreen() {
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
   const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
   const [dayDir, setDayDir] = useState<1 | -1>(1);
+  // טעינה מחדש אחרי ביטול / החזרה של מפגש
+  const [reloadTick, setReloadTick] = useState(0);
+  const sessionDialog = useSessionCancel();
 
   // השעה מתעדכנת כל דקה — הברכה וסטטוס המפגשים ("עכשיו" / "ממתין לדיווח").
   useEffect(() => {
@@ -98,7 +102,7 @@ export default function HomeScreen() {
         active = false;
         off();
       };
-    }, [basis]),
+    }, [basis, reloadTick]),
   );
 
   function dismiss(key: string) {
@@ -134,7 +138,16 @@ export default function HomeScreen() {
   );
   const flash = useFlash(dayIdx, dayDir);
 
-  const todayCount = today?.items.length ?? 0;
+  function openCancel(item: AgendaItem) {
+    sessionDialog.open({
+      course: item.course,
+      date: item.date,
+      cancel: item.cancel,
+      onDone: () => setReloadTick((n) => n + 1),
+    });
+  }
+
+  const todayCount = today?.items.filter((i) => i.status !== 'canceled').length ?? 0;
 
   return (
     <Screen>
@@ -239,19 +252,27 @@ export default function HomeScreen() {
                   item.reportId
                     ? // מפגש שדווח — תצוגת הדיווח (עריכה בכפתור, "חזרה" חוזרת לכאן)
                       () => router.push({ pathname: '/report-view', params: { id: item.reportId } })
-                    : day.offset <= 0
-                      ? () =>
+                    : item.status === 'canceled' || item.status === 'upcoming'
+                      ? // מבוטל — הסיבה והחזרה; עתידי — ביטול מראש
+                        () => openCancel(item)
+                      : () =>
                           router.push({
                             pathname: '/report',
                             params: { course: item.course.id, date: item.date },
                           })
-                      : undefined
                 }
+                onLongPress={item.reportId || item.status === 'canceled' ? undefined : () => openCancel(item)}
               />
             ))
           )}
+          {day.items.some((i) => !i.reportId && i.status !== 'canceled') ? (
+            <Text style={styles.hint}>
+              {day.offset > 0 ? 'לחיצה על מפגש — ביטול מראש' : 'לחיצה ארוכה על מפגש — סימון "לא התקיים"'}
+            </Text>
+          ) : null}
         </Animated.View>
       ) : null}
+      {sessionDialog.dialog}
 
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>התראות ותזכורות</Text>
@@ -286,6 +307,7 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   pending: 'ממתין לדיווח',
   now: 'עכשיו',
   later: 'בהמשך היום',
+  canceled: 'בוטל',
   upcoming: '',
 };
 
@@ -295,7 +317,15 @@ const shortDay = (iso: string) => {
   return `${d}.${m}`;
 };
 
-function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void }) {
+function SessionRow({
+  item,
+  onPress,
+  onLongPress,
+}: {
+  item: AgendaItem;
+  onPress?: () => void;
+  onLongPress?: () => void;
+}) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const tone =
@@ -305,21 +335,27 @@ function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void 
         ? { bg: colors.background, fg: colors.warning }
         : item.status === 'now'
           ? { bg: colors.brand, fg: colors.textOnBrand }
-          : { bg: colors.background, fg: colors.textMuted };
+          : item.status === 'canceled'
+            ? { bg: colors.background, fg: colors.danger }
+            : { bg: colors.background, fg: colors.textMuted };
+  const canceled = item.status === 'canceled';
   const taxi = isTaxi(item.workplace.arrivalMode);
   return (
     <Pressable
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={onLongPress}
+      disabled={!onPress && !onLongPress}
       style={({ pressed }) => [styles.session, pressed && styles.pressed]}
       accessibilityRole={onPress ? 'button' : undefined}
     >
       <View style={styles.sessionTexts}>
-        <Text style={styles.sessionName} numberOfLines={1}>
+        <Text style={[styles.sessionName, canceled && styles.sessionCanceled]} numberOfLines={1}>
           {item.course.name}
         </Text>
         <Text style={styles.sessionMeta} numberOfLines={1}>
-          {item.time} · {item.workplace.name}
+          {canceled && item.cancel?.reason
+            ? `${item.cancel.reason} · ${item.workplace.name}`
+            : `${item.time} · ${item.workplace.name}`}
         </Text>
       </View>
       {item.status === 'upcoming' ? (
@@ -327,6 +363,7 @@ function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void 
       ) : (
         <View style={[styles.chip, { backgroundColor: tone.bg }]}>
           {item.status === 'reported' ? <Icon name="check-circle" size={14} color={tone.fg} /> : null}
+          {canceled ? <Icon name="cancel" size={14} color={tone.fg} /> : null}
           <Text style={[styles.chipText, { color: tone.fg }]}>{STATUS_LABEL[item.status]}</Text>
         </View>
       )}
@@ -463,6 +500,8 @@ const makeStyles = (colors: AppColors) =>
     },
     sessionTexts: { flex: 1, gap: 2 },
     sessionName: { fontSize: 16, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
+    sessionCanceled: { textDecorationLine: 'line-through', color: colors.textMuted },
+    hint: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT, paddingTop: 2 },
     sessionMeta: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
     chip: {
       flexDirection: 'row',

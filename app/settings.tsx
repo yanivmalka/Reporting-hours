@@ -3,6 +3,8 @@ import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { useConfirm } from '../components/ConfirmDialog';
+import { Icon } from '../components/Icon';
+import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { useToast } from '../components/Toast';
@@ -29,6 +31,7 @@ import {
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
+import { useCancelHolidays } from '../lib/sessions';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { PAY_BASIS_LABELS, usePayBasis, type PayBasis } from '../lib/payBasis';
 import { useTheme } from '../theme/ThemeContext';
@@ -47,6 +50,7 @@ export default function SettingsScreen() {
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [statuses, setStatuses] = useState<StatusMap>({});
   const [mode, setMode] = useRedeemMode();
+  const [cancelHolidays, setCancelHolidays] = useCancelHolidays();
   const confirm = useConfirm();
 
   useFocusEffect(
@@ -141,6 +145,33 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>לו״ז וקורסים</Text>
+        <Pressable
+          onPress={() => {
+            setCancelHolidays(!cancelHolidays);
+            showToast(cancelHolidays ? 'ביטול אוטומטי בחגים כובה' : 'מפגשים בחגים ובימי שבתון סומנו כבוטלו');
+          }}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: cancelHolidays }}
+          style={({ pressed }) => [styles.checkRow, pressed && { opacity: 0.85 }]}
+        >
+          <Icon
+            name={cancelHolidays ? 'checkbox-marked' : 'checkbox-blank-outline'}
+            size={26}
+            color={cancelHolidays ? colors.brand : colors.textMuted}
+          />
+          <View style={styles.checkTexts}>
+            <Text style={styles.checkTitle}>ביטול אוטומטי של מפגשים בחגים ובימי שבתון</Text>
+            <Text style={styles.note}>
+              מפגשי קורסים שחלים בחג (ראש השנה, יום הכיפורים, סוכות, שמחת תורה, פסח, שבועות) או
+              ביום העצמאות מסומנים בלו״ז כ"בוטל". הם לא נספרים בשעות המתוכננות ולא מופיעים כדיווח
+              חסר. חל גם על קורסים קיימים. מפגש בודד אפשר להחזיר מהלו״ז.
+            </Text>
+          </View>
+        </Pressable>
+      </View>
+
       <View style={styles.intro}>
         <Text style={styles.title}>דקות מצטברות</Text>
         <Text style={styles.subtitle}>
@@ -285,6 +316,18 @@ export default function SettingsScreen() {
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    checkRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    checkTexts: { flex: 1, gap: 4 },
+    checkTitle: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
   center: {
     flex: 1,
     alignItems: 'center',

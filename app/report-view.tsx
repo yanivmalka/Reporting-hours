@@ -8,12 +8,16 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
+import { useSessionCancel } from '../components/SessionCancelDialog';
+import { adjustAccumulated } from '../lib/accumulated';
+import { courseReport, coursesOn, loadCourses, type Course } from '../lib/courses';
+import { NO_CANCEL } from '../lib/sessions';
 import { currentPayPeriod } from '../lib/dashboard';
 import { hebrewDate } from '../lib/hebrewDate';
 import { reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
 import { isLocked, loadPayrollStatus, periodTitle, statusKey } from '../lib/payroll';
-import { academicOf, loadReports, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
+import { academicOf, deleteReport, loadReports, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -34,13 +38,16 @@ export default function ReportViewScreen() {
     report: WorkReport | null;
     workplace?: Workplace;
     lockedStart: string | null;
+    /** הקורס שהדיווח מכסה (אם יש) — לסימון "השיעור לא התקיים" */
+    course?: Course;
   } | null>(null);
+  const sessionDialog = useSessionCancel();
 
   // נטען מחדש בכל חזרה למסך — כדי לשקף עריכה שנשמרה באשף.
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus()]).then(([reports, wps, st]) => {
+      Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus(), loadCourses()]).then(([reports, wps, st, crs]) => {
         if (!active) return;
         const report = reports.find((r) => r.id === id) ?? null;
         const workplace = report ? wps.find((w) => w.id === report.workplaceId) : undefined;
@@ -50,7 +57,12 @@ export default function ReportViewScreen() {
           const p = currentPayPeriod(workplace.payday, new Date(y, m - 1, d));
           if (isLocked(st[statusKey(workplace.id, p.start)])) lockedStart = p.start;
         }
-        setData({ report, workplace, lockedStart });
+        const course = report
+          ? coursesOn(crs, report.date, report.workplaceId, NO_CANCEL).find((c) =>
+              courseReport(c, report.date, [report]),
+            )
+          : undefined;
+        setData({ report, workplace, lockedStart, course });
       });
       return () => {
         active = false;
@@ -68,7 +80,7 @@ export default function ReportViewScreen() {
     );
   }
 
-  const { report, workplace, lockedStart } = data;
+  const { report, workplace, lockedStart, course } = data;
   if (!report) {
     return (
       <Screen>
@@ -131,9 +143,31 @@ export default function ReportViewScreen() {
           />
         </>
       ) : (
-        <Button label="עריכה" onPress={() => router.push({ pathname: '/report', params: { id: report.id } })} />
+        <>
+          <Button label="עריכה" onPress={() => router.push({ pathname: '/report', params: { id: report.id } })} />
+          {course ? (
+            <Button
+              label="השיעור לא התקיים — סימון כבוטל"
+              variant="secondary"
+              onPress={() =>
+                sessionDialog.open({
+                  course,
+                  date: report.date,
+                  // המפגש בוטל — הדיווח עליו נמחק (וגם הדקות שנצברו ממנו).
+                  onDone: async (canceled) => {
+                    if (!canceled) return;
+                    await deleteReport(report.id);
+                    if (report.carriedMinutes > 0) await adjustAccumulated(report.workplaceId, -report.carriedMinutes);
+                    router.back();
+                  },
+                })
+              }
+            />
+          ) : null}
+        </>
       )}
       <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
+      {sessionDialog.dialog}
     </Screen>
   );
 }

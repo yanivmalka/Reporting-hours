@@ -14,6 +14,7 @@ import {
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useSessionCancel } from '../components/SessionCancelDialog';
 import { DatePicker, longDate } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
@@ -40,6 +41,8 @@ import { formatShekels, hasTravelCost, travelCostForDay } from '../lib/travel';
 import { formatDuration, isValidISODate, parseTime, todayISO } from '../lib/time';
 import {
   ARRIVAL_MODE_LABELS,
+  activeWorkplaces,
+  isArchived,
   loadWorkplaces,
   paymentTermsLabel,
   taxPercentOf,
@@ -99,6 +102,7 @@ export default function ReportScreen() {
   /** בעריכה: הדוח לשכר של החודש נשלח — הדיווח נעול */
   const [lockedStart, setLockedStart] = useState<string | null>(null);
   const confirm = useConfirm();
+  const sessionDialog = useSessionCancel();
   const { basis } = usePayBasis();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
   const [existing, setExisting] = useState<WorkReport[]>([]);
@@ -202,7 +206,8 @@ export default function ReportScreen() {
         }
         setWorkplaceId((current) => {
           if (current && list.some((w) => w.id === current)) return current;
-          return list.length === 1 ? list[0].id : null;
+          const open = activeWorkplaces(list);
+          return open.length === 1 ? open[0].id : null;
         });
       });
       return () => {
@@ -431,8 +436,10 @@ export default function ReportScreen() {
   // קורסים קבועים שמתקיימים בתאריך שנבחר (במקום העבודה שנבחר, או בכולם).
   // נבחר מקום עבודה מראש — רק הקורסים שלו.
   const lockWp = presetWp && workplaces.some((w) => w.id === presetWp) ? presetWp : null;
+  // לבחירה: מקומות עבודה פעילים (מקום בארכיון — רק אם הוא כבר נבחר, למשל בעריכה).
+  const pickable = workplaces.filter((w) => !isArchived(w) || w.id === workplaceId);
   const activeCourses = coursesOn(courses, date).filter(
-    (c) => workplaces.some((w) => w.id === c.workplaceId) && (!lockWp || c.workplaceId === lockWp),
+    (c) => pickable.some((w) => w.id === c.workplaceId) && (!lockWp || c.workplaceId === lockWp),
   );
 
   /**
@@ -701,7 +708,7 @@ export default function ReportScreen() {
         <>
           <Text style={styles.stepTitle}>באיזה מקום עבודה?</Text>
           <View style={styles.choices}>
-            {workplaces.map((w) => {
+            {pickable.map((w) => {
               const selected = w.id === workplaceId;
               return (
                 <Pressable
@@ -735,6 +742,22 @@ export default function ReportScreen() {
           <Text style={styles.stepTitle}>
             {selectedCourse ? 'השעות לפי הקורס — אפשר לעדכן' : 'מתי עבדת?'}
           </Text>
+          {selectedCourse && !editId ? (
+            <Pressable
+              onPress={() =>
+                sessionDialog.open({
+                  course: selectedCourse,
+                  date,
+                  // אחרי סימון כבוטל אין מה לדווח — חוזרים למסך הקודם.
+                  onDone: (canceled) => canceled && router.back(),
+                })
+              }
+              accessibilityRole="button"
+              style={styles.linkBtn}
+            >
+              <Text style={styles.linkText}>השיעור לא התקיים? סימון כבוטל</Text>
+            </Pressable>
+          ) : null}
           <View style={styles.timesRow}>
             <View style={styles.timeCol}>
               <FormField label="שעת התחלה" error={errors.start}>
@@ -986,6 +1009,7 @@ export default function ReportScreen() {
         </View>
       </Modal>
       {confirm.dialog}
+      {sessionDialog.dialog}
     </Screen>
   );
 }

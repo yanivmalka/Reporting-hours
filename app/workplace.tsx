@@ -12,6 +12,7 @@ import { money } from '../components/ForecastChart';
 import { Icon } from '../components/Icon';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
+import { useToast } from '../components/Toast';
 import { academicOf, loadReports, type WorkReport } from '../lib/reports';
 import {
   courseReported,
@@ -30,7 +31,9 @@ import { parseTime } from '../lib/time';
 import {
   ARRIVAL_MODE_LABELS,
   deadlineLabel,
+  isArchived,
   loadWorkplaces,
+  setWorkplaceArchived,
   paymentTermsLabel,
   taxPercentOf,
   type Workplace,
@@ -54,6 +57,9 @@ export default function WorkplaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [data, setData] = useState<Loaded | null | undefined>(undefined);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [showEnded, setShowEnded] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+  const { showToast } = useToast();
 
   useFocusEffect(
     useCallback(() => {
@@ -77,7 +83,7 @@ export default function WorkplaceDetailScreen() {
       return () => {
         active = false;
       };
-    }, [id]),
+    }, [id, reloadTick]),
   );
 
   if (data === undefined) {
@@ -129,12 +135,29 @@ export default function WorkplaceDetailScreen() {
   const activeCourses = courses
     .filter((c) => c.to >= today)
     .sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start));
+  // ארכיון קורסים: קורסים שתקופתם הסתיימה — מהאחרון שהסתיים.
+  const endedCourses = courses.filter((c) => c.to < today).sort((a, b) => b.to.localeCompare(a.to));
+  const archived = isArchived(w);
+
+  async function toggleArchive() {
+    await setWorkplaceArchived(w.id, !archived);
+    showToast(archived ? 'מקום העבודה הוחזר לפעילים' : 'מקום העבודה הועבר לארכיון');
+    setReloadTick((n) => n + 1);
+  }
 
   const isOpen = (key: string, i: number) => open[key] ?? i === 0;
 
   return (
     <Screen>
       <Stack.Screen options={{ title: w.name }} />
+      {archived ? (
+        <View style={styles.archivedBanner}>
+          <Icon name="archive-outline" size={20} color={colors.textMuted} />
+          <Text style={styles.archivedText}>
+            מקום העבודה בארכיון — לא מוצג בלו״ז, בתזכורות ובבחירה לדיווח חדש. הדיווחים והתשלומים נשמרים.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>{next === current ? 'התקופה הנוכחית' : 'התשלום הבא'}</Text>
@@ -205,6 +228,37 @@ export default function WorkplaceDetailScreen() {
           );
         })
       )}
+
+      {endedCourses.length ? (
+        <>
+          <Pressable
+            onPress={() => setShowEnded((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showEnded }}
+            style={({ pressed }) => [styles.sectionRow, pressed && styles.pressed]}
+          >
+            <Text style={styles.section}>ארכיון קורסים שהסתיימו</Text>
+            <View style={styles.archiveCount}>
+              <Text style={styles.muted}>{endedCourses.length}</Text>
+              <Icon name={showEnded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
+            </View>
+          </Pressable>
+          {showEnded
+            ? endedCourses.map((c) => (
+                <Pressable
+                  key={c.id}
+                  onPress={() => router.push({ pathname: '/course-form', params: { id: c.id, view: '1' } })}
+                  style={({ pressed }) => [styles.card, styles.courseCard, styles.endedCard, pressed && styles.pressed]}
+                >
+                  <Text style={styles.courseName}>{c.name}</Text>
+                  <Text style={styles.muted}>
+                    {courseScheduleLabel(c)} · {dateRange(c.from, c.to, true)}
+                  </Text>
+                </Pressable>
+              ))
+            : null}
+        </>
+      ) : null}
 
       <Text style={styles.section}>דוחות שכר ודיווחים אחרונים</Text>
       {forecasts.map((f, i) => {
@@ -328,6 +382,11 @@ export default function WorkplaceDetailScreen() {
           variant="secondary"
           onPress={() => router.push({ pathname: '/workplace-form', params: { id: w.id } })}
         />
+        <Button
+          label={archived ? 'החזרה ממקומות לא פעילים' : 'העברה לארכיון — לא עובד כאן כרגע'}
+          variant="secondary"
+          onPress={() => void toggleArchive()}
+        />
       </View>
     </Screen>
   );
@@ -382,6 +441,19 @@ export default function WorkplaceDetailScreen() {
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    archivedBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    archivedText: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    archiveCount: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    endedCard: { opacity: 0.75 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     pressed: { opacity: 0.8 },
     muted: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
