@@ -10,6 +10,9 @@
  * בתוכו: ניווט ראשי (5), שכר ומס (3), ו"הגדרות ותצוגה" מתקפל — מסכי
  * ההגדרות, מצב יום/לילה, ערכת צבעים, שפה, חשבון ועדכונים. מצב הפתיחה משותף דרך DrawerProvider כך שכפתור ההמבורגר
  * בכותרת (DrawerToggle) יכול לפתוח אותו.
+ *
+ * במסך רחב (דפדפן במחשב, טאבלט לרוחב) התפריט מוצג קבוע בצד (SideNav),
+ * בלי ☰ ובלי ⋮ — כמו Google Calendar ו־Gmail בדפדפן.
  */
 import {
   createContext,
@@ -68,6 +71,15 @@ export function useDrawer(): DrawerContextValue {
   return ctx;
 }
 
+/** רוחב החלון שממנו התפריט מוצג קבוע בצד. */
+export const WIDE_MIN_WIDTH = 1000;
+
+/** מסך רחב: התפריט קבוע בצד והתוכן ממורכז ברוחב מוגבל. */
+export function useWideLayout(): boolean {
+  const { width } = useWindowDimensions();
+  return width >= WIDE_MIN_WIDTH;
+}
+
 /** כפתור ההמבורגר לכותרת הניווט. */
 export function DrawerToggle() {
   const { open } = useDrawer();
@@ -93,7 +105,8 @@ export function DrawerToggle() {
 export function HeaderStart({ canGoBack, tintColor }: { canGoBack?: boolean; tintColor?: string }) {
   const router = useRouter();
   const { isRTL } = useI18n();
-  if (!canGoBack) return <DrawerToggle />;
+  const wide = useWideLayout();
+  if (!canGoBack) return wide ? null : <DrawerToggle />;
   return (
     <Pressable
       onPress={() => router.back()}
@@ -147,7 +160,9 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
   const { open: openDrawer } = useDrawer();
   const menuStyles = useStyles(makeOverflowStyles);
   const [open, setOpen] = useState(false);
-  if (!canGoBack) return null;
+  const wide = useWideLayout();
+  // במסך רחב התפריט כבר גלוי בצד — אין צורך בשכפול שלו.
+  if (!canGoBack || wide) return null;
 
   function go(href: Href) {
     setOpen(false);
@@ -260,18 +275,10 @@ const ANIM_MS = 220;
 
 function AppDrawer() {
   const { visible, close } = useDrawer();
-  const { t, lang, setLang, langLabels, isRTL } = useI18n();
-  const { mode, setMode, paletteId, setPaletteId, palettes, colors } = useTheme();
+  const { t, isRTL } = useI18n();
+  const { colors } = useTheme();
   const drawerStyles = useStyles(makeStyles);
-  const router = useRouter();
-  const pathname = usePathname();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
-  function go(href: Href) {
-    close();
-    if (href === '/') router.dismissTo('/');
-    else router.push(href);
-  }
+  const wide = useWideLayout();
 
   const { width } = useWindowDimensions();
   const panelWidth = Math.min(320, Math.round(width * 0.84));
@@ -301,12 +308,88 @@ function AppDrawer() {
     }
   }, [visible, mounted, progress]);
 
-  if (!mounted) return null;
+  // הרחבת החלון כשהמגירה פתוחה — התפריט הקבוע מחליף אותה.
+  useEffect(() => {
+    if (wide && visible) close();
+  }, [wide, visible, close]);
+
+  if (!mounted || wide) return null;
 
   const translateX = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [hiddenOffset, 0],
   });
+
+  return (
+    <Modal visible transparent animationType="none" onRequestClose={close} statusBarTranslucent>
+      {/* שורה: הילד הראשון מוצב בצד ההתחלה של השפה — ימין בעברית */}
+      <View style={styles.row}>
+        <Animated.View style={[styles.backdrop, { opacity: progress }]}>
+          <Pressable style={styles.fill} accessibilityLabel={t('drawer.closeMenu')} onPress={close} />
+        </Animated.View>
+
+        <Animated.View style={[drawerStyles.panel, { width: panelWidth, transform: [{ translateX }] }]}>
+          <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+            <View style={drawerStyles.header}>
+              <Icon name="clock-check-outline" size={26} color={colors.textOnBrand} />
+              <Text style={drawerStyles.title}>{t('nav.home')}</Text>
+              <Pressable
+                onPress={close}
+                accessibilityRole="button"
+                accessibilityLabel={t('drawer.closeMenu')}
+                hitSlop={10}
+                style={styles.iconBtn}
+              >
+                <Icon name="close" size={22} color={colors.textOnBrand} />
+              </Pressable>
+            </View>
+            <DrawerBody onNavigate={close} />
+          </SafeAreaView>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+/** רוחב התפריט הקבוע במסך רחב. */
+const SIDE_NAV_WIDTH = 280;
+
+/**
+ * התפריט הקבוע בצד במסך רחב (בעברית — מימין). מוצב כילד ראשון בשורה
+ * לצד הניווט, ולכן נצמד לצד ההתחלה של השפה.
+ */
+export function SideNav() {
+  const { t } = useI18n();
+  const { colors } = useTheme();
+  const drawerStyles = useStyles(makeStyles);
+  return (
+    <View style={[drawerStyles.sideNav, { width: SIDE_NAV_WIDTH }]}>
+      <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+        <View style={[drawerStyles.header, drawerStyles.sideHeader]}>
+          <Icon name="clock-check-outline" size={26} color={colors.textOnBrand} />
+          <Text style={drawerStyles.title}>{t('nav.home')}</Text>
+        </View>
+        <DrawerBody />
+      </SafeAreaView>
+    </View>
+  );
+}
+
+/** תוכן התפריט — משותף למגירה ולתפריט הקבוע. */
+function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
+  const { t, lang, setLang, langLabels } = useI18n();
+  const { mode, setMode, paletteId, setPaletteId, palettes, colors } = useTheme();
+  const drawerStyles = useStyles(makeStyles);
+  const router = useRouter();
+  const pathname = usePathname();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  function go(href: Href) {
+    onNavigate?.();
+    if (isCurrent(href, pathname)) return;
+    if (href === '/') router.dismissTo('/');
+    else router.push(href);
+  }
 
   const modeOptions: { value: ThemeMode; label: string }[] = [
     { value: 'light', label: t('drawer.mode.light') },
@@ -341,94 +424,67 @@ function AppDrawer() {
   };
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={close} statusBarTranslucent>
-      {/* שורה: הילד הראשון מוצב בצד ההתחלה של השפה — ימין בעברית */}
-      <View style={styles.row}>
-        <Animated.View style={[styles.backdrop, { opacity: progress }]}>
-          <Pressable style={styles.fill} accessibilityLabel={t('drawer.closeMenu')} onPress={close} />
-        </Animated.View>
+    <ScrollView contentContainerStyle={drawerStyles.body}>
+      {MAIN_LINKS.map(navItem)}
+      <View style={drawerStyles.divider} />
+      {PAY_LINKS.map(navItem)}
+      <View style={drawerStyles.divider} />
 
-        <Animated.View style={[drawerStyles.panel, { width: panelWidth, transform: [{ translateX }] }]}>
-          <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
-            <View style={drawerStyles.header}>
-              <Icon name="clock-check-outline" size={26} color={colors.textOnBrand} />
-              <Text style={drawerStyles.title}>{t('nav.home')}</Text>
-              <Pressable
-                onPress={close}
-                accessibilityRole="button"
-                accessibilityLabel={t('drawer.closeMenu')}
-                hitSlop={10}
-                style={styles.iconBtn}
-              >
-                <Icon name="close" size={22} color={colors.textOnBrand} />
-              </Pressable>
-            </View>
+      <Pressable
+        onPress={() => setSettingsOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: settingsOpen }}
+        style={({ pressed }) => [drawerStyles.navItem, pressed && drawerStyles.navItemPressed]}
+      >
+        <Icon name="cog-outline" size={22} color={colors.textMuted} />
+        <Text style={drawerStyles.navItemText}>הגדרות ותצוגה</Text>
+        <Icon name={settingsOpen ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
+      </Pressable>
 
-            <ScrollView contentContainerStyle={drawerStyles.body}>
-              {MAIN_LINKS.map(navItem)}
-              <View style={drawerStyles.divider} />
-              {PAY_LINKS.map(navItem)}
-              <View style={drawerStyles.divider} />
+      {settingsOpen ? (
+        <View style={drawerStyles.settings}>
+          {SETTINGS_LINKS.map(navItem)}
 
-              <Pressable
-                onPress={() => setSettingsOpen((v) => !v)}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: settingsOpen }}
-                style={({ pressed }) => [drawerStyles.navItem, pressed && drawerStyles.navItemPressed]}
-              >
-                <Icon name="cog-outline" size={22} color={colors.textMuted} />
-                <Text style={drawerStyles.navItemText}>הגדרות ותצוגה</Text>
-                <Icon name={settingsOpen ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
-              </Pressable>
+          <View style={drawerStyles.section}>
+            <SectionLabel icon="theme-light-dark" text={t('drawer.appearance')} />
+            <SegmentedControl options={modeOptions} value={mode} onChange={setMode} />
+          </View>
 
-              {settingsOpen ? (
-                <View style={drawerStyles.settings}>
-                  {SETTINGS_LINKS.map(navItem)}
-
-                  <View style={drawerStyles.section}>
-                    <SectionLabel icon="theme-light-dark" text={t('drawer.appearance')} />
-                    <SegmentedControl options={modeOptions} value={mode} onChange={setMode} />
-                  </View>
-
-                  <View style={drawerStyles.section}>
-                    <SectionLabel icon="palette-outline" text={t('drawer.palette')} />
-                    <View style={drawerStyles.swatchRow}>
-                      {palettes.map((palette) => {
-                        const selected = palette.id === paletteId;
-                        const label = lang === 'he' ? palette.labelHe : palette.labelEn;
-                        return (
-                          <Pressable
-                            key={palette.id}
-                            onPress={() => setPaletteId(palette.id)}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected }}
-                            accessibilityLabel={label}
-                            style={[drawerStyles.swatch, selected && drawerStyles.swatchSelected]}
-                          >
-                            <View style={drawerStyles.swatchDisc}>
-                              <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.light.brand }]} />
-                              <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.dark.brand }]} />
-                            </View>
-                          </Pressable>
-                        );
-                      })}
+          <View style={drawerStyles.section}>
+            <SectionLabel icon="palette-outline" text={t('drawer.palette')} />
+            <View style={drawerStyles.swatchRow}>
+              {palettes.map((palette) => {
+                const selected = palette.id === paletteId;
+                const label = lang === 'he' ? palette.labelHe : palette.labelEn;
+                return (
+                  <Pressable
+                    key={palette.id}
+                    onPress={() => setPaletteId(palette.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={label}
+                    style={[drawerStyles.swatch, selected && drawerStyles.swatchSelected]}
+                  >
+                    <View style={drawerStyles.swatchDisc}>
+                      <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.light.brand }]} />
+                      <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.dark.brand }]} />
                     </View>
-                  </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
 
-                  <View style={drawerStyles.section}>
-                    <SectionLabel icon="translate" text={t('drawer.language')} />
-                    <SegmentedControl options={langOptions} value={lang} onChange={setLang} />
-                  </View>
+          <View style={drawerStyles.section}>
+            <SectionLabel icon="translate" text={t('drawer.language')} />
+            <SegmentedControl options={langOptions} value={lang} onChange={setLang} />
+          </View>
 
-                  <AccountSection />
-                  <UpdateSection />
-                </View>
-              ) : null}
-            </ScrollView>
-          </SafeAreaView>
-        </Animated.View>
-      </View>
-    </Modal>
+          <AccountSection />
+          <UpdateSection />
+        </View>
+      ) : null}
+    </ScrollView>
   );
 }
 
@@ -452,6 +508,16 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       shadowColor: '#000',
       shadowOpacity: 0.25,
       shadowRadius: 16,
+    },
+    sideNav: {
+      height: '100%',
+      backgroundColor: c.background,
+      borderEndWidth: StyleSheet.hairlineWidth,
+      borderEndColor: c.border,
+    },
+    sideHeader: {
+      minHeight: 64,
+      paddingVertical: 0,
     },
     header: {
       flexDirection: 'row',
