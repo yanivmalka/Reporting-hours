@@ -229,11 +229,6 @@ export default function HomeScreen() {
           <View style={styles.dayHead}>
             <Text style={styles.dayLabel}>{day.label}</Text>
             <Text style={styles.dayDate}>{day.dayLabel}</Text>
-            {dayIdx !== AGENDA_TODAY_INDEX ? (
-              <Pressable onPress={() => pickDay(AGENDA_TODAY_INDEX)} accessibilityRole="link" hitSlop={8}>
-                <Text style={styles.toToday}>להיום</Text>
-              </Pressable>
-            ) : null}
           </View>
           {day.items.length === 0 ? (
             <Pressable
@@ -489,7 +484,6 @@ const makeStyles = (colors: AppColors) =>
     dayHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
     dayLabel: { fontSize: 17, fontWeight: '800', color: colors.text },
     dayDate: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
-    toToday: { fontSize: 14, fontWeight: '700', color: colors.brand },
     session: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -5,7 +5,7 @@
 ## תהליך עבודה
 
 - כל שינוי בענף חדש מ־`main` ← PR ← **מיזוג אוטומטי** אחרי שעוברים `npx tsc --noEmit` ו־`npx expo export --platform web`. אין צורך לחכות לאישור.
-- מיזוג ל־`main` מפעיל בנייה ופריסה: אתר ב־GitHub Pages, ו־APK כ־GitHub Release (`v0.1.<מספר בנייה>`).
+- מיזוג ל־`main` מפרסם את האתר ב־GitHub Pages. APK (GitHub Release ‏`v0.1.<מספר בנייה>`) נבנה רק בשינוי שמשפיע על השכבה הנייטיבית (תלויות, `app.json`, `assets/`), עם `[apk]` בהודעת ה־commit, או בהפעלה ידנית. שינויי JS בלבד — בלי APK.
 - תיאורי commit ו־PR בעברית.
 
 ## ממשק (עברית, RTL)
