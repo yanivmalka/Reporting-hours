@@ -5,7 +5,8 @@ import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { courseScheduleLabel, loadCourses, type Course } from '../lib/courses';
-import { dateRange } from '../lib/dashboard';
+import { currentPayPeriod, dateRange } from '../lib/dashboard';
+import { periodTitle } from '../lib/payroll';
 import { formatISODate, todayISO } from '../lib/time';
 import { DateField } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
@@ -822,7 +823,39 @@ export default function WorkplaceFormScreen() {
               <Button label="העברה לארכיון" variant="secondary" onPress={handleArchive} disabled={saving} />
               <Text style={styles.deleteNote}>
                 אי אפשר למחוק: {deletion.lockedPayrolls === 1 ? 'דוח שכר אחד נשלח' : `${deletion.lockedPayrolls} דוחות שכר נשלחו`} או שולמו.
+                {original?.demo ? '' : ' כדי למחוק, מבטלים בכל דוח את התשלום ואת השליחה.'}
               </Text>
+              {original?.demo ? (
+                <Pressable
+                  onPress={() => router.push('/data')}
+                  accessibilityRole="link"
+                  style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={styles.linkRowText}>זה מקום הדגמה — אפשר להסיר אותו ב"איפוס נתוני הדגמה"</Text>
+                  <Text style={styles.linkRowChevron}>‹</Text>
+                </Pressable>
+              ) : null}
+              {original
+                ? deletion.lockedPeriods.map((p) => {
+                    const [y, m, d] = p.start.split('-').map(Number);
+                    const period = currentPayPeriod(original.payday, new Date(y, m - 1, d));
+                    return (
+                      <Pressable
+                        key={p.start}
+                        onPress={() =>
+                          router.push({ pathname: '/payroll-report', params: { wp: original.id, start: p.start } })
+                        }
+                        accessibilityRole="link"
+                        style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
+                      >
+                        <Text style={styles.linkRowText}>
+                          דוח שכר {periodTitle(period)} · {p.paid ? 'שולם' : 'נשלח'}
+                        </Text>
+                        <Text style={styles.linkRowChevron}>‹</Text>
+                      </Pressable>
+                    );
+                  })
+                : null}
             </>
           )
         ) : null}
@@ -837,6 +870,20 @@ const makeStyles = (colors: AppColors) =>
   courses: {
     gap: spacing.sm,
   },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  linkRowText: { flex: 1, fontSize: 14, color: colors.text, textAlign: TEXT_RIGHT },
+  linkRowChevron: { fontSize: 20, color: colors.textMuted },
   deleteNote: {
     fontSize: 13,
     color: colors.textMuted,
