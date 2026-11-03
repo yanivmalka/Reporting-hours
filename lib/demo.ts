@@ -16,7 +16,7 @@ import { loadAccumulated, saveAccumulated, type AccumulatedEntry } from './accum
 import { loadReports, saveReports, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import { formatTime } from './time';
-import { loadCourses, saveCourses, type Course } from './courses';
+import { loadCourses, reportsOfCourse, saveCourses, type Course } from './courses';
 import { expectedPayment, loadPayrollStatus, payrollItems, savePayrollStatus, statusKey } from './payroll';
 import { saveWorkplaces, type Workplace } from './workplaces';
 
@@ -579,11 +579,21 @@ export async function removeDemoData(): Promise<DemoRemoval> {
     await saveWorkplaces(nextWorkplaces);
   }
 
-  // קורסים לדוגמה — כולם (הם רק תכנון; דיווחים אמיתיים לא תלויים בהם).
+  // קורסים לדוגמה — נמחקים, חוץ מקורס שיש עליו דיווח אמיתי במקום שנשמר:
+  // הוא הופך לקורס רגיל, כדי שהדיווח לא יישאר בלי קורס.
   const courses = await loadCourses();
-  const userCourses = courses.filter((c) => !c.demo);
+  const userCourses: Course[] = [];
+  for (const c of courses) {
+    if (!c.demo) userCourses.push(c);
+    else if (!removedWpIds.has(c.workplaceId) && reportsOfCourse(c, kept).length > 0) {
+      const { demo: _demo, ...rest } = c;
+      userCourses.push(rest);
+    }
+  }
   const removedCourses = courses.length - userCourses.length;
-  if (removedCourses > 0) await saveCourses(userCourses);
+  if (userCourses.length !== courses.length || userCourses.some((c, i) => c !== courses[i])) {
+    await saveCourses(userCourses);
+  }
 
   // מצב דוחות שכר של מקומות שנמחקו.
   if (removedWpIds.size > 0) {
