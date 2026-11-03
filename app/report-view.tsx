@@ -9,6 +9,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
+import { useConfirm } from '../components/ConfirmDialog';
 import { useSessionCancel } from '../components/SessionCancelDialog';
 import { adjustAccumulated } from '../lib/accumulated';
 import { courseReport, coursesOn, loadCourses, type Course } from '../lib/courses';
@@ -45,6 +46,7 @@ export default function ReportViewScreen() {
     course?: Course;
   } | null>(null);
   const sessionDialog = useSessionCancel();
+  const confirm = useConfirm();
 
   // נטען מחדש בכל חזרה למסך — כדי לשקף עריכה שנשמרה באשף.
   useFocusEffect(
@@ -178,10 +180,27 @@ export default function ReportViewScreen() {
               }
             />
           ) : null}
+          <Button
+            label="מחיקת הדיווח"
+            variant="danger"
+            onPress={() =>
+              confirm({
+                title: 'למחוק את הדיווח?',
+                message: 'הדיווח יימחק לצמיתות, והדקות שהעביר למונה המצטבר יוחזרו.',
+                confirmLabel: 'מחיקה',
+                onConfirm: async () => {
+                  await deleteReport(report.id);
+                  if (report.carriedMinutes > 0) await adjustAccumulated(report.workplaceId, -report.carriedMinutes);
+                  router.back();
+                },
+              })
+            }
+          />
         </>
       )}
       <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
       {sessionDialog.dialog}
+      {confirm.dialog}
     </Screen>
   );
 }
