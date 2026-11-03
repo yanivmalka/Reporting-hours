@@ -9,7 +9,8 @@
  *   {sessionDialog.dialog}
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { hebrewDate } from '../lib/hebrewDate';
 import { longDayLabel } from '../lib/home';
 import { restoreSession, setSessionMark, type Cancellation } from '../lib/sessions';

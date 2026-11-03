@@ -6,7 +6,8 @@
  *   - מצב מורחב (לחיצה על האריח או על החץ): סטטוס, צפי תשלום, איחור בדיווח,
  *     סינון למקום הזה ומעבר לפירוט המלא.
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { money, realization } from './ForecastChart';

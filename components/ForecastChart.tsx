@@ -11,7 +11,8 @@
  * דפדוף (חצים / החלקה) אינו "סינון": "נקה סינון" מופיע רק כשיש מקום עבודה
  * או חודש מסוננים; לחזרה לחודש הנוכחי יש קישור נפרד.
  */
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { useFlash } from './useFlash';

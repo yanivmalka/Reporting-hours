@@ -7,7 +7,8 @@
  */
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { onDataChanged } from '../lib/demo';
 import { loadPayrollStatus, overduePayments, payrollItems, pendingPayroll } from '../lib/payroll';

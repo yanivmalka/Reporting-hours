@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Linking, Modal, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, Share, StyleSheet, View } from 'react-native';
+import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { PaymentDialog } from '../components/PaymentDialog';
 import { TextField } from '../components/TextField';

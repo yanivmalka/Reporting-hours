@@ -4,7 +4,8 @@
  * מעבר בין שבועות בחיצים או בהחלקה, וכפתור "היום" שחוזר לשבוע הנוכחי.
  * לחיצה על יום בוחרת אותו / משלימה טווח — בדיוק כמו בלוח החודשי.
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { iso, nextRange, type DateRangeValue } from './RangeCalendar';

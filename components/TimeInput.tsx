@@ -12,7 +12,9 @@
  * - הערך החיצוני הוא "HH:MM" כששני החלקים מלאים, אחרת מחרוזת ריקה.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Text, TextInput } from './Text';
+import type { TextInput as RNTextInput } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -55,8 +57,8 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
 ) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
-  const hourRef = useRef<TextInput>(null);
-  const minuteRef = useRef<TextInput>(null);
+  const hourRef = useRef<RNTextInput>(null);
+  const minuteRef = useRef<RNTextInput>(null);
   const [[hh, mm], setParts] = useState<[string, string]>(() => split(value));
   // הערכים העדכניים, מתעדכנים מיד (לא מחכים לרינדור) — בהקלדה מהירה אירוע
   // אחד עלול להגיע לפני שהקודם הגיע ל־state.

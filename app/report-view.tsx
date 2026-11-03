@@ -5,7 +5,8 @@
  */
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { useSessionCancel } from '../components/SessionCancelDialog';
