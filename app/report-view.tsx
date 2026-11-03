@@ -63,11 +63,16 @@ export default function ReportViewScreen() {
           if (isLocked(status)) lockedStart = p.start;
           paid = isPaid(status);
         }
-        const course = report
-          ? coursesOn(crs, report.date, report.workplaceId, NO_CANCEL).find((c) =>
-              courseReport(c, report.date, [report]),
-            )
-          : undefined;
+        // דיווח ששומר `courseId` מזוהה לפי המזהה, גם אם הקורס כבר לא מתקיים
+        // בתאריך הזה (נערך, קוצר או הסתיים). דיווח ישן בלי מזהה — לפי הקורסים
+        // של אותו יום, בשם או בחפיפת שעות.
+        const course = !report
+          ? undefined
+          : report.courseId
+            ? crs.find((c) => c.id === report.courseId)
+            : coursesOn(crs, report.date, report.workplaceId, NO_CANCEL).find((c) =>
+                courseReport(c, report.date, [report]),
+              );
         setData({ report, workplace, lockedStart, paid, course });
       });
       return () => {

@@ -22,11 +22,12 @@ import {
 } from '../lib/courses';
 import { dateRange } from '../lib/dashboard';
 import { formatHours } from '../lib/pay';
-import { parseTime, todayISO } from '../lib/time';
+import { formatISODate, parseTime, todayISO } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
 import { loadReports } from '../lib/reports';
 import { deleteOrEndCourse } from '../lib/trash';
-import { reportsOfCourse, type Course } from '../lib/courses';
+import { courseReport, occursOn, reportsOfCourse, type Course, type CourseDraft } from '../lib/courses';
+import type { WorkReport } from '../lib/reports';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -57,6 +58,8 @@ export default function CourseFormScreen() {
   /** הקורס כפי שנטען, ומספר הדיווחים שלו — קובעים מחיקה או סיום */
   const [loaded, setLoaded] = useState<Course | null>(null);
   const [reportCount, setReportCount] = useState(0);
+  /** הדיווחים של הקורס — לבדיקה בשמירה אם השינוי מנתק חלק מהם */
+  const [courseReports, setCourseReports] = useState<WorkReport[]>([]);
   const params = useLocalSearchParams<{ id?: string; workplaceId?: string; view?: string }>();
   const id = params.id || undefined;
   /** הגיעו ממצב תצוגה (?view=1): מציגים קודם קריאה בלבד; עריכה — בכפתור */
@@ -90,7 +93,9 @@ export default function CourseFormScreen() {
       if (!active) return;
       const course = id ? courses.find((c) => c.id === id) : undefined;
       setLoaded(course ?? null);
-      setReportCount(course ? reportsOfCourse(course, reports).length : 0);
+      const mine = course ? reportsOfCourse(course, reports) : [];
+      setCourseReports(mine);
+      setReportCount(mine.length);
       const wpId = course?.workplaceId ?? params.workplaceId ?? '';
       setWorkplaceId(wpId);
       setWorkplaceName(workplaces.find((w) => w.id === wpId)?.name ?? '');
@@ -168,9 +173,7 @@ export default function CourseFormScreen() {
     const found = validate(form);
     setErrors(found);
     if (Object.values(found).some(Boolean)) return;
-    setSaving(true);
-    await upsertCourse({
-      id,
+    const draft = {
       workplaceId,
       name: form.name.trim(),
       weekday: form.weekday,
@@ -179,7 +182,34 @@ export default function CourseFormScreen() {
       breakMinutes: Number(form.breakMinutes) || 0,
       from: form.from,
       to: form.to,
-    });
+    };
+    // דיווחים קיימים שלא יתאימו למועד החדש (יום, שעות, תקופה) — מתריעים לפני שמירה.
+    const next: Course = { ...draft, id: id ?? '' };
+    const detached = id
+      ? courseReports.filter((r) => !(occursOn(next, r.date) && courseReport(next, r.date, [r])))
+      : [];
+    if (detached.length > 0) {
+      const dates = detached
+        .map((r) => r.date)
+        .sort()
+        .slice(0, 5)
+        .map(formatISODate)
+        .join(', ');
+      const more = detached.length > 5 ? ` ועוד ${detached.length - 5}` : '';
+      confirm({
+        title: 'השינוי ינתק דיווחים מהקורס',
+        message: `${detached.length === 1 ? 'דיווח אחד' : `${detached.length} דיווחים`} של הקורס (${dates}${more}) כבר לא יתאימו למועד החדש. הדיווחים והשכר שלהם נשמרים, אבל הם לא ייספרו במפגשי הקורס ובמימוש התכנון. כדי לשמור עליהם, אפשר לסיים את הקורס הזה ולפתוח קורס חדש עם המועד החדש.`,
+        confirmLabel: 'שמירה בכל זאת',
+        onConfirm: () => save(draft),
+      });
+      return;
+    }
+    await save(draft);
+  }
+
+  async function save(draft: CourseDraft) {
+    setSaving(true);
+    await upsertCourse({ id, ...draft });
     setSaving(false);
     if (fromView) {
       savedRef.current = form;
