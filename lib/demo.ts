@@ -483,8 +483,11 @@ export async function loadDemoData(): Promise<number> {
     demo: true,
     deletedAt: Date.now() - 6 * DAY_MS,
   };
-  const ids = new Set([...demoWps, trashed].map((w) => w.id));
-  await saveWorkplaces([...existing.filter((w) => !ids.has(w.id)), ...demoWps, trashed]);
+  // מקום לדוגמה שהפך למקום עבודה רגיל (יש בו דיווח אמיתי) — לא נדרס.
+  const adopted = new Set(existing.filter((w) => !w.demo).map((w) => w.id));
+  const toAdd = [...demoWps, trashed].filter((w) => !adopted.has(w.id));
+  const ids = new Set(toAdd.map((w) => w.id));
+  await saveWorkplaces([...existing.filter((w) => !ids.has(w.id)), ...toAdd]);
 
   // דיווחים.
   const { reports } = generateDemoReports();
@@ -527,38 +530,96 @@ export async function loadDemoData(): Promise<number> {
   return reports.length;
 }
 
+/** מה נמחק באיפוס נתוני ההדגמה. */
+export type DemoRemoval = {
+  reports: number;
+  workplaces: number;
+  courses: number;
+  /** מקומות עבודה לדוגמה שנשארו כי יש בהם דיווחים אמיתיים (הפכו למקומות עבודה רגילים). */
+  keptWorkplaces: string[];
+};
+
+/** האם יש במכשיר נתוני הדגמה כלשהם — דיווחים, מקומות עבודה או קורסים. */
+export async function hasDemoData(): Promise<boolean> {
+  const [reports, workplaces, courses] = await Promise.all([
+    loadReports(),
+    readJSON<Workplace[]>(WORKPLACES_KEY, []),
+    loadCourses(),
+  ]);
+  return reports.some((r) => r.demo) || workplaces.some((w) => w.demo) || courses.some((c) => c.demo);
+}
+
 /**
- * מוחק את דיווחי ההדגמה ואת תרומתם למונה המצטבר. מקומות העבודה, ההעדפות
- * (מראה, שפה, בסיס חישוב) והדיווחים האמיתיים נשארים.
+ * מוחק את נתוני ההדגמה: דיווחים, קורסים ומקומות עבודה לדוגמה, ואת תרומתם
+ * למונה המצטבר ולמצב דוחות השכר. מקום עבודה לדוגמה שיש בו דיווח אמיתי לא
+ * נמחק — הוא הופך למקום עבודה רגיל, כדי שהדיווח לא יאבד. ההעדפות והנתונים
+ * של המשתמש נשארים.
  */
-export async function removeDemoData(): Promise<number> {
+export async function removeDemoData(): Promise<DemoRemoval> {
   const current = await loadReports();
   const kept = current.filter((r) => !r.demo);
-  const removed = current.length - kept.length;
-  if (removed > 0) await saveReports(kept);
+  const removedReports = current.length - kept.length;
+  if (removedReports > 0) await saveReports(kept);
+
+  // מקומות עבודה: נשמרים רק מקומות לדוגמה שיש בהם דיווח אמיתי.
+  const usedIds = new Set(kept.map((r) => r.workplaceId));
+  const workplaces = await readJSON<Workplace[]>(WORKPLACES_KEY, []);
+  const removedWpIds = new Set<string>();
+  const keptWorkplaces: string[] = [];
+  const nextWorkplaces: Workplace[] = [];
+  for (const w of workplaces) {
+    if (!w.demo) nextWorkplaces.push(w);
+    else if (usedIds.has(w.id)) {
+      const { demo: _demo, ...rest } = w;
+      nextWorkplaces.push(rest);
+      keptWorkplaces.push(w.name);
+    } else removedWpIds.add(w.id);
+  }
+  if (nextWorkplaces.length !== workplaces.length || keptWorkplaces.length > 0) {
+    await saveWorkplaces(nextWorkplaces);
+  }
+
+  // קורסים לדוגמה — כולם (הם רק תכנון; דיווחים אמיתיים לא תלויים בהם).
+  const courses = await loadCourses();
+  const userCourses = courses.filter((c) => !c.demo);
+  const removedCourses = courses.length - userCourses.length;
+  if (removedCourses > 0) await saveCourses(userCourses);
+
+  // מצב דוחות שכר של מקומות שנמחקו.
+  if (removedWpIds.size > 0) {
+    const statuses = await loadPayrollStatus();
+    let changed = false;
+    for (const key of Object.keys(statuses)) {
+      if (removedWpIds.has(key.split('|')[0])) {
+        delete statuses[key];
+        changed = true;
+      }
+    }
+    if (changed) await savePayrollStatus(statuses);
+  }
 
   const meta = await readJSON<DemoMeta | null>(DEMO_META_KEY, null);
-  if (meta) {
-    const acc = await loadAccumulated();
-    const byWorkplace = { ...acc.byWorkplace };
-    if (meta.byWorkplace) {
-      for (const [id, c] of Object.entries(meta.byWorkplace)) {
-        const e = byWorkplace[id];
-        if (!e) continue;
-        byWorkplace[id] = {
-          minutes: Math.max(0, e.minutes - c.minutes),
-          redeemedHours: Math.max(0, e.redeemedHours - c.redeemedHours),
-        };
-      }
-    } else {
-      // הדגמה ישנה (מונה גלובלי) — מאפסים את המונים של סמינרי ההדגמה.
-      for (const id of Object.keys(byWorkplace)) if (id.startsWith('demo_wp_')) delete byWorkplace[id];
+  const acc = await loadAccumulated();
+  const byWorkplace = { ...acc.byWorkplace };
+  if (meta?.byWorkplace) {
+    for (const [id, c] of Object.entries(meta.byWorkplace)) {
+      const e = byWorkplace[id];
+      if (!e) continue;
+      byWorkplace[id] = {
+        minutes: Math.max(0, e.minutes - c.minutes),
+        redeemedHours: Math.max(0, e.redeemedHours - c.redeemedHours),
+      };
     }
-    await saveAccumulated({ byWorkplace });
-    await AsyncStorage.removeItem(DEMO_META_KEY).catch(() => {});
+  } else if (meta) {
+    // הדגמה ישנה (מונה גלובלי) — מאפסים את המונים של סמינרי ההדגמה.
+    for (const id of Object.keys(byWorkplace)) if (id.startsWith('demo_wp_')) delete byWorkplace[id];
   }
-  if (removed > 0) notify();
-  return removed;
+  for (const id of removedWpIds) delete byWorkplace[id];
+  if (meta || removedWpIds.size > 0) await saveAccumulated({ byWorkplace });
+  if (meta) await AsyncStorage.removeItem(DEMO_META_KEY).catch(() => {});
+
+  if (removedReports > 0 || removedWpIds.size > 0 || removedCourses > 0 || keptWorkplaces.length > 0) notify();
+  return { reports: removedReports, workplaces: removedWpIds.size, courses: removedCourses, keptWorkplaces };
 }
 
 /** מחיקת כל נתוני האפליקציה: דיווחים, מקומות עבודה, מונה והעדפות. */

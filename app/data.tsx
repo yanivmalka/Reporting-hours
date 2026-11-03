@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 import { useConfirm } from '../components/ConfirmDialog';
 import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
-import { isDemoLoaded, loadDemoData, removeDemoData, resetAllData } from '../lib/demo';
+import { hasDemoData, isDemoLoaded, loadDemoData, removeDemoData, resetAllData } from '../lib/demo';
 import { useI18n } from '../lib/i18n';
 import { DEFAULT_PAY_BASIS, usePayBasis } from '../lib/payBasis';
 import { loadReports } from '../lib/reports';
@@ -20,7 +20,7 @@ import { TEXT_RIGHT } from '../theme/align';
 
 type Action = 'load' | 'removeDemo' | 'resetAll';
 
-type Stats = { reports: number; demoReports: number; workplaces: number; demo: boolean };
+type Stats = { reports: number; demoReports: number; workplaces: number; demo: boolean; anyDemo: boolean };
 
 /** מסך ניהול נתונים: טעינת נתוני הדגמה, מחיקתם, או איפוס מלא של האפליקציה. */
 export default function DataScreen() {
@@ -34,16 +34,18 @@ export default function DataScreen() {
   const [busy, setBusy] = useState<Action | null>(null);
 
   const refresh = useCallback(async () => {
-    const [reports, workplaces, demo] = await Promise.all([
+    const [reports, workplaces, demo, anyDemo] = await Promise.all([
       loadReports(),
       loadWorkplaces(),
       isDemoLoaded(),
+      hasDemoData(),
     ]);
     setStats({
       reports: reports.length,
       demoReports: reports.filter((r) => r.demo).length,
       workplaces: workplaces.length,
       demo,
+      anyDemo,
     });
   }, []);
 
@@ -62,7 +64,7 @@ export default function DataScreen() {
     },
     removeDemo: {
       title: 'לאפס את נתוני ההדגמה?',
-      message: 'דיווחי ההדגמה והדקות שהוסיפו למונים יימחקו. מקומות העבודה, ההעדפות והדיווחים שלכם נשמרים.',
+      message: 'דיווחי ההדגמה, מקומות העבודה והקורסים לדוגמה והדקות שהוסיפו למונים יימחקו. מקום עבודה לדוגמה שיש בו דיווח שלכם נשאר. ההעדפות והנתונים שלכם נשמרים.',
       confirmLabel: 'איפוס נתוני הדגמה',
       destructive: true,
     },
@@ -85,8 +87,12 @@ export default function DataScreen() {
         const n = await loadDemoData();
         showToast(`נטענו ${n} דיווחי הדגמה ב־8 סמינרים`);
       } else if (action === 'removeDemo') {
-        const n = await removeDemoData();
-        showToast(`נמחקו ${n} דיווחי הדגמה · מקומות העבודה וההעדפות נשמרו`);
+        const r = await removeDemoData();
+        const parts = [`${r.reports} דיווחים`, `${r.workplaces} מקומות עבודה`, `${r.courses} קורסים`];
+        const kept = r.keptWorkplaces.length
+          ? ` · נשאר עם הדיווחים שלכם: ${r.keptWorkplaces.join(', ')}`
+          : '';
+        showToast(`נמחקו נתוני ההדגמה: ${parts.join(', ')}${kept}`);
       } else {
         await resetAllData();
         setMode('system');
@@ -150,7 +156,7 @@ export default function DataScreen() {
           variant="secondary"
           onPress={() => run('removeDemo')}
           loading={busy === 'removeDemo'}
-          disabled={busy != null || !stats?.demoReports}
+          disabled={busy != null || !stats?.anyDemo}
         />
       </View>
 
