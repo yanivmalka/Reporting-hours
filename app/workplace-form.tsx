@@ -349,7 +349,8 @@ export default function WorkplaceFormScreen() {
       onConfirm: async () => {
         setSaving(true);
         await trashWorkplace(id);
-        router.back();
+        // חוזרים לרשימת מקומות העבודה — מסך הצפייה של המקום שהועבר לאשפה כבר לא קיים.
+        router.dismissTo('/workplaces');
       },
     });
   }

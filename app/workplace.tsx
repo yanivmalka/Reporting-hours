@@ -5,7 +5,7 @@
  * הדיווחים (ומפגשים שעוד לא דווחו).
  */
 import { useCallback, useState } from 'react';
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
@@ -97,11 +97,8 @@ export default function WorkplaceDetailScreen() {
     );
   }
   if (data === null) {
-    return (
-      <Screen>
-        <Text style={styles.muted}>מקום העבודה לא נמצא.</Text>
-      </Screen>
-    );
+    // מקום עבודה שנמחק או הועבר לאשפה — לא משאירים מסך ריק, חוזרים לרשימה.
+    return <Redirect href="/workplaces" />;
   }
 
   const { workplace: w, reports, courses, statuses } = data;
