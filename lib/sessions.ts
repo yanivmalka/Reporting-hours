@@ -60,6 +60,12 @@ export const DEFAULT_HOLIDAY_SETTINGS: HolidaySettings = {
 
 const keyOf = (courseId: string, date: string) => `${courseId}@${date}`;
 
+/** שמירת כל סימוני המפגשים (לשימוש בהעברה לאשפה ובשחזור — lib/trash.ts). */
+export async function saveSessionMarks(list: SessionMark[]): Promise<void> {
+  await writeJSON(MARKS_KEY, list);
+  await loadCancelIndex();
+}
+
 export function loadSessionMarks(): Promise<SessionMark[]> {
   return readJSON<SessionMark[]>(MARKS_KEY, []);
 }

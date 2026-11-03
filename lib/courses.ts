@@ -160,42 +160,69 @@ export function courseScheduleLabel(course: Pick<Course, 'weekday' | 'start' | '
   return `יום ${WEEKDAY_SHORT[course.weekday]} · ${timeRange(course.start, course.end)}`;
 }
 
+type ReportLike = {
+  id: string;
+  workplaceId: string;
+  date: string;
+  start: string;
+  end: string;
+  note?: string;
+  courseId?: string;
+};
+
 /**
- * האם מפגש של קורס בתאריך נתון כבר דווח: יש באותו יום דיווח לאותו מקום
- * עבודה שנושאו שם הקורס, או שטווח השעות שלו חופף לקורס.
+ * האם דיווח מכסה מפגש של קורס בתאריך: דיווח עם `courseId` — רק לפי המזהה;
+ * דיווח ישן בלי מזהה — לפי שם הקורס או חפיפה בשעות באותו מקום עבודה.
  */
-/** הדיווח שמכסה מפגש של קורס בתאריך (לפי שם הקורס או חפיפה בשעות), אם יש. */
-export function courseReport<R extends { id: string; workplaceId: string; date: string; start: string; end: string; note?: string }>(
-  course: Pick<Course, 'workplaceId' | 'name' | 'start' | 'end'>,
+function covers(course: Pick<Course, 'id' | 'workplaceId' | 'name' | 'start' | 'end'>, date: string, r: ReportLike): boolean {
+  if (r.date !== date || r.workplaceId !== course.workplaceId) return false;
+  if (r.courseId) return r.courseId === course.id;
+  if (r.note === course.name) return true;
+  const cs = parseTime(course.start) ?? 0;
+  const ce = parseTime(course.end) ?? 0;
+  const rs = parseTime(r.start) ?? 0;
+  const re = parseTime(r.end) ?? 0;
+  return rs < ce && re > cs;
+}
+
+/** הדיווח שמכסה מפגש של קורס בתאריך, אם יש. */
+export function courseReport<R extends ReportLike>(
+  course: Pick<Course, 'id' | 'workplaceId' | 'name' | 'start' | 'end'>,
   date: string,
   reports: readonly R[],
 ): R | undefined {
-  const cs = parseTime(course.start) ?? 0;
-  const ce = parseTime(course.end) ?? 0;
-  return reports.find((r) => {
-    if (r.date !== date || r.workplaceId !== course.workplaceId) return false;
+  return reports.find((r) => covers(course, date, r));
+}
+
+/** האם מפגש של קורס בתאריך נתון כבר דווח. */
+export function courseReported(
+  course: Pick<Course, 'id' | 'workplaceId' | 'name' | 'start' | 'end'>,
+  date: string,
+  reports: readonly ReportLike[],
+  excludeReportId?: string,
+): boolean {
+  return reports.some((r) => r.id !== excludeReportId && covers(course, date, r));
+}
+
+/**
+ * כל הדיווחים ששייכים לקורס: לפי `courseId`, ובדיווחים ישנים — דיווח של אותו
+ * מקום עבודה בתקופת הקורס, ביום הקורס, שנושאו שם הקורס או שחופף לשעותיו.
+ */
+export function reportsOfCourse<R extends ReportLike>(course: Course, reports: readonly R[]): R[] {
+  return reports.filter((r) => {
+    if (r.courseId) return r.courseId === course.id;
+    if (r.workplaceId !== course.workplaceId || r.date < course.from || r.date > course.to) return false;
     if (r.note === course.name) return true;
-    const rs = parseTime(r.start) ?? 0;
-    const re = parseTime(r.end) ?? 0;
-    return rs < ce && re > cs;
+    return parseISO(r.date).getDay() === course.weekday && covers(course, r.date, r);
   });
 }
 
-export function courseReported(
-  course: Pick<Course, 'workplaceId' | 'name' | 'start' | 'end'>,
-  date: string,
-  reports: readonly { id: string; workplaceId: string; date: string; start: string; end: string; note?: string }[],
-  excludeReportId?: string,
-): boolean {
-  const cs = parseTime(course.start) ?? 0;
-  const ce = parseTime(course.end) ?? 0;
-  return reports.some((r) => {
-    if (r.date !== date || r.workplaceId !== course.workplaceId || r.id === excludeReportId) return false;
-    if (r.note === course.name) return true;
-    const rs = parseTime(r.start) ?? 0;
-    const re = parseTime(r.end) ?? 0;
-    return rs < ce && re > cs;
-  });
+/** תאריך הסיום לקורס שמסיימים היום: אתמול, או המפגש האחרון שדווח אם הוא מאוחר יותר. */
+export function endDateForCourse(course: Course, reports: readonly ReportLike[], today: Date = new Date()): string {
+  const yesterday = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1));
+  const last = reportsOfCourse(course, reports).reduce((m, r) => (r.date > m ? r.date : m), '');
+  const end = last > yesterday ? last : yesterday;
+  return end < course.from ? course.from : end;
 }
 
 // ───────────────────────── תקופות מוכנות ─────────────────────────

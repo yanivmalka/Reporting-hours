@@ -34,6 +34,11 @@ export type WorkReport = {
   carriedMinutes: number;
   /** הערה חופשית — נושא ההרצאה / הגשה / קבוצה (רשות) */
   note?: string;
+  /**
+   * הקורס שהדיווח שייך אליו (כשדווח דרך בחירת קורס). דיווחים ישנים בלי
+   * השדה משויכים לפי שם הקורס או חפיפה בשעות (lib/courses.ts).
+   */
+  courseId?: string;
   /** דיווח שנוצר כנתוני הדגמה (lib/demo.ts) — נמחק ב"איפוס נתוני הדגמה" */
   demo?: boolean;
   /** חותמת יצירה (מילישניות) — לסידור דיווחים באותו תאריך */
@@ -115,8 +120,8 @@ export async function updateReport(id: string, draft: WorkReportDraft): Promise<
   const list = await loadReports();
   const next = list.map((r) => {
     if (r.id !== id) return r;
-    const { note: _n, ...rest } = r;
-    // note נמחק כשהוסר בטופס — לכן בונים מחדש בלי הישן.
+    const { note: _n, courseId: _c, ...rest } = r;
+    // note ו־courseId נמחקים כשהוסרו בטופס — לכן בונים מחדש בלי הישנים.
     return { ...rest, ...draft, id: r.id, createdAt: r.createdAt };
   });
   await saveReports(next);
