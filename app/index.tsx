@@ -1,20 +1,24 @@
 /**
  * מסך הבית: ברכה לפי שעת היום ושם פרטי, כפתור דיווח גדול (ממולא מראש
- * לפי הקורס של היום), לו״ז היום ומחר מתוך הקורסים הפעילים (החלקה לצדדים),
+ * לפי הקורס של היום), לו״ז משלשום עד מחרתיים מתוך הקורסים הפעילים (בחירת
+ * יום בשורת ימים או בהחלקה),
  * התראות ותזכורות, וקישור ללוח הבקרה.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
-import { Linking, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Linking, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from '../components/Pressable';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
+import { useFlash } from '../components/useFlash';
+import { useSwipe } from '../components/useSwipe';
 import { useCloudSync } from '../components/CloudSync';
 import { loadAccumulated } from '../lib/accumulated';
 import { loadCourses } from '../lib/courses';
 import { onDataChanged } from '../lib/demo';
 import { hebrewDate } from '../lib/hebrewDate';
 import {
+  AGENDA_TODAY_INDEX,
   agenda,
   firstName,
   greetingFor,
@@ -49,12 +53,14 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const { basis } = usePayBasis();
   const { user } = useCloudSync();
-  const { width } = useWindowDimensions();
   // null עד הטעינה בדפדפן: ב־web המסך מרונדר מראש בזמן הבנייה, ושעה שונה
   // בין הבנייה לדפדפן גורמת לאי־התאמה (hydration).
   const [now, setNow] = useState<Date | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
+  // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
+  const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
+  const [dayDir, setDayDir] = useState<1 | -1>(1);
 
   // השעה מתעדכנת כל דקה — הברכה וסטטוס המפגשים ("עכשיו" / "ממתין לדיווח").
   useEffect(() => {
@@ -107,7 +113,9 @@ export default function HomeScreen() {
   }
 
   const name = data?.name || firstName(user?.name);
-  const today = data?.days[0];
+  const days = data?.days ?? [];
+  const today = days[AGENDA_TODAY_INDEX];
+  const day = days[dayIdx];
   const suggestion = today ? suggestedSession(today) : null;
   const reportHref: Href = suggestion
     ? { pathname: '/report', params: { course: suggestion.course.id, date: suggestion.date } }
@@ -115,9 +123,17 @@ export default function HomeScreen() {
   const visibleAlerts = (data?.alerts ?? []).filter((a) => !dismissed.includes(a.key));
   const todayIso = now ? isoDate(now) : '';
 
-  // כרטיס "מחר" מציץ מהצד: רוחב הכרטיס קצר מהמסך.
-  const contentWidth = Math.min(width, 640);
-  const cardWidth = Math.max(240, contentWidth - spacing.lg * 2 - 56);
+  function pickDay(i: number) {
+    if (i < 0 || i >= days.length || i === dayIdx) return;
+    setDayDir(i > dayIdx ? 1 : -1);
+    setDayIdx(i);
+  }
+  const swipe = useSwipe(
+    () => pickDay(dayIdx + 1),
+    () => pickDay(dayIdx - 1),
+  );
+  const flash = useFlash(dayIdx, dayDir);
+
   const todayCount = today?.items.length ?? 0;
 
   return (
@@ -165,54 +181,77 @@ export default function HomeScreen() {
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>הלו״ז שלי</Text>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={cardWidth + spacing.sm}
-        decelerationRate="fast"
-        style={styles.carousel}
-        contentContainerStyle={styles.carouselContent}
-      >
-        {(data?.days ?? []).map((day) => (
-          <View key={day.key} style={[styles.dayCard, { width: cardWidth }]}>
-            <View style={styles.dayHead}>
-              <Text style={styles.dayLabel}>{day.label}</Text>
-              <Text style={styles.dayDate}>{day.dayLabel}</Text>
-            </View>
-            {day.items.length === 0 ? (
-              <Pressable
-                onPress={() => router.push('/workplaces')}
-                style={({ pressed }) => [styles.emptyDay, pressed && styles.pressed]}
-                accessibilityRole="button"
-              >
-                <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
-                <Text style={styles.emptyText}>
-                  אין קורסים מתוכננים. קורסים מגדירים במקום העבודה ←
-                </Text>
+      <View style={styles.dayTabs} accessibilityRole="tablist">
+        {days.map((d, i) => {
+          const active = i === dayIdx;
+          const missing = d.items.some((it) => it.status === 'pending');
+          return (
+            <Pressable
+              key={d.key}
+              onPress={() => pickDay(i)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${d.label}, ${d.dayLabel}`}
+              style={({ pressed }) => [styles.dayTab, active && styles.dayTabActive, pressed && styles.pressed]}
+            >
+              <Text style={[styles.dayTabLabel, active && styles.dayTabTextActive]} numberOfLines={1}>
+                {d.label}
+              </Text>
+              <Text style={[styles.dayTabDate, active && styles.dayTabTextActive]}>{shortDay(d.date)}</Text>
+              <View
+                style={[
+                  styles.dayTabDot,
+                  d.items.length > 0 && {
+                    backgroundColor: active ? colors.textOnBrand : missing ? colors.warning : colors.textMuted,
+                  },
+                ]}
+              />
+            </Pressable>
+          );
+        })}
+      </View>
+      {day ? (
+        <Animated.View style={[styles.dayCard, flash]} {...swipe}>
+          <View style={styles.dayHead}>
+            <Text style={styles.dayLabel}>{day.label}</Text>
+            <Text style={styles.dayDate}>{day.dayLabel}</Text>
+            {dayIdx !== AGENDA_TODAY_INDEX ? (
+              <Pressable onPress={() => pickDay(AGENDA_TODAY_INDEX)} accessibilityRole="link" hitSlop={8}>
+                <Text style={styles.toToday}>להיום</Text>
               </Pressable>
-            ) : (
-              day.items.map((item) => (
-                <SessionRow
-                  key={item.course.id}
-                  item={item}
-                  onPress={
-                    item.reportId
-                      ? // מפגש שדווח — תצוגת הדיווח (עריכה בכפתור, "חזרה" חוזרת לכאן)
-                        () => router.push({ pathname: '/report-view', params: { id: item.reportId } })
-                      : day.key === 'today'
-                        ? () =>
-                            router.push({
-                              pathname: '/report',
-                              params: { course: item.course.id, date: item.date },
-                            })
-                        : undefined
-                  }
-                />
-              ))
-            )}
+            ) : null}
           </View>
-        ))}
-      </ScrollView>
+          {day.items.length === 0 ? (
+            <Pressable
+              onPress={() => router.push('/workplaces')}
+              style={({ pressed }) => [styles.emptyDay, pressed && styles.pressed]}
+              accessibilityRole="button"
+            >
+              <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
+              <Text style={styles.emptyText}>אין קורסים מתוכננים. קורסים מגדירים במקום העבודה ←</Text>
+            </Pressable>
+          ) : (
+            day.items.map((item) => (
+              <SessionRow
+                key={item.course.id}
+                item={item}
+                onPress={
+                  item.reportId
+                    ? // מפגש שדווח — תצוגת הדיווח (עריכה בכפתור, "חזרה" חוזרת לכאן)
+                      () => router.push({ pathname: '/report-view', params: { id: item.reportId } })
+                    : day.offset <= 0
+                      ? () =>
+                          router.push({
+                            pathname: '/report',
+                            params: { course: item.course.id, date: item.date },
+                          })
+                      : undefined
+                }
+              />
+            ))
+          )}
+        </Animated.View>
+      ) : null}
 
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>התראות ותזכורות</Text>
@@ -247,7 +286,13 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   pending: 'ממתין לדיווח',
   now: 'עכשיו',
   later: 'בהמשך היום',
-  tomorrow: '',
+  upcoming: '',
+};
+
+/** "3.11" */
+const shortDay = (iso: string) => {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${d}.${m}`;
 };
 
 function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void }) {
@@ -277,7 +322,7 @@ function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void 
           {item.time} · {item.workplace.name}
         </Text>
       </View>
-      {item.status === 'tomorrow' ? (
+      {item.status === 'upcoming' ? (
         taxi ? <Icon name="taxi" size={20} color={colors.textMuted} /> : null
       ) : (
         <View style={[styles.chip, { backgroundColor: tone.bg }]}>
@@ -379,8 +424,22 @@ const makeStyles = (colors: AppColors) =>
     sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     sectionMeta: { fontSize: 13, color: colors.textMuted },
 
-    carousel: { marginHorizontal: -spacing.lg, flexGrow: 0 },
-    carouselContent: { paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: 4 },
+    dayTabs: { flexDirection: 'row', gap: 6 },
+    dayTab: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 2,
+      paddingVertical: 8,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    dayTabActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+    dayTabLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
+    dayTabDate: { fontSize: 12, color: colors.textMuted },
+    dayTabTextActive: { color: colors.textOnBrand },
+    dayTabDot: { width: 6, height: 6, borderRadius: 3, marginTop: 2, backgroundColor: 'transparent' },
     dayCard: {
       backgroundColor: colors.surface,
       borderRadius: 18,
@@ -391,7 +450,8 @@ const makeStyles = (colors: AppColors) =>
     },
     dayHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
     dayLabel: { fontSize: 17, fontWeight: '800', color: colors.text },
-    dayDate: { fontSize: 14, color: colors.textMuted },
+    dayDate: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    toToday: { fontSize: 14, fontWeight: '700', color: colors.brand },
     session: {
       flexDirection: 'row',
       alignItems: 'center',

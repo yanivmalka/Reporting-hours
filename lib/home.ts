@@ -1,7 +1,7 @@
 /**
  * הנתונים של מסך הבית — טהור, בלי React ובלי אחסון:
  *   - ברכה לפי שעת היום ושם פרטי;
- *   - לו״ז היום ומחר מתוך הקורסים הפעילים של כל מקום עבודה, עם סטטוס דיווח;
+ *   - לו״ז משלשום עד מחרתיים מתוך הקורסים הפעילים של כל מקום עבודה, עם סטטוס דיווח;
  *   - התראות ותזכורות (מונית, דיווחים חסרים, תשלום קרוב, דקות מצטברות,
  *     דוחות שכר ותיאום מס).
  */
@@ -49,7 +49,11 @@ const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
 // ───────────────────────── לו״ז ─────────────────────────
 
-export type SessionStatus = 'reported' | 'pending' | 'now' | 'later' | 'tomorrow';
+/**
+ * reported — דווח · pending — הסתיים ולא דווח (היום או בימים שעברו) ·
+ * now — מתקיים עכשיו · later — בהמשך היום · upcoming — ביום עתידי.
+ */
+export type SessionStatus = 'reported' | 'pending' | 'now' | 'later' | 'upcoming';
 
 export type AgendaItem = {
   course: Course;
@@ -62,15 +66,33 @@ export type AgendaItem = {
   time: string;
 };
 
+export type AgendaDayKey = 'dayBefore' | 'yesterday' | 'today' | 'tomorrow' | 'dayAfter';
+
 export type AgendaDay = {
-  key: 'today' | 'tomorrow';
+  key: AgendaDayKey;
+  /** הסטה בימים מהיום (‎-2…2) */
+  offset: number;
   label: string;
   date: string;
   dayLabel: string;
   items: AgendaItem[];
 };
 
-/** הקורסים של היום ומחר במקומות העבודה הפעילים, עם סטטוס לכל מפגש. */
+const AGENDA_DAYS: { key: AgendaDayKey; offset: number; label: string }[] = [
+  { key: 'dayBefore', offset: -2, label: 'שלשום' },
+  { key: 'yesterday', offset: -1, label: 'אתמול' },
+  { key: 'today', offset: 0, label: 'היום' },
+  { key: 'tomorrow', offset: 1, label: 'מחר' },
+  { key: 'dayAfter', offset: 2, label: 'מחרתיים' },
+];
+
+/** מיקום "היום" ברשימת ימי הלו״ז. */
+export const AGENDA_TODAY_INDEX = AGENDA_DAYS.findIndex((d) => d.key === 'today');
+
+/**
+ * הקורסים משלשום עד מחרתיים במקומות העבודה הפעילים, עם סטטוס לכל מפגש.
+ * הימים לפי סדר כרונולוגי.
+ */
 export function agenda(
   courses: readonly Course[],
   workplaces: readonly Workplace[],
@@ -79,28 +101,28 @@ export function agenda(
 ): AgendaDay[] {
   const byId = new Map(workplaces.map((w) => [w.id, w]));
   const nowMin = minutesOfDay(now);
-  const build = (key: AgendaDay['key'], d: Date): AgendaDay => {
+  return AGENDA_DAYS.map(({ key, offset, label }) => {
+    const d = addDays(now, offset);
     const date = isoDate(d);
     const items: AgendaItem[] = [];
     for (const course of coursesOn(courses, date)) {
       const workplace = byId.get(course.workplaceId);
       if (!workplace) continue;
-      let status: SessionStatus = 'tomorrow';
+      let status: SessionStatus = 'upcoming';
       let reportId: string | undefined;
-      if (key === 'today') {
+      if (offset <= 0) {
+        reportId = courseReport(course, date, reports)?.id;
         const s = parseTime(course.start) ?? 0;
         const e = parseTime(course.end) ?? 0;
-        reportId = courseReport(course, date, reports)?.id;
         if (reportId) status = 'reported';
-        else if (nowMin >= e) status = 'pending';
+        else if (offset < 0 || nowMin >= e) status = 'pending';
         else if (nowMin >= s) status = 'now';
         else status = 'later';
       }
       items.push({ course, workplace, date, status, reportId, time: timeRange(course.start, course.end) });
     }
-    return { key, label: key === 'today' ? 'היום' : 'מחר', date, dayLabel: longDayLabel(d), items };
-  };
-  return [build('today', now), build('tomorrow', addDays(now, 1))];
+    return { key, offset, label, date, dayLabel: longDayLabel(d), items };
+  });
 }
 
 /**
