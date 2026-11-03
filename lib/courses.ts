@@ -6,9 +6,13 @@
  *   - מילוי מהיר של דיווח (בחירת קורס ממלאת שעות, הפסקה ונושא);
  *   - "שעות מתוכננות" לחודש של כל מקום עבודה, להשוואה מול מה שדווח.
  * האחסון מקומי בלבד, תחת מפתח יחיד.
+ *
+ * מפגשים מבוטלים (חג, "לא התקיים" — lib/sessions.ts) לא נספרים: החישובים
+ * כאן מקבלים אינדקס ביטולים, וברירת המחדל היא האינדקס הנוכחי.
  */
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { readJSON, writeJSON } from './storage';
+import { currentCancel, loadCancelIndex, type CancelIndex } from './sessions';
 import { parseTime } from './time';
 
 export type Course = {
@@ -39,8 +43,10 @@ const STORAGE_KEY = 'reporting-hours/courses/v1';
 export const WEEKDAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 export const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
+/** טעינת הקורסים — יחד עם רענון אינדקס הביטולים (lib/sessions.ts). */
 export async function loadCourses(): Promise<Course[]> {
-  return readJSON<Course[]>(STORAGE_KEY, []);
+  const [list] = await Promise.all([readJSON<Course[]>(STORAGE_KEY, []), loadCancelIndex()]);
+  return list;
 }
 
 export function saveCourses(list: Course[]): Promise<void> {
@@ -92,15 +98,30 @@ export function occursOn(course: Course, date: string): boolean {
   return date >= course.from && date <= course.to && parseISO(date).getDay() === course.weekday;
 }
 
-/** הקורסים שמתקיימים בתאריך (אפשר לצמצם למקום עבודה), לפי שעת התחלה. */
-export function coursesOn(courses: readonly Course[], date: string, workplaceId?: string): Course[] {
+/**
+ * הקורסים שמתקיימים בתאריך (אפשר לצמצם למקום עבודה), לפי שעת התחלה.
+ * עם אינדקס ביטולים — בלי מפגשים מבוטלים (חג, "לא התקיים").
+ */
+export function coursesOn(
+  courses: readonly Course[],
+  date: string,
+  workplaceId?: string,
+  cancel: CancelIndex = currentCancel(),
+): Course[] {
   return courses
-    .filter((c) => (!workplaceId || c.workplaceId === workplaceId) && occursOn(c, date))
+    .filter(
+      (c) => (!workplaceId || c.workplaceId === workplaceId) && occursOn(c, date) && !cancel(c.id, date),
+    )
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 
-/** תאריכי המפגשים של קורס בטווח [start, end] (כולל). */
-export function occurrences(course: Course, start: string, end: string): string[] {
+/** תאריכי המפגשים של קורס בטווח [start, end] (כולל), בלי מפגשים מבוטלים. */
+export function occurrences(
+  course: Course,
+  start: string,
+  end: string,
+  cancel: CancelIndex = currentCancel(),
+): string[] {
   const from = start > course.from ? start : course.from;
   const to = end < course.to ? end : course.to;
   if (from > to) return [];
@@ -108,7 +129,7 @@ export function occurrences(course: Course, start: string, end: string): string[
   d.setDate(d.getDate() + ((course.weekday - d.getDay() + 7) % 7));
   const out: string[] = [];
   for (; iso(d) <= to; d.setDate(d.getDate() + 7)) out.push(iso(d));
-  return out;
+  return out.filter((date) => !cancel(course.id, date));
 }
 
 /** דקות עבודה מתוכננות למקום עבודה בטווח תאריכים — לפי הקורסים שלו. */
@@ -117,10 +138,11 @@ export function plannedMinutes(
   workplaceId: string,
   start: string,
   end: string,
+  cancel: CancelIndex = currentCancel(),
 ): number {
   return courses
     .filter((c) => c.workplaceId === workplaceId)
-    .reduce((sum, c) => sum + occurrences(c, start, end).length * sessionMinutes(c), 0);
+    .reduce((sum, c) => sum + occurrences(c, start, end, cancel).length * sessionMinutes(c), 0);
 }
 
 /** שעות אקדמיות של מפגש — לתצוגה ("4 שע׳ אקד׳"). */

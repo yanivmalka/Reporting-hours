@@ -2,15 +2,14 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
+import { Icon } from '../components/Icon';
+import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { WorkplaceCard } from '../components/WorkplaceCard';
 import { loadCourses, type Course } from '../lib/courses';
 import { workplaceMonthStats } from '../lib/dashboard';
 import { loadReports, type WorkReport } from '../lib/reports';
-import {
-  loadWorkplaces,
-  type Workplace,
-} from '../lib/workplaces';
+import { isArchived, loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
@@ -23,6 +22,7 @@ export default function WorkplacesScreen() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
   const [reports, setReports] = useState<WorkReport[]>([]);
+  const [showArchive, setShowArchive] = useState(false);
 
   // נטען מחדש בכל כניסה למסך כדי לשקף שינויים שנעשו בטופס ובדיווחים.
   useFocusEffect(
@@ -52,6 +52,11 @@ export default function WorkplacesScreen() {
     );
   }
 
+  const active = workplaces.filter((w) => !isArchived(w));
+  const archived = workplaces
+    .filter(isArchived)
+    .sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0));
+
   return (
     <Screen>
       <View style={styles.intro}>
@@ -62,13 +67,15 @@ export default function WorkplacesScreen() {
         </Text>
       </View>
 
-      {workplaces.length === 0 ? (
+      {active.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>עדיין לא הוזנו מקומות עבודה.</Text>
+          <Text style={styles.emptyText}>
+            {archived.length ? 'אין מקומות עבודה פעילים.' : 'עדיין לא הוזנו מקומות עבודה.'}
+          </Text>
         </View>
       ) : (
         <View style={styles.list}>
-          {workplaces.map((workplace) => (
+          {active.map((workplace) => (
             <WorkplaceCard
               key={workplace.id}
               workplace={workplace}
@@ -79,8 +86,36 @@ export default function WorkplacesScreen() {
         </View>
       )}
 
+      {archived.length ? (
+        <>
+          <Pressable
+            onPress={() => setShowArchive((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showArchive }}
+            style={({ pressed }) => [styles.archiveHead, pressed && { opacity: 0.85 }]}
+          >
+            <Icon name="archive-outline" size={22} color={colors.textMuted} />
+            <Text style={styles.archiveTitle}>ארכיון — מקומות עבודה לא פעילים ({archived.length})</Text>
+            <Icon name={showArchive ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
+          </Pressable>
+          {showArchive ? (
+            <View style={styles.list}>
+              {archived.map((workplace) => (
+                <WorkplaceCard
+                  key={workplace.id}
+                  workplace={workplace}
+                  stats={workplaceMonthStats(workplace, reports, courses)}
+                  onPress={() => router.push({ pathname: '/workplace', params: { id: workplace.id } })}
+                />
+              ))}
+            </View>
+          ) : null}
+        </>
+      ) : null}
+
       <Text style={styles.hint}>
-        עריכה והעברה לאשפה — מתוך מסך מקום העבודה, בכפתור "עריכה". מהאשפה אפשר לשחזר תוך 30 יום.
+        העברה לארכיון (מקום שלא עובדים בו כרגע) — מתוך מסך מקום העבודה; הדיווחים וההיסטוריה נשמרים.
+        מחיקה — בעריכה, לאשפה; מהאשפה אפשר לשחזר תוך 30 יום.
       </Text>
 
       <View style={styles.action}>
@@ -119,6 +154,18 @@ const makeStyles = (colors: AppColors) =>
     list: {
       gap: spacing.md,
     },
+    archiveHead: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: 48,
+      paddingHorizontal: spacing.md,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    archiveTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.textMuted, textAlign: TEXT_RIGHT },
     empty: {
       paddingVertical: spacing.xl,
       alignItems: 'center',

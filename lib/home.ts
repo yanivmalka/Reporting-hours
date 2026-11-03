@@ -12,8 +12,9 @@ import { currentPayPeriod, currentPeriods, isoDate } from './dashboard';
 import type { PayBasis } from './payBasis';
 import { isLocked, overduePayments, payrollItems, pendingPayroll, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
+import { currentCancel, NO_CANCEL, type Cancellation, type CancelIndex } from './sessions';
 import { parseTime } from './time';
-import { isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
+import { activeWorkplaces, isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
 
 // ───────────────────────── ברכה ─────────────────────────
 
@@ -51,9 +52,10 @@ const minutesOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
 /**
  * reported — דווח · pending — הסתיים ולא דווח (היום או בימים שעברו) ·
- * now — מתקיים עכשיו · later — בהמשך היום · upcoming — ביום עתידי.
+ * now — מתקיים עכשיו · later — בהמשך היום · upcoming — ביום עתידי ·
+ * canceled — בוטל (חג / שבתון, או סומן ידנית "לא התקיים").
  */
-export type SessionStatus = 'reported' | 'pending' | 'now' | 'later' | 'upcoming';
+export type SessionStatus = 'reported' | 'pending' | 'now' | 'later' | 'upcoming' | 'canceled';
 
 export type AgendaItem = {
   course: Course;
@@ -64,6 +66,8 @@ export type AgendaItem = {
   reportId?: string;
   /** "09:00–12:15" בבידוד LTR */
   time: string;
+  /** כשהמפגש בוטל — הסיבה והאם אוטומטי (חג) */
+  cancel?: Cancellation;
 };
 
 export type AgendaDayKey = 'dayBefore' | 'yesterday' | 'today' | 'tomorrow' | 'dayAfter';
@@ -98,19 +102,26 @@ export function agenda(
   workplaces: readonly Workplace[],
   reports: readonly WorkReport[],
   now: Date = new Date(),
+  cancel: CancelIndex = currentCancel(),
 ): AgendaDay[] {
-  const byId = new Map(workplaces.map((w) => [w.id, w]));
+  // מקומות עבודה בארכיון לא מופיעים בלו״ז.
+  const byId = new Map(activeWorkplaces(workplaces).map((w) => [w.id, w]));
   const nowMin = minutesOfDay(now);
   return AGENDA_DAYS.map(({ key, offset, label }) => {
     const d = addDays(now, offset);
     const date = isoDate(d);
     const items: AgendaItem[] = [];
-    for (const course of coursesOn(courses, date)) {
+    for (const course of coursesOn(courses, date, undefined, NO_CANCEL)) {
       const workplace = byId.get(course.workplaceId);
       if (!workplace) continue;
       let status: SessionStatus = 'upcoming';
       let reportId: string | undefined;
-      if (offset <= 0) {
+      const canceled = cancel(course.id, date) ?? undefined;
+      // מפגש שבוטל אך בכל זאת דווח — מוצג כמדווח.
+      const covering = courseReport(course, date, reports)?.id;
+      if (canceled && !covering) {
+        status = 'canceled';
+      } else if (offset <= 0) {
         reportId = courseReport(course, date, reports)?.id;
         const s = parseTime(course.start) ?? 0;
         const e = parseTime(course.end) ?? 0;
@@ -119,7 +130,15 @@ export function agenda(
         else if (nowMin >= s) status = 'now';
         else status = 'later';
       }
-      items.push({ course, workplace, date, status, reportId, time: timeRange(course.start, course.end) });
+      items.push({
+        course,
+        workplace,
+        date,
+        status,
+        reportId,
+        time: timeRange(course.start, course.end),
+        cancel: status === 'canceled' ? canceled : undefined,
+      });
     }
     return { key, offset, label, date, dayLabel: longDayLabel(d), items };
   });
@@ -255,8 +274,11 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
   const { workplaces, courses, reports } = input;
   const out: HomeAlert[] = [];
 
-  out.push(...taxiAlerts(workplaces, courses, now));
-  out.push(...missingAlerts(workplaces, courses, reports, now));
+  // תזכורות שוטפות (מונית, דיווח חסר, תיאום מס) — רק למקומות עבודה פעילים.
+  // דוחות שכר ותשלומים — לכולם, גם למקום שהועבר לארכיון ועוד חייב תשלום.
+  const active = activeWorkplaces(workplaces);
+  out.push(...taxiAlerts(active, courses, now));
+  out.push(...missingAlerts(active, courses, reports, now));
 
   // דוחות שכר ותיאום מס (אותה לוגיקה שהייתה בבאנר התזכורות).
   const items = payrollItems(workplaces, reports, input.payroll);
@@ -334,7 +356,7 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
   }
 
   const year = String(now.getFullYear());
-  const noTax = missingTaxCoordination(workplaces, year);
+  const noTax = missingTaxCoordination(active, year);
   if (noTax.length) {
     out.push({
       key: `tax|${year}|${noTax.map((w) => w.id).join(',')}`,

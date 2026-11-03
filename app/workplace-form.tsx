@@ -731,18 +731,27 @@ export default function WorkplaceFormScreen() {
       >
         {isEdit ? (
           <View style={styles.courses}>
-            {courses.map((c) => (
-              <Pressable
-                key={c.id}
-                onPress={() => router.push({ pathname: '/course-form', params: { id: c.id } })}
-                style={({ pressed }) => [styles.course, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={styles.courseName}>{c.name}</Text>
-                <Text style={styles.courseMeta}>
-                  {courseScheduleLabel(c)} · {dateRange(c.from, c.to, true)}
-                </Text>
-              </Pressable>
-            ))}
+            {/* פעילים קודם; קורסים שהסתיימו (ארכיון) — בסוף ומעומעמים */}
+            {[...courses]
+              .sort((x, y) => Number(x.to < todayISO()) - Number(y.to < todayISO()))
+              .map((c) => {
+                const ended = c.to < todayISO();
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => router.push({ pathname: '/course-form', params: { id: c.id } })}
+                    style={({ pressed }) => [styles.course, ended && { opacity: 0.6 }, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={styles.courseName}>
+                      {c.name}
+                      {ended ? ' · הסתיים (ארכיון)' : ''}
+                    </Text>
+                    <Text style={styles.courseMeta}>
+                      {courseScheduleLabel(c)} · {dateRange(c.from, c.to, true)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             <Button
               label="הוספת קורס"
               variant="secondary"
