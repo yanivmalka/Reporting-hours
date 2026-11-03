@@ -142,7 +142,10 @@ const PAY_LINKS: NavLink[] = [
   { href: '/tax', key: 'nav.tax', icon: 'receipt-text-outline' },
 ];
 
-/** מסכי הגדרה — בתוך "הגדרות ותצוגה" המתקפל. (האשפה — ממסך מקומות העבודה.) */
+/** ארכיון ואשפה — מסך אחד עם בורר. */
+const ARCHIVE_LINKS: NavLink[] = [{ href: '/archive', key: 'nav.archive', icon: 'archive-outline' }];
+
+/** מסכי הגדרה — בתוך "הגדרות ותצוגה" המתקפל. */
 const SETTINGS_LINKS: NavLink[] = [
   { href: '/settings', key: 'nav.settings', icon: 'timer-cog-outline' },
   { href: '/profile', key: 'nav.profile', icon: 'account-circle-outline' },
@@ -209,6 +212,7 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
                 <View style={menuStyles.divider} />
                 {PAY_LINKS.map(item)}
                 <View style={menuStyles.divider} />
+                {ARCHIVE_LINKS.map(item)}
                 <Pressable
                   onPress={() => {
                     setOpen(false);
@@ -433,6 +437,7 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
       <View style={drawerStyles.divider} />
       {PAY_LINKS.map(navItem)}
       <View style={drawerStyles.divider} />
+      {ARCHIVE_LINKS.map(navItem)}
 
       <Pressable
         onPress={() => setSettingsOpen((v) => !v)}

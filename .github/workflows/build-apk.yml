@@ -1,10 +1,7 @@
 name: Build Android APK
 
-# בונה APK חתום ומפרסם אותו כ־GitHub Release — רק כשצריך:
-#   - push ל־main שמשנה קבצים שמשפיעים על השכבה הנייטיבית (תלויות, app.json, נכסים, הבנייה עצמה);
-#   - push ל־main שבהודעת ה־commit יש [apk];
-#   - הפעלה ידנית (Run workflow).
-# שינויי קוד JS בלבד מתעדכנים באתר (deploy-web) בלי לבנות APK.
+# בונה APK חתום ומפרסם אותו כ־GitHub Release — בכל push ל־main (כולל שינויי JS בלבד,
+# כדי שכל שינוי יגיע גם לאפליקציה בטלפון), ובהפעלה ידנית (Run workflow).
 # האפליקציה בודקת את ה־Release האחרון (lib/update.ts) ומציעה עדכון.
 #
 # חתימה: אנדרואיד מתקין עדכון רק אם הוא חתום באותו מפתח כמו הגרסה המותקנת.
@@ -25,35 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  gate:
-    runs-on: ubuntu-latest
-    outputs:
-      build: ${{ steps.check.outputs.build }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: check
-        env:
-          EVENT: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-          MSG: ${{ github.event.head_commit.message }}
-        run: |
-          if [ "$EVENT" = "workflow_dispatch" ]; then echo "build=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if printf '%s' "$MSG" | grep -qiF '[apk]'; then echo "build=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if [ -z "$BEFORE" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then echo "build=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA")
-          echo "$CHANGED"
-          if printf '%s\n' "$CHANGED" | grep -qE '^(package\.json|package-lock\.json|app\.json|app\.config\.(js|ts)|eas\.json|assets/|plugins/|\.github/workflows/build-apk\.yml)'; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::JS-only change — APK not rebuilt (the website is updated). Add [apk] to the commit message or run the workflow manually to build one."
-          fi
-
   apk:
-    needs: gate
-    if: needs.gate.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:

@@ -99,6 +99,7 @@ function Chrome() {
               <Stack.Screen name="payroll-report" options={{ title: 'דוח שכר' }} />
               <Stack.Screen name="course-form" options={{ title: 'קורס' }} />
               <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
+              <Stack.Screen name="archive" options={{ title: t('nav.archive') }} />
               <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
               <Stack.Screen name="data" options={{ title: t('nav.data') }} />
             </Stack>
