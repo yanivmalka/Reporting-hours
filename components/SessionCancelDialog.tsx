@@ -78,7 +78,7 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
           {canceled ? (
             <Text style={styles.reason}>
               {canceled.auto
-                ? `בוטל אוטומטית: ${canceled.reason}. אפשר לכבות את הביטול האוטומטי בחגים בהגדרות.`
+                ? `בוטל אוטומטית: ${canceled.reason}. "המפגש התקיים" מחזיר רק את המפגש הזה; את סוגי הימים המבוטלים בוחרים בהגדרות.`
                 : canceled.reason
                   ? `סיבה: ${canceled.reason}`
                   : 'לא צוינה סיבה.'}
