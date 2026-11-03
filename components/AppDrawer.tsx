@@ -38,6 +38,7 @@ import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyle
 import { SegmentedControl } from './SegmentedControl';
 import { UpdateSection } from './UpdateChecker';
 import { AccountSection } from './CloudSync';
+import { useHydrated } from '../lib/useHydrated';
 
 type DrawerContextValue = {
   open: () => void;
@@ -77,7 +78,9 @@ export const WIDE_MIN_WIDTH = 1000;
 /** מסך רחב: התפריט קבוע בצד והתוכן ממורכז ברוחב מוגבל. */
 export function useWideLayout(): boolean {
   const { width } = useWindowDimensions();
-  return width >= WIDE_MIN_WIDTH;
+  // ברינדור מראש אין רוחב חלון — עד סיום ה־hydration תמיד הפריסה הצרה.
+  const hydrated = useHydrated();
+  return hydrated && width >= WIDE_MIN_WIDTH;
 }
 
 /** כפתור ההמבורגר לכותרת הניווט. */
