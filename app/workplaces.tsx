@@ -124,7 +124,7 @@ export default function WorkplacesScreen() {
           label="הוספת מקום עבודה"
           onPress={() => router.push('/workplace-form')}
         />
-        <Button label="אשפה — מקומות עבודה שנמחקו" variant="secondary" onPress={() => router.push('/trash')} />
+        <Button label="ארכיון ואשפה" variant="secondary" onPress={() => router.push('/archive')} />
       </View>
     </Screen>
   );

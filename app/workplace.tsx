@@ -381,7 +381,7 @@ export default function WorkplaceDetailScreen() {
           onPress={() => router.push({ pathname: '/workplace-form', params: { id: w.id } })}
         />
         <Button
-          label={archived ? 'החזרה ממקומות לא פעילים' : 'העברה לארכיון — לא עובד כאן כרגע'}
+          label={archived ? 'החזרה ממקומות לא פעילים' : 'העברה לארכיון'}
           variant="secondary"
           onPress={() => void toggleArchive()}
         />

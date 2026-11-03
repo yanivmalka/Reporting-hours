@@ -101,7 +101,7 @@ export default function DashboardScreen() {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   /** כיוון הדפדוף האחרון — לאנימציה */
   const [navDir, setNavDir] = useState<1 | -1>(1);
-  /** עמוד בלוח הבקרה: 0 — צפי ותשלומים · 1 — החודש הנוכחי לפי תקופת שכר */
+  /** עמוד בלוח הבקרה: 0 — צפי ותשלומים · 1 — סיכום וניתוח (התקופה לפי שכר, פילוחים ומגמות) */
   const [page, setPage] = useState<0 | 1>(0);
   const [pageDir, setPageDir] = useState<1 | -1>(1);
   const pageFlash = useFlash(page, pageDir);
@@ -356,7 +356,7 @@ export default function DashboardScreen() {
   return (
     <Screen>
       <View style={styles.pager} accessibilityRole="tablist">
-        {(['צפי ותשלומים', 'החודש הנוכחי'] as const).map((label, i) => (
+        {(['צפי ותשלומים', 'סיכום וניתוח'] as const).map((label, i) => (
           <Pressable
             key={label}
             onPress={() => goPage(i as 0 | 1)}
@@ -470,7 +470,7 @@ export default function DashboardScreen() {
       ))}
       {rows.length === 0 ? <Text style={styles.periodSub}>אין מקומות עבודה עם נתונים בתקופה.</Text> : null}
 
-      <Button label="החודש הנוכחי ←" variant="secondary" onPress={() => goPage(1)} />
+      <Button label="סיכום וניתוח ←" variant="secondary" onPress={() => goPage(1)} />
         </>
       ) : (
         <>

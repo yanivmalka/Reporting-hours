@@ -13,6 +13,7 @@ import type { PayBasis } from './payBasis';
 import { isLocked, overduePayments, payrollItems, pendingPayroll, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
 import { currentCancel, NO_CANCEL, type Cancellation, type CancelIndex } from './sessions';
+import { recommendations } from './recommend';
 import { parseTime } from './time';
 import { activeWorkplaces, isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
 
@@ -174,6 +175,8 @@ export type AlertInput = {
   accumulated: AccumulatedState;
   payroll: StatusMap;
   basis: PayBasis;
+  /** המלצות סידור שנדחו (lib/recommend.ts) */
+  recommendDismissed?: readonly string[];
   now?: Date;
 };
 
@@ -368,5 +371,18 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
     });
   }
 
+
+  // הצעות לסידור פריטים לא פעילים (ארכיון / מחיקה) — מובילות למסך "ארכיון ואשפה".
+  const recs = recommendations(workplaces, courses, reports, input.payroll, input.recommendDismissed ?? [], now);
+  if (recs.length) {
+    out.push({
+      key: `recommend|${recs.map((r) => r.key).join(',')}`,
+      icon: 'archive-arrow-down-outline',
+      tone: 'info',
+      title: recs.length === 1 ? 'הצעה אחת לסידור פריטים לא פעילים' : `${recs.length} הצעות לסידור פריטים לא פעילים`,
+      body: 'מקומות עבודה וקורסים שלא בשימוש — להעביר לארכיון או למחוק.',
+      action: { label: 'לצפייה בהצעות', href: { pathname: '/archive', params: { tab: 'archive' } } },
+    });
+  }
   return out;
 }

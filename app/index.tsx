@@ -35,6 +35,7 @@ import { usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus } from '../lib/payroll';
 import { loadProfile } from '../lib/profile';
 import { loadReports } from '../lib/reports';
+import { loadDismissedRecommendations } from '../lib/recommend';
 import { readJSON, writeJSON } from '../lib/storage';
 import { isTaxi, loadWorkplaces } from '../lib/workplaces';
 import { isoDate } from '../lib/dashboard';
@@ -86,14 +87,15 @@ export default function HomeScreen() {
           loadPayrollStatus(),
           loadProfile(),
           readJSON<string[]>(DISMISSED_KEY, []),
-        ]).then(([workplaces, reports, courses, accumulated, payroll, profile, gone]) => {
+          loadDismissedRecommendations(),
+        ]).then(([workplaces, reports, courses, accumulated, payroll, profile, gone, recommendDismissed]) => {
           if (!active) return;
           const at = new Date();
           setNow(at);
           setDismissed(gone);
           setData({
             days: agenda(courses, workplaces, reports, at),
-            alerts: homeAlerts({ workplaces, courses, reports, accumulated, payroll, basis, now: at }),
+            alerts: homeAlerts({ workplaces, courses, reports, accumulated, payroll, basis, recommendDismissed, now: at }),
             name: firstName(profile.fullName),
           });
         });
