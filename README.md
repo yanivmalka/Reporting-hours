@@ -32,8 +32,11 @@
 
 ## APK (אנדרואיד)
 
-- **בנייה אוטומטית:** [.github/workflows/build-apk.yml](./.github/workflows/build-apk.yml) רץ בכל push ל־`main`
-  (או ידנית מ־Actions): `expo prebuild` → `gradlew assembleRelease` → פרסום **GitHub Release**
+- **בנייה לפי צורך:** [.github/workflows/build-apk.yml](./.github/workflows/build-apk.yml) בונה APK רק כשנדרש:
+  push ל־`main` שמשנה קבצים שמשפיעים על השכבה הנייטיבית (`package.json`, `package-lock.json`, `app.json`,
+  `app.config.js`, `assets/`, `plugins/` או ה־workflow עצמו), push שבהודעת ה־commit יש `[apk]`, או הפעלה ידנית
+  מ־Actions ("Run workflow"). שינויי JS בלבד מתעדכנים רק באתר.
+  הבנייה: `expo prebuild` → `gradlew assembleRelease` (ארכיטקטורת `arm64-v8a` בלבד) → פרסום **GitHub Release**
   בשם `v0.1.<מספר בנייה>` עם קובץ ה־APK.
 - **הורדה:** `https://github.com/yanivmalka/Reporting-hours/releases/latest`
 - **עדכון מתוך האפליקציה:** [lib/update.ts](./lib/update.ts) בודק בפתיחה את ה־Release האחרון ומשווה
