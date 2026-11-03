@@ -16,13 +16,6 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
         <title>דיווח שעות</title>
-        {/* גופן Heebo (משקלים 400–800) — באנדרואיד הוא ארוז באפליקציה (app.json → expo-font) */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap"
-        />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: backgroundStyle }} />
       </head>
