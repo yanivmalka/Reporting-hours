@@ -43,6 +43,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { useWorkplaceColor } from '../theme/workplaceColors';
 
 /** התראות שנסגרו — לפי המפתח שלהן (שכולל תאריך כשהן תלויות יום). */
 const DISMISSED_KEY = 'reporting-hours/home-dismissed/v1';
@@ -200,14 +201,14 @@ export default function HomeScreen() {
       <View style={styles.dayTabs} accessibilityRole="tablist">
         {days.map((d, i) => {
           const active = i === dayIdx;
-          const missing = d.items.some((it) => it.status === 'pending');
+          const dot = dayDot(d, colors);
           return (
             <Pressable
               key={d.key}
               onPress={() => pickDay(i)}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={`${d.label}, ${d.dayLabel}`}
+              accessibilityLabel={`${d.label}, ${d.dayLabel}${dot ? `, ${dot.label}` : ''}`}
               style={({ pressed }) => [styles.dayTab, active && styles.dayTabActive, pressed && styles.pressed]}
             >
               <Text style={[styles.dayTabLabel, active && styles.dayTabTextActive]} numberOfLines={1}>
@@ -217,8 +218,9 @@ export default function HomeScreen() {
               <View
                 style={[
                   styles.dayTabDot,
-                  d.items.length > 0 && {
-                    backgroundColor: active ? colors.textOnBrand : missing ? colors.warning : colors.textMuted,
+                  dot && {
+                    backgroundColor: dot.fill ?? 'transparent',
+                    borderColor: dot.fill ? (active ? colors.textOnBrand : 'transparent') : dot.ring,
                   },
                 ]}
               />
@@ -309,6 +311,24 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   upcoming: '',
 };
 
+/**
+ * הנקודה מתחת ליום בשורת הימים — מצב הדיווח של אותו יום:
+ * כתום — יש מפגש שממתין לדיווח; ירוק — כל המפגשים דווחו;
+ * כחול (צבע המערכת) — מפגשים שעוד לפניך (עתידי, עכשיו, בהמשך היום);
+ * טבעת אפורה — כל המפגשים בוטלו. בלי מפגשים — בלי נקודה.
+ */
+function dayDot(
+  d: AgendaDay,
+  colors: AppColors,
+): { fill?: string; ring?: string; label: string } | null {
+  if (d.items.length === 0) return null;
+  const live = d.items.filter((it) => it.status !== 'canceled');
+  if (live.length === 0) return { ring: colors.textMuted, label: 'כל המפגשים בוטלו' };
+  if (live.some((it) => it.status === 'pending')) return { fill: colors.warning, label: 'יש מפגשים לדיווח' };
+  if (live.every((it) => it.status === 'reported')) return { fill: colors.success, label: 'הכול דווח' };
+  return { fill: colors.brand, label: 'מפגשים מתוכננים' };
+}
+
 /** "3.11" */
 const shortDay = (iso: string) => {
   const [, m, d] = iso.split('-').map(Number);
@@ -338,6 +358,7 @@ function SessionRow({
             : { bg: colors.background, fg: colors.textMuted };
   const canceled = item.status === 'canceled';
   const taxi = isTaxi(item.workplace.arrivalMode);
+  const wpColor = useWorkplaceColor()(item.workplace);
   return (
     <Pressable
       onPress={onPress}
@@ -346,6 +367,7 @@ function SessionRow({
       style={({ pressed }) => [styles.session, pressed && styles.pressed]}
       accessibilityRole={onPress ? 'button' : undefined}
     >
+      <View style={[styles.sessionBar, { backgroundColor: wpColor }, canceled && styles.sessionBarCanceled]} />
       <View style={styles.sessionTexts}>
         <Text style={[styles.sessionName, canceled && styles.sessionCanceled]} numberOfLines={1}>
           {item.course.name}
@@ -474,7 +496,15 @@ const makeStyles = (colors: AppColors) =>
     dayTabLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
     dayTabDate: { fontSize: 12, color: colors.textMuted },
     dayTabTextActive: { color: colors.textOnBrand },
-    dayTabDot: { width: 6, height: 6, borderRadius: 3, marginTop: 2, backgroundColor: 'transparent' },
+    dayTabDot: {
+      width: 9,
+      height: 9,
+      borderRadius: 4.5,
+      marginTop: 2,
+      borderWidth: 1.5,
+      borderColor: 'transparent',
+      backgroundColor: 'transparent',
+    },
     dayCard: {
       backgroundColor: colors.surface,
       borderRadius: 18,
@@ -496,6 +526,8 @@ const makeStyles = (colors: AppColors) =>
       minHeight: 52,
     },
     sessionTexts: { flex: 1, gap: 2 },
+    sessionBar: { width: 4, alignSelf: 'stretch', borderRadius: 2, marginBottom: 2 },
+    sessionBarCanceled: { opacity: 0.35 },
     sessionName: { fontSize: 16, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     sessionCanceled: { textDecorationLine: 'line-through', color: colors.textMuted },
     hint: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT, paddingTop: 2 },

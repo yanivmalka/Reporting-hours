@@ -16,6 +16,7 @@ import { loadReports } from '../lib/reports';
 import { formatDateWithHebrew } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
+import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -66,7 +67,14 @@ export default function PayrollScreen() {
     });
 
   const Row = ({ item, kind }: { item: PayrollItem; kind: 'pending' | 'current' | 'sent' }) => (
-    <Pressable onPress={() => openItem(item)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+    <Pressable
+      onPress={() => openItem(item)}
+      style={({ pressed }) => [
+        styles.row,
+        { borderStartWidth: 5, borderStartColor: workplaceColor(colors, item.workplace) },
+        pressed && styles.pressed,
+      ]}
+    >
       <View style={styles.rowHead}>
         <Text style={styles.rowName} numberOfLines={2}>
           {item.workplace.name}

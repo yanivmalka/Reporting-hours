@@ -29,6 +29,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { workplaceColor } from '../theme/workplaceColors';
 
 /** מיון: תאריך יורד, ובאותו תאריך לפי סדר ההזנה היורד. */
 function byNewest(a: WorkReport, b: WorkReport): number {
@@ -263,7 +264,7 @@ export default function ReportsScreen() {
           onChange={setWpFilter}
           options={[
             { value: null, label: 'הכול' },
-            ...usedWorkplaces.map((w) => ({ value: w.id, label: w.name })),
+            ...usedWorkplaces.map((w) => ({ value: w.id, label: w.name, color: workplaceColor(colors, w) })),
           ]}
         />
       </View>
@@ -344,6 +345,7 @@ export default function ReportsScreen() {
               key={report.id}
               report={report}
               workplaceName={nameOf(report.workplaceId)}
+              color={workplaceOf(report.workplaceId) ? workplaceColor(colors, workplaceOf(report.workplaceId)) : undefined}
               pay={payOf(report)}
               travel={travelOf(report)}
               locked={lockOf(report) != null}

@@ -48,6 +48,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { useWorkplaceColor } from '../theme/workplaceColors';
 
 /** שורת הפסקה בטופס — משך בדקות נשמר כמחרוזת לעריכה חופשית. */
 type BreakRow = { id: string; minutes: string };
@@ -77,6 +78,9 @@ function sumBreaks(rows: BreakRow[]): number {
   }, 0);
 }
 
+/** כמה שניות אחרי שמירה חוזרים אוטומטית (לבית, או לתצוגת הדיווח בעריכה). */
+const AUTO_RETURN_SECONDS = 5;
+
 export default function ReportScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
@@ -98,6 +102,7 @@ export default function ReportScreen() {
   const [lockedStart, setLockedStart] = useState<string | null>(null);
   const confirm = useConfirm();
   const sessionDialog = useSessionCancel();
+  const colorOf = useWorkplaceColor();
   const { basis } = usePayBasis();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
   const [existing, setExisting] = useState<WorkReport[]>([]);
@@ -243,6 +248,27 @@ export default function ReportScreen() {
     else router.replace('/');
   }, [exitReason, navigation, router]);
 
+  // ── חזרה אוטומטית אחרי שמירה ──
+  // דיווח חדש — לדף הבית; עריכה — לתצוגת הדיווח. "להישאר כאן" עוצר.
+  const [countdown, setCountdown] = useState<number | null>(null);
+  useEffect(() => {
+    if (step === 'done') setCountdown(AUTO_RETURN_SECONDS);
+    else setCountdown(null);
+  }, [step]);
+  useEffect(() => {
+    if (countdown == null) return;
+    if (countdown <= 0) {
+      setCountdown(null);
+      if (editId) router.back();
+      else if (router.canDismiss()) router.dismissAll();
+      else router.replace('/');
+      return;
+    }
+    const t = setTimeout(() => setCountdown((n) => (n == null ? null : n - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [countdown, editId, router]);
+
+
   function addBreak() {
     setBreaks((prev) => [...prev, { id: makeBreakId(), minutes: '' }]);
     setErrors((prev) => ({ ...prev, breaks: undefined }));
@@ -352,6 +378,8 @@ export default function ReportScreen() {
     setCourseId(null);
     setTouched(false);
     setSaving(false);
+    // הדיווח נשמר — יציאה מהמסך (לבית, לדיווחים, ללוח הבקרה) בלי אזהרת "לצאת בלי לשמור".
+    setExitReason('saved');
     setStep('done');
   }
 
@@ -568,7 +596,31 @@ export default function ReportScreen() {
     Keyboard.dismiss();
     setLastSaved(null);
     setErrors({});
+    // דיווח חדש — שוב שומרים מפני יציאה בלי שמירה, מול טופס ריק.
+    setBaseline({ start: '', end: '', note: '', breaks: 0 });
+    setExitReason(null);
     setStep('date');
+  }
+
+  /**
+   * "השיעור לא התקיים" מתוך האשף, לפני שמירה. מהשעות / מהסיכום — אין מה
+   * לדווח, יוצאים מהאשף (בלי אזהרה). מבחירת הקורס — נשארים, והקורס יורד
+   * מהרשימה (הקורסים נטענים מחדש עם אינדקס הביטולים).
+   */
+  function cancelSession(c: Course, leave: boolean) {
+    sessionDialog.open({
+      course: c,
+      date,
+      onDone: (canceled) => {
+        if (!canceled) return;
+        if (leave) {
+          setExitReason('cancelled');
+          return;
+        }
+        if (courseId === c.id) setCourseId(null);
+        loadCourses().then(setCourses);
+      },
+    });
   }
 
   // ── מחוון שלבים ──
@@ -585,7 +637,7 @@ export default function ReportScreen() {
   const wAt = workplace ? workplaceAt(workplace, date) : null;
   const context =
     (step === 'times' || step === 'summary') && wAt ? (
-      <View style={styles.context}>
+      <View style={[styles.context, { borderStartWidth: 5, borderStartColor: colorOf(workplace) }]}>
         <Text style={styles.contextMain}>{wAt.name}</Text>
         {selectedCourse ? (
           <Text style={styles.contextCourse}>
@@ -672,7 +724,13 @@ export default function ReportScreen() {
                 {activeCourses.map((c) => {
                   const done = reportedCourse(c);
                   return (
-                    <View key={c.id} style={styles.dayCourseRow}>
+                    <View
+                      key={c.id}
+                      style={[
+                        styles.dayCourseRow,
+                        { borderStartWidth: 3, borderStartColor: colorOf(workplaces.find((w) => w.id === c.workplaceId)), paddingStart: 6 },
+                      ]}
+                    >
                       <Text style={[styles.dayCourseMark, done ? styles.markDone : styles.markTodo]}>
                         {done ? '✓' : '•'}
                       </Text>
@@ -706,7 +764,11 @@ export default function ReportScreen() {
                 <Pressable
                   key={c.id}
                   onPress={() => chooseCourse(c)}
-                  style={({ pressed }) => [styles.courseCard, pressed && styles.pressed]}
+                  style={({ pressed }) => [
+                    styles.courseCard,
+                    { borderStartWidth: 5, borderStartColor: colorOf(workplaces.find((w) => w.id === c.workplaceId)) },
+                    pressed && styles.pressed,
+                  ]}
                   accessibilityRole="button"
                 >
                   <View style={styles.courseTop}>
@@ -718,6 +780,17 @@ export default function ReportScreen() {
                     {workplaceName(c.workplaceId)}
                     {c.breakMinutes > 0 ? ` · הפסקה ${c.breakMinutes} דק׳` : ''}
                   </Text>
+                  {!done ? (
+                    <Pressable
+                      onPress={() => cancelSession(c, false)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${c.name}: השיעור לא התקיים`}
+                      hitSlop={8}
+                      style={styles.cardCancel}
+                    >
+                      <Text style={styles.cardCancelText}>השיעור לא התקיים?</Text>
+                    </Pressable>
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -739,7 +812,11 @@ export default function ReportScreen() {
                 <Pressable
                   key={w.id}
                   onPress={() => chooseWorkplace(w.id)}
-                  style={[styles.choice, selected && styles.choiceSelected]}
+                  style={[
+                    styles.choice,
+                    selected && styles.choiceSelected,
+                    { borderStartWidth: 5, borderStartColor: colorOf(w) },
+                  ]}
                   accessibilityRole="button"
                 >
                   <View style={styles.choiceBody}>
@@ -769,14 +846,7 @@ export default function ReportScreen() {
           </Text>
           {selectedCourse && !editId && !extraKind ? (
             <Pressable
-              onPress={() =>
-                sessionDialog.open({
-                  course: selectedCourse,
-                  date,
-                  // אחרי סימון כבוטל אין מה לדווח — חוזרים למסך הקודם.
-                  onDone: (canceled) => canceled && router.back(),
-                })
-              }
+              onPress={() => cancelSession(selectedCourse, true)}
               accessibilityRole="button"
               style={styles.linkBtn}
             >
@@ -895,6 +965,15 @@ export default function ReportScreen() {
       {step === 'summary' ? (
         <>
           <Text style={styles.stepTitle}>בדיקה ושמירה</Text>
+          {selectedCourse && !editId && !extraKind ? (
+            <Pressable
+              onPress={() => cancelSession(selectedCourse, true)}
+              accessibilityRole="button"
+              style={styles.linkBtn}
+            >
+              <Text style={styles.linkText}>השיעור לא התקיים? סימון כבוטל</Text>
+            </Pressable>
+          ) : null}
           <FormField label="נושא / הערה" hint="רשות — למשל נושא ההרצאה או ההגשה">
             <TextField value={note} onChangeText={setNote} placeholder="תולדות האדריכלות — שיעור 4" />
           </FormField>
@@ -1001,6 +1080,16 @@ export default function ReportScreen() {
           <Text style={styles.doneTitle}>{editId ? 'הדיווח עודכן' : 'הדיווח נשמר'}</Text>
           <Text style={styles.doneText}>{lastSaved.text}</Text>
           {lastSaved.toast ? <Text style={styles.doneSub}>{lastSaved.toast}</Text> : null}
+          {countdown != null ? (
+            <View style={styles.countdown}>
+              <Text style={styles.countdownText}>
+                {editId ? 'חוזרים לתצוגת הדיווח' : 'חוזרים לדף הבית'} בעוד {countdown} שניות
+              </Text>
+              <Pressable onPress={() => setCountdown(null)} accessibilityRole="button" hitSlop={8}>
+                <Text style={styles.linkText}>להישאר כאן</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -1010,12 +1099,25 @@ export default function ReportScreen() {
       {step === 'done' ? (
         <View style={styles.nav}>
           {editId ? (
-            <Button label="חזרה לדיווח" onPress={() => router.back()} />
+            <Button label="חזרה לדיווח" onPress={() => { setCountdown(null); router.back(); }} />
           ) : (
             <Button label="דיווח נוסף" onPress={anotherReport} />
           )}
-          <Button label="ללוח הבקרה" variant="secondary" onPress={() => router.replace('/dashboard')} />
-          <Pressable onPress={() => router.replace('/reports')} style={styles.cancel}>
+          <Button
+            label="ללוח הבקרה"
+            variant="secondary"
+            onPress={() => {
+              setCountdown(null);
+              router.replace('/dashboard');
+            }}
+          />
+          <Pressable
+            onPress={() => {
+              setCountdown(null);
+              router.replace('/reports');
+            }}
+            style={styles.cancel}
+          >
             <Text style={styles.cancelText}>להדיווחים שלי</Text>
           </Pressable>
         </View>
@@ -1283,6 +1385,27 @@ const makeStyles = (colors: AppColors) =>
   linkBtn: {
     alignSelf: 'center',
     paddingVertical: spacing.sm,
+  },
+  cardCancel: {
+    alignSelf: 'flex-start',
+    paddingTop: spacing.xs,
+  },
+  cardCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.danger,
+    textDecorationLine: 'underline',
+  },
+  countdown: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: 2,
+    paddingTop: spacing.sm,
+  },
+  countdownText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
   linkText: {
     fontSize: 14,

@@ -32,6 +32,7 @@ import {
   PAYMENT_TYPE_LABELS,
   DEFAULT_TAXI_REMINDER,
   emptyDraft,
+  freeColor,
   isTaxi,
   makeContactId,
   paymentTermsOf,
@@ -48,6 +49,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { workplacePalette } from '../theme/workplaceColors';
 
 /** מצב הטופס — שדות מספריים נשמרים כמחרוזת כדי לאפשר עריכה חופשית. */
 /** איש קשר בטופס — כל השדות כמחרוזות */
@@ -74,6 +76,8 @@ type FormState = {
   taxiReminderKind: TaxiReminder['kind'];
   taxiHours: string;
   taxiNightTime: string;
+  /** משבצת הצבע בפלטת מקומות העבודה */
+  colorIndex: number;
 };
 
 type Errors = Partial<Record<keyof FormState, string>> & { contactErrors?: Record<string, string> };
@@ -116,6 +120,7 @@ function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
     taxiReminderKind: reminder.kind,
     taxiHours: String(reminder.kind === 'hoursBefore' ? reminder.hours : 2),
     taxiNightTime: reminder.kind === 'nightBefore' ? reminder.time : '21:00',
+    colorIndex: d.colorIndex ?? 0,
   };
 }
 
@@ -178,6 +183,18 @@ export default function WorkplaceFormScreen() {
       };
     }, [id]),
   );
+
+  // מקום חדש: הצבע הפנוי הבא (המשתמש יכול לבחור אחר).
+  useEffect(() => {
+    if (id) return;
+    let active = true;
+    loadWorkplaces().then((list) => {
+      if (active) setForm((prev) => (prev ? { ...prev, colorIndex: freeColor(list) } : prev));
+    });
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -316,6 +333,7 @@ export default function WorkplaceFormScreen() {
     await upsertWorkplace({
       id,
       name: form.name.trim(),
+      colorIndex: form.colorIndex,
       address: form.address.trim() || undefined,
       contacts: form.contacts.map((c) => ({
         id: c.id,
@@ -432,6 +450,26 @@ export default function WorkplaceFormScreen() {
           placeholder="מכללה / אוניברסיטה"
           invalid={Boolean(errors.name)}
         />
+      </FormField>
+
+      <FormField label="צבע" hint="מסמן את מקום העבודה בלו״ז, בדיווחים ובלוח הבקרה. משתנה יחד עם צבע המערכת.">
+        <View style={styles.swatches} accessibilityRole="radiogroup">
+          {workplacePalette(colors).map((c, i) => {
+            const on = form.colorIndex === i;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => set('colorIndex', i)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`צבע ${i + 1}`}
+                style={[styles.swatch, { backgroundColor: c }, on && { borderColor: colors.text }]}
+              >
+                {on ? <Text style={styles.swatchCheck}>✓</Text> : null}
+              </Pressable>
+            );
+          })}
+        </View>
       </FormField>
 
       <FormField label="כתובת" hint="מוצגת בתזכורת לנסיעה">
@@ -867,6 +905,21 @@ export default function WorkplaceFormScreen() {
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    swatches: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    swatch: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 3,
+      borderColor: 'transparent',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    swatchCheck: { color: '#fff', fontSize: 18, fontWeight: '800' },
   courses: {
     gap: spacing.sm,
   },

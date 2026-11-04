@@ -46,7 +46,7 @@ import { loadWorkplaces, paymentTermsLabel, type Workplace } from '../lib/workpl
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
-import { distinctShades } from '../theme/shades';
+import { workplaceColor } from '../theme/workplaceColors';
 import { TEXT_RIGHT } from '../theme/align';
 
 type PeriodChoice = 'current' | 'previous';
@@ -246,8 +246,8 @@ export default function DashboardScreen() {
   const { totals, accumulated } = { totals: view.totals, accumulated: data.accumulated };
 
   // ── צפי: גוונים מאותה משפחה לכל מקום עבודה, וסיכום לחודש / לשנה המסוננים ──
-  const shades = distinctShades(colors, data.workplaces.length);
-  const series = data.workplaces.map((w, i) => ({ id: w.id, color: shades[i], name: w.name }));
+  // צבע קבוע לכל מקום עבודה — אותו צבע שמופיע בלו״ז, בדיווחים ובדוחות.
+  const series = data.workplaces.map((w) => ({ id: w.id, color: workplaceColor(colors, w), name: w.name }));
   const cells = forecast ?? [];
   const now = new Date();
   const nowRef: MonthRef = { year: now.getFullYear(), month0: now.getMonth() };
@@ -532,6 +532,7 @@ export default function DashboardScreen() {
               openReports({ wp: s.workplace.id, from: `${view.firstMonth}-01`, to: todayISO() })
             }
             label={s.workplace.name}
+            color={workplaceColor(colors, s.workplace)}
             value={`${money(s.totals.pay)} · ${Math.round(s.share * 100)}%`}
             fraction={s.share / (view.shares[0]?.share || 1)}
             sub={`${s.totals.days} ימים · ${hoursText(academicHours(s.totals.netMinutes))} שע׳ אקדמיות${
