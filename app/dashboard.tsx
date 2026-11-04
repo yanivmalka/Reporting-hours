@@ -252,28 +252,37 @@ export default function DashboardScreen() {
   const now = new Date();
   const nowRef: MonthRef = { year: now.getFullYear(), month0: now.getMonth() };
   const atNow = anchor.year === nowRef.year && anchor.month0 === nowRef.month0;
-  // בלי נתונים בתצוגה: קישור לחודש של הדיווח האחרון (של המקום המסונן, אם יש), או לחודש הנוכחי.
-  const lastDate = data.reports
-    .filter((r) => !selWp || r.workplaceId === selWp)
-    .reduce<string | null>((m, r) => (m == null || r.date > m ? r.date : m), null);
-  const lastRef: MonthRef | null = lastDate
-    ? { year: Number(lastDate.slice(0, 4)), month0: Number(lastDate.slice(5, 7)) - 1 }
-    : null;
-  const emptyLink = lastRef
-    ? {
-        label: `לחודש הדיווח האחרון · ${MONTHS_LONG[lastRef.month0]} ${lastRef.year}`,
-        onPress: () => {
-          setAnchor(lastRef);
-          setRes('month');
-        },
-      }
-    : {
-        label: 'לחודש הנוכחי',
-        onPress: () => {
-          setAnchor(nowRef);
-          setRes('month');
-        },
-      };
+  // בלי נתונים בתצוגה: תקופה שלפני הדיווח הראשון — קישור קדימה לחודש הדיווח הראשון;
+  // אחרת (אחרי הדיווח האחרון) — קישור אחורה לחודש הדיווח האחרון. לפי המקום המסונן, אם יש.
+  const myDates = data.reports.filter((r) => !selWp || r.workplaceId === selWp).map((r) => r.date);
+  const toRef = (d: string): MonthRef => ({ year: Number(d.slice(0, 4)), month0: Number(d.slice(5, 7)) - 1 });
+  const firstDate = myDates.reduce<string | null>((m, d) => (m == null || d < m ? d : m), null);
+  const lastDate = myDates.reduce<string | null>((m, d) => (m == null || d > m ? d : m), null);
+  const viewEnd = cells.length ? cells[cells.length - 1].key : null;
+  const beforeFirst = firstDate != null && viewEnd != null && viewEnd < firstDate.slice(0, 7);
+  const jump = (ref: MonthRef) => () => {
+    setAnchor(ref);
+    setRes('month');
+  };
+  const emptyLink: { label: string; onPress: () => void; direction: 'back' | 'forward' } =
+    firstDate && lastDate
+      ? beforeFirst
+        ? {
+            label: `לחודש הדיווח הראשון · ${MONTHS_LONG[toRef(firstDate).month0]} ${toRef(firstDate).year}`,
+            onPress: jump(toRef(firstDate)),
+            direction: 'forward',
+          }
+        : {
+            label: `לחודש הדיווח האחרון · ${MONTHS_LONG[toRef(lastDate).month0]} ${toRef(lastDate).year}`,
+            onPress: jump(toRef(lastDate)),
+            direction: 'back',
+          }
+      : {
+          label: 'לחודש הנוכחי',
+          onPress: jump(nowRef),
+          direction:
+            anchor.year * 12 + anchor.month0 > nowRef.year * 12 + nowRef.month0 ? 'back' : 'forward',
+        };
   const sem = semesterOf(anchor);
   const chartView =
     res === 'month'

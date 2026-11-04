@@ -35,8 +35,9 @@ export const money = (n: number) => `${Math.round(n).toLocaleString('en-US')} �
 
 /** אחוז מימוש הפוטנציאל, או null כשאין תכנון. */
 /** סכום מקוצר מעל עמודה צרה: "42.2K", "950". */
-function compact(v: number): string {
-  return v >= 1000 ? `${Math.round(v / 100) / 10}K` : String(Math.round(v));
+function compact(v: number, narrow = false): string {
+  if (v < 1000) return String(Math.round(v));
+  return narrow ? `${Math.round(v / 1000)}K` : `${Math.round(v / 100) / 10}K`;
 }
 
 export function realization(reported: number, planned: number): number | null {
@@ -74,7 +75,8 @@ type Props = {
   /** התצוגה אינה על החודש הנוכחי — קישור חזרה */
   onToday?: () => void;
   /** בלי נתונים בתצוגה: קישור לחודש עם נתונים */
-  emptyLink: { label: string; onPress: () => void };
+  /** קישור כשאין נתונים; direction קובע את כיוון החץ (אחורה בזמן / קדימה) */
+  emptyLink: { label: string; onPress: () => void; direction: 'back' | 'forward' };
 };
 
 export function ForecastChart({
@@ -176,7 +178,10 @@ export function ForecastChart({
           <View style={styles.empty}>
             <Text style={styles.emptyText}>אין נתונים ל{title}</Text>
             <Pressable onPress={emptyLink.onPress} accessibilityRole="link" hitSlop={8}>
-              <Text style={styles.emptyLink}>{emptyLink.label} ←</Text>
+              <Text style={styles.emptyLink}>
+                {/* ב־RTL "אחורה" (חודש קודם) הוא ימינה. */}
+                {(emptyLink.direction === 'back') === isRTL ? `→ ${emptyLink.label}` : `${emptyLink.label} ←`}
+              </Text>
             </Pressable>
           </View>
         ) : res === 'month' ? (
@@ -232,7 +237,7 @@ export function ForecastChart({
                 >
                   {clipped ? (
                     <Text style={styles.colFull} numberOfLines={1}>
-                      {compact(t.planned)}
+                      {compact(t.planned, res === 'year')}
                     </Text>
                   ) : null}
                   <Text style={[styles.colPct, pct != null && pct > 100 && styles.pctOver]} numberOfLines={1}>
@@ -262,7 +267,12 @@ export function ForecastChart({
                       })}
                     </View>
                   </View>
-                  <Text style={[styles.label, future && styles.labelFuture, (isNow || sel) && styles.labelNow]}>
+                  <Text
+                    style={[styles.label, future && styles.labelFuture, (isNow || sel) && styles.labelNow]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
+                  >
                     {res === 'semester' ? MONTH_LONG[m.month0] : MONTH_SHORT[m.month0]}
                   </Text>
                   <Text style={styles.heb} numberOfLines={1}>
