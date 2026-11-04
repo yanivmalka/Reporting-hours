@@ -1,11 +1,13 @@
 /**
  * אריח מקום עבודה בלוח הבקרה — מאחד את פס הגרף ואת פירוט המקום:
- *   - מצב מצומצם: שם מלא, סכום שדווח, פס (רקע בהיר = פוטנציאל) ואחוז מימוש.
+ *   - מצב מצומצם: שם מלא, סכום שדווח, פס (רקע בהיר = פוטנציאל, גוון ביניים =
+ *     צפי) ואחוז מימוש. מתחת: "פוטנציאל", ומשמאלו "צפי" — רק כשהצפי שונה.
  *     כשהדיווח עולה על התכנון — הפס מלא, והחלק שמעבר לתכנון מסומן בגוון
  *     כהה יותר אחרי קו הפרדה.
  *   - מצב מורחב (לחיצה על האריח או על החץ): סטטוס, צפי תשלום, איחור בדיווח,
- *     סינון למקום הזה ומעבר לפירוט המלא.
+ *     פירוט המפגשים לפי קורס (עיגולים צבעוניים), סינון למקום הזה ומעבר לפירוט המלא.
  */
+import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
@@ -21,6 +23,10 @@ type Props = {
   color: string;
   reported: number;
   planned: number;
+  /** צפי: הפוטנציאל בלי המפגשים שבוטלו */
+  forecast: number;
+  /** פירוט המפגשים לפי קורס — במצב מורחב */
+  sessions?: ReactNode;
   /** סקאלת הפס המשותפת לכל האריחים (מקסימום בפועל + שליש) */
   scale: number;
   expanded: boolean;
@@ -38,6 +44,8 @@ export function WorkplaceTile({
   color,
   reported,
   planned,
+  forecast,
+  sessions,
   scale,
   expanded,
   onToggle,
@@ -54,6 +62,8 @@ export function WorkplaceTile({
   const over = planned > 0 && reported > planned;
   const light = mix(color, colors.surface, 0.72);
   const deeper = mix(color, colors.text, 0.35);
+  const mid = mix(color, colors.surface, 0.45);
+  const showForecast = planned > 0 && Math.round(forecast) !== Math.round(planned);
 
   return (
     <View style={[styles.card, filtered && { borderColor: color, borderWidth: 2 }]}>
@@ -61,7 +71,7 @@ export function WorkplaceTile({
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={`${name}: דווח ${money(reported)}${planned > 0 ? `, פוטנציאל ${money(planned)}, מימוש ${pct}%` : ''}`}
+        accessibilityLabel={`${name}: דווח ${money(reported)}${planned > 0 ? `, פוטנציאל ${money(planned)}${showForecast ? `, צפי ${money(forecast)}` : ''}, מימוש ${pct}%` : ''}`}
         style={styles.main}
       >
         <View style={styles.head}>
@@ -81,6 +91,9 @@ export function WorkplaceTile({
               </View>
             ) : planned > 0 ? (
               <View style={[styles.fillRow, { width: `${frac(planned) * 100}%`, backgroundColor: light }]}>
+                {showForecast && forecast > reported ? (
+                  <View style={[styles.layer, { width: `${(forecast / planned) * 100}%`, backgroundColor: mid }]} />
+                ) : null}
                 {reported > 0 ? (
                   <View style={{ width: `${Math.max(2, (reported / planned) * 100)}%`, backgroundColor: color }} />
                 ) : null}
@@ -101,7 +114,10 @@ export function WorkplaceTile({
         {over ? (
           <Text style={styles.sub}>מעל התכנון · פוטנציאל {money(planned)}</Text>
         ) : planned > 0 ? (
-          <Text style={styles.sub}>פוטנציאל {money(planned)}</Text>
+          <View style={styles.subRow}>
+            <Text style={styles.sub}>פוטנציאל {money(planned)}</Text>
+            {showForecast ? <Text style={styles.subForecast}>צפי {money(forecast)}</Text> : null}
+          </View>
         ) : (
           <Text style={styles.sub}>ללא תכנון קורסים</Text>
         )}
@@ -114,6 +130,7 @@ export function WorkplaceTile({
               <Text style={[styles.chipText, { color: status.fg }]}>{status.label}</Text>
             </View>
           ) : null}
+          {sessions}
           {details.map((d) => (
             <Text key={d.text} style={[styles.detail, d.tone === 'warn' && styles.warn]}>
               {d.text}
@@ -159,6 +176,9 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     pct: { minWidth: 46, fontSize: 14, fontWeight: '800', color: c.text, textAlign: layout.textEnd },
     pctOver: { color: c.brand },
     sub: { fontSize: 12, color: c.textMuted, textAlign: layout.textStart },
+    subRow: { flexDirection: layout.rowStart, justifyContent: 'space-between', gap: spacing.sm },
+    subForecast: { fontSize: 12, fontWeight: '700', color: c.brand },
+    layer: { position: 'absolute', top: 0, bottom: 0, start: 0 },
     more: {
       gap: 6,
       paddingHorizontal: 14,

@@ -7,7 +7,7 @@
  */
 import type { Href } from 'expo-router';
 import { accumulatedTotal, redeemableHours, entryOf, type AccumulatedState } from './accumulated';
-import { courseReport, courseReported, coursesOn, timeRange, type Course } from './courses';
+import { courseReport, courseReported, coursesOn, sessionCancel, timeRange, type Course } from './courses';
 import { currentPayPeriod, currentPeriods, isoDate } from './dashboard';
 import type { PayBasis } from './payBasis';
 import { isLocked, overduePayments, payrollItems, pendingPayroll, statusKey, type StatusMap } from './payroll';
@@ -117,7 +117,7 @@ export function agenda(
       if (!workplace) continue;
       let status: SessionStatus = 'upcoming';
       let reportId: string | undefined;
-      const canceled = cancel(course.id, date) ?? undefined;
+      const canceled = sessionCancel(course, date, cancel) ?? undefined;
       // מפגש שבוטל אך בכל זאת דווח — מוצג כמדווח.
       const covering = courseReport(course, date, reports)?.id;
       if (canceled && !covering) {

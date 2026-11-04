@@ -8,12 +8,15 @@
  *
  * הסכום של תקופה = שכר + החזר נסיעות (כמו בדוח השכר, grossAmount).
  *   - לפי דיווח: מהדיווחים בתקופה (totalsFor).
- *   - לפי תכנון: ממפגשי הקורסים בתקופה — שעתי: תעריף × שעות לפי בסיס
- *     החישוב; חודשי: הסכום הקבוע כשיש לפחות מפגש אחד. ונסיעות לכל יום מפגש.
+ *   - פוטנציאל (planned): ממפגשי הקורסים בתקופה, כולל מפגשים שסומנו "בוטל"
+ *     (מה שציפית) — שעתי: תעריף × שעות לפי בסיס החישוב; חודשי: הסכום הקבוע
+ *     כשיש לפחות מפגש אחד. ונסיעות לכל יום מפגש.
+ *   - צפי (expected): הפוטנציאל בלי המפגשים שסומנו "בוטל".
+ *   מפגשים שהוסרו מהפוטנציאל, הועברו לתאריך אחר או חלים בחג — לא בשניהם.
  * המודול טהור — בלי אחסון ובלי React.
  */
 import { ACADEMIC_HOUR_MINUTES } from './academic';
-import { occurrences, sessionMinutes, type Course } from './courses';
+import { potentialSessions, sessionMinutes, type Course } from './courses';
 import { currentPayPeriod, expectedPaymentDate, isoDate, totalsFor, type PayPeriod } from './dashboard';
 import type { PayBasis } from './payBasis';
 import { expectedPayment, reportLate, statusKey, type StatusMap } from './payroll';
@@ -38,6 +41,10 @@ export type PeriodForecast = {
   /** מספר הדיווחים בתקופה */
   reportCount: number;
   planned: number;
+  /** צפי: הפוטנציאל בלי המפגשים שבוטלו */
+  forecast: number;
+  /** המפגשים שבוטלו בתקופה (נשארים בפוטנציאל, יורדים מהצפי) */
+  canceled: { courseId: string; date: string }[];
   status: PeriodStatus;
   /** הדוח לא נשלח עד היום האחרון לדיווח — התשלום נדחה בחודש */
   late: boolean;
@@ -47,7 +54,7 @@ export type PeriodForecast = {
   sentAt?: number;
 };
 
-export type ForecastCell = { reported: number; planned: number; periods: PeriodForecast[] };
+export type ForecastCell = { reported: number; planned: number; forecast: number; periods: PeriodForecast[] };
 
 export type ForecastMonth = {
   /** "YYYY-MM" */
@@ -57,6 +64,7 @@ export type ForecastMonth = {
   byWorkplace: Record<string, ForecastCell>;
   reported: number;
   planned: number;
+  forecast: number;
 };
 
 const monthKey = (iso: string) => iso.slice(0, 7);
@@ -67,20 +75,22 @@ function periodInMonth(w: Workplace, year: number, month0: number): PayPeriod {
   return currentPayPeriod(w.payday, new Date(year, month0, day));
 }
 
-/** סכום מתוכנן לתקופה — ממפגשי הקורסים של המקום. */
-export function plannedFor(
+/** סכום לתקופה ממפגשי הקורסים של המקום: פוטנציאל, או צפי (`withoutCanceled`). */
+function amountFor(
   w: Workplace,
   courses: readonly Course[],
   period: Pick<PayPeriod, 'start' | 'end'>,
   basis: PayBasis,
+  withoutCanceled: boolean,
 ): number {
   const dates = new Set<string>();
   let pay = 0;
   for (const c of courses) {
     if (c.workplaceId !== w.id) continue;
-    for (const date of occurrences(c, period.start, period.end)) {
-      dates.add(date);
-      const at = workplaceAt(w, date);
+    for (const s of potentialSessions(c, period.start, period.end)) {
+      if (withoutCanceled && s.canceled) continue;
+      dates.add(s.date);
+      const at = workplaceAt(w, s.date);
       if (at.paymentType === 'hourly') {
         const per = basis === 'academic' ? ACADEMIC_HOUR_MINUTES : 60;
         pay += (Math.max(0, at.rate) * sessionMinutes(c)) / per;
@@ -94,6 +104,40 @@ export function plannedFor(
   let travel = 0;
   for (const d of dates) travel += travelCostForDay(w, d);
   return pay + travel;
+}
+
+/** פוטנציאל לתקופה — ממפגשי הקורסים של המקום, כולל מפגשים שבוטלו. */
+export function plannedFor(
+  w: Workplace,
+  courses: readonly Course[],
+  period: Pick<PayPeriod, 'start' | 'end'>,
+  basis: PayBasis,
+): number {
+  return amountFor(w, courses, period, basis, false);
+}
+
+/** צפי לתקופה — הפוטנציאל בלי המפגשים שסומנו "בוטל". */
+export function expectedFor(
+  w: Workplace,
+  courses: readonly Course[],
+  period: Pick<PayPeriod, 'start' | 'end'>,
+  basis: PayBasis,
+): number {
+  return amountFor(w, courses, period, basis, true);
+}
+
+/** המפגשים שבוטלו (ונשארו בפוטנציאל) של מקום עבודה בתקופה. */
+export function canceledSessions(
+  w: Workplace,
+  courses: readonly Course[],
+  period: Pick<PayPeriod, 'start' | 'end'>,
+): { courseId: string; date: string }[] {
+  const out: { courseId: string; date: string }[] = [];
+  for (const c of courses) {
+    if (c.workplaceId !== w.id) continue;
+    for (const s of potentialSessions(c, period.start, period.end)) if (s.canceled) out.push({ courseId: c.id, date: s.date });
+  }
+  return out;
 }
 
 /** כל נתוני התקופה של מקום עבודה: דווח, מתוכנן, מועד תשלום וסטטוס. */
@@ -134,6 +178,8 @@ export function periodForecast(
     reportedPay: t.pay + redeemedPay,
     reportCount: mine.length,
     planned: plannedFor(w, courses, period, basis),
+    forecast: expectedFor(w, courses, period, basis),
+    canceled: canceledSessions(w, courses, period),
     status,
     paidAt: st.paidAt,
     sentAt: st.sentAt,
@@ -156,10 +202,11 @@ export function forecastYear(
     year,
     month0: m,
     byWorkplace: Object.fromEntries(
-      workplaces.map((w) => [w.id, { reported: 0, planned: 0, periods: [] as PeriodForecast[] }]),
+      workplaces.map((w) => [w.id, { reported: 0, planned: 0, forecast: 0, periods: [] as PeriodForecast[] }]),
     ),
     reported: 0,
     planned: 0,
+    forecast: 0,
   }));
   const index = new Map(months.map((m, i) => [m.key, i]));
   // במצב "מועד תשלום" תקופות מהשנה הקודמת עשויות להשתלם השנה.
@@ -174,9 +221,11 @@ export function forecastYear(
       const cell = months[i].byWorkplace[w.id];
       cell.reported += f.reported;
       cell.planned += f.planned;
+      cell.forecast += f.forecast;
       cell.periods.push(f);
       months[i].reported += f.reported;
       months[i].planned += f.planned;
+      months[i].forecast += f.forecast;
     }
   }
   return months;
