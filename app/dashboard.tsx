@@ -474,23 +474,24 @@ export default function DashboardScreen() {
             {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.reported)} בכל המקומות</Text> : null}
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <View style={styles.potentialHead}>
-              <Text style={styles.totalLabel}>פוטנציאל</Text>
-              {Math.round(sel ? sel.forecast : totalAll.forecast) !== Math.round(sel ? sel.planned : totalAll.planned) ? (
-                <Text style={styles.totalForecast}>צפי {money(sel ? sel.forecast : totalAll.forecast)}</Text>
-              ) : null}
-            </View>
+            <Text style={styles.totalLabel}>פוטנציאל</Text>
             <Text style={[styles.totalValue, styles.totalPlanned]}>{money(sel ? sel.planned : totalAll.planned)}</Text>
             {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.planned)}</Text> : null}
           </View>
         </View>
-        <Text style={styles.totalPct}>
-          {pctTotal == null
-            ? 'אין תכנון קורסים לתקופה'
-            : pctTotal > 100
-              ? `${pctTotal}% — הדיווח עולה על התכנון`
-              : `מימוש ${pctTotal}% מהפוטנציאל`}
-        </Text>
+        {/* מימוש מימין, ומשמאל — הצפי, רק כשהוא שונה מהפוטנציאל */}
+        <View style={styles.pctRow}>
+          <Text style={styles.totalPct}>
+            {pctTotal == null
+              ? 'אין תכנון קורסים לתקופה'
+              : pctTotal > 100
+                ? `${pctTotal}% — הדיווח עולה על התכנון`
+                : `מימוש ${pctTotal}% מהפוטנציאל`}
+          </Text>
+          {Math.round(sel ? sel.forecast : totalAll.forecast) !== Math.round(sel ? sel.planned : totalAll.planned) ? (
+            <Text style={styles.totalForecast}>צפי {money(sel ? sel.forecast : totalAll.forecast)}</Text>
+          ) : null}
+        </View>
       </View>
 
       {rows.map((row) => (
@@ -678,8 +679,8 @@ const makeStyles = (colors: AppColors) =>
     totalLabel: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     totalValue: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     totalPlanned: { color: colors.brandDark },
-    potentialHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
-    totalForecast: { fontSize: 12, fontWeight: '700', color: colors.brand },
+    pctRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: spacing.sm },
+    totalForecast: { fontSize: 13, fontWeight: '700', color: colors.brand },
     sessions: { gap: spacing.sm, paddingBottom: 4 },
     sessionGroup: { gap: 4 },
     sessionCourse: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
