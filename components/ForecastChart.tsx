@@ -34,6 +34,11 @@ export const HEADROOM = 4 / 3;
 export const money = (n: number) => `${Math.round(n).toLocaleString('en-US')} ₪`;
 
 /** אחוז מימוש הפוטנציאל, או null כשאין תכנון. */
+/** סכום מקוצר מעל עמודה צרה: "42.2K", "950". */
+function compact(v: number): string {
+  return v >= 1000 ? `${Math.round(v / 100) / 10}K` : String(Math.round(v));
+}
+
 export function realization(reported: number, planned: number): number | null {
   return planned > 0 ? Math.round((reported / planned) * 100) : null;
 }
@@ -214,6 +219,8 @@ export function ForecastChart({
               const sel = selectedMonth === m.key;
               const t = totals[i];
               const pct = realization(t.reported, t.planned);
+              // פוטנציאל גבוה מהזום (שנקבע לפי הדיווח) — העמודה קטועה: קו שבור והסכום המלא מעליה.
+              const clipped = t.planned > scale;
               return (
                 <Pressable
                   key={m.key}
@@ -223,6 +230,11 @@ export function ForecastChart({
                   accessibilityLabel={`${MONTH_LONG[m.month0]} ${m.year}: דווח ${money(t.reported)}, פוטנציאל ${money(t.planned)}${pct != null ? `, מימוש ${pct}%` : ''}`}
                   style={[styles.col, isNow && styles.colNow, sel && styles.colSel, selectedMonth != null && !sel && styles.dim]}
                 >
+                  {clipped ? (
+                    <Text style={styles.colFull} numberOfLines={1}>
+                      {compact(t.planned)}
+                    </Text>
+                  ) : null}
                   <Text style={[styles.colPct, pct != null && pct > 100 && styles.pctOver]} numberOfLines={1}>
                     {pct == null || t.reported === 0 ? ' ' : res === 'year' ? String(pct) : `${pct}%`}
                   </Text>
@@ -233,7 +245,14 @@ export function ForecastChart({
                           styles.potential,
                           { height: Math.round(frac(t.planned) * BAR_H), backgroundColor: light(colors.brand) },
                         ]}
-                      />
+                      >
+                        {clipped ? (
+                          <>
+                            <View style={[styles.cut, { top: 12, backgroundColor: isNow ? colors.brandLight : colors.surface }]} />
+                            <View style={[styles.cut, { top: 21, backgroundColor: isNow ? colors.brandLight : colors.surface }]} />
+                          </>
+                        ) : null}
+                      </View>
                     ) : null}
                     <View style={styles.stack}>
                       {series.map((s) => {
@@ -262,7 +281,9 @@ export function ForecastChart({
           <Text style={styles.footerText}>
             {res === 'month'
               ? 'רקע בהיר — פוטנציאל לפי תכנון · % — מימוש'
-              : 'רקע בהיר — פוטנציאל · המספר מעל העמודה — % מימוש · לחיצה על חודש מסננת את הרשימה'}
+              : `רקע בהיר — פוטנציאל · המספר מעל העמודה — % מימוש${
+                  totals.some((t) => t.planned > scale) ? ' · קו שבור — פוטנציאל גבוה מהגרף, הסכום המלא מעליו' : ''
+                } · לחיצה על חודש מסננת את הרשימה`}
           </Text>
         </View>
       ) : null}
@@ -336,7 +357,17 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     colSel: { borderColor: c.brand },
     colPct: { fontSize: 10, fontWeight: '700', color: c.textMuted, marginBottom: 2 },
     barArea: { height: BAR_H, justifyContent: 'flex-end' },
-    potential: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+    potential: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      borderTopLeftRadius: 4,
+      borderTopRightRadius: 4,
+      overflow: 'hidden',
+    },
+    cut: { position: 'absolute', left: '-20%', right: '-20%', height: 4, transform: [{ rotate: '-14deg' }] },
+    colFull: { fontSize: 9, fontWeight: '700', color: c.textMuted },
     stack: { flexDirection: 'column-reverse', overflow: 'hidden', borderTopLeftRadius: 3, borderTopRightRadius: 3 },
     label: { marginTop: 4, fontSize: 10, fontWeight: '600', color: c.text },
     labelFuture: { color: c.textMuted },
