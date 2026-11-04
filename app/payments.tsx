@@ -25,6 +25,7 @@ import { formatDateWithHebrew, todayISO } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, paymentTermsLabel, taxPercentOf, workplaceAt } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
+import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -117,7 +118,12 @@ export default function PaymentsScreen() {
     return (
       <Pressable
         onPress={() => setEditing(row)}
-        style={({ pressed }) => [styles.row, kind === 'overdue' && styles.rowOverdue, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.row,
+          kind === 'overdue' && styles.rowOverdue,
+          { borderStartWidth: 5, borderStartColor: workplaceColor(colors, item.workplace) },
+          pressed && styles.pressed,
+        ]}
       >
         <View style={styles.rowHead}>
           <Text style={styles.rowName} numberOfLines={2}>

@@ -138,12 +138,15 @@ export function ShareRow({
   fraction,
   sub,
   onPress,
+  color,
 }: {
   label: string;
   value: string;
   fraction: number;
   sub?: string;
   onPress?: () => void;
+  /** צבע מקום העבודה — לנקודה ולפס */
+  color?: string;
 }) {
   const styles = useStyles(makeStyles);
   return (
@@ -153,23 +156,24 @@ export function ShareRow({
       style={({ pressed }) => [styles.shareRow, pressed && styles.pressed]}
     >
       <View style={styles.shareHead}>
+        {color ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} /> : null}
         <Text style={styles.shareLabel} numberOfLines={1}>
           {label}
         </Text>
         <Text style={styles.shareValue}>{value}</Text>
       </View>
-      <ProgressBar fraction={fraction} />
+      <ProgressBar fraction={fraction} color={color} />
       {sub ? <Text style={styles.shareSub}>{sub}</Text> : null}
     </Pressable>
   );
 }
 
-export function ProgressBar({ fraction, thin }: { fraction: number; thin?: boolean }) {
+export function ProgressBar({ fraction, thin, color }: { fraction: number; thin?: boolean; color?: string }) {
   const styles = useStyles(makeStyles);
   const pct = Math.max(0, Math.min(1, fraction)) * 100;
   return (
     <View style={[styles.track, thin && styles.trackThin]}>
-      <View style={[styles.fill, { width: `${pct}%` }]} />
+      <View style={[styles.fill, { width: `${pct}%` }, color ? { backgroundColor: color } : null]} />
     </View>
   );
 }
@@ -309,6 +313,7 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     },
     shareHead: {
       flexDirection: layout.rowStart,
+      alignItems: 'center',
       justifyContent: 'space-between',
       gap: spacing.sm,
     },

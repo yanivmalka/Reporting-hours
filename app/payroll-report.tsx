@@ -36,6 +36,7 @@ import { formatDateWithHebrew, formatISODate } from '../lib/time';
 import { hebrewDate } from '../lib/hebrewDate';
 import { loadWorkplaces } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
+import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -190,7 +191,7 @@ export default function PayrollReportScreen() {
     <Screen>
       <Stack.Screen options={{ title: 'דוח שכר' }} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { borderStartWidth: 5, borderStartColor: workplaceColor(colors, workplace), paddingStart: spacing.sm }]}>
         <Pressable
           onPress={() => router.push({ pathname: '/workplace', params: { id: workplace.id } })}
           accessibilityRole="link"

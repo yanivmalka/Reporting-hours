@@ -25,6 +25,7 @@ import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
+import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -145,7 +146,7 @@ export default function ReportViewScreen() {
 
   return (
     <Screen>
-      <View style={styles.card}>
+      <View style={[styles.card, workplace ? { borderStartWidth: 5, borderStartColor: workplaceColor(colors, workplace) } : null]}>
         {rows.map(([label, value], i) => {
           const onPress = links[label];
           const body = (

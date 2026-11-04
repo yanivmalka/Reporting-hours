@@ -8,6 +8,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { ProgressBar } from './Charts';
 import { TEXT_RIGHT } from '../theme/align';
+import { useWorkplaceColor } from '../theme/workplaceColors';
 
 type WorkplaceCardProps = {
   workplace: Workplace;
@@ -25,6 +26,7 @@ const h = (n: number) => formatHours(Math.round(n * 10) / 10);
  */
 export function WorkplaceCard({ workplace, stats, onPress }: WorkplaceCardProps) {
   const styles = useThemedStyles(makeStyles);
+  const color = useWorkplaceColor()(workplace);
   const { actual, planned, plannedToDate, average, period } = stats;
 
   let line: string;
@@ -51,11 +53,14 @@ export function WorkplaceCard({ workplace, stats, onPress }: WorkplaceCardProps)
   }
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, { borderStartWidth: 5, borderStartColor: color }, pressed && styles.pressed]}
+    >
       <View style={styles.texts}>
         <Text style={styles.name}>{workplace.name}</Text>
         <Text style={styles.line}>{line}</Text>
-        {planned > 0 || average != null ? <ProgressBar fraction={fraction} thin /> : null}
+        {planned > 0 || average != null ? <ProgressBar fraction={fraction} thin color={color} /> : null}
         <Text style={styles.sub}>
           {sub} · {dateRange(period.start, period.end)}
         </Text>

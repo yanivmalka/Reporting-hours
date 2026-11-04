@@ -14,6 +14,8 @@ export type SelectOption<T extends string | null> = {
   label: string;
   /** שורת משנה אופציונלית ברשימה */
   sub?: string;
+  /** צבע מקום העבודה — פס בצד האפשרות */
+  color?: string;
 };
 
 type SelectFieldProps<T extends string | null> = {
@@ -69,7 +71,11 @@ export function SelectField<T extends string | null>({
                       onChange(o.value);
                       setOpen(false);
                     }}
-                    style={[styles.option, selected && styles.optionSelected]}
+                    style={[
+                      styles.option,
+                      selected && styles.optionSelected,
+                      o.color ? { borderStartWidth: 5, borderStartColor: o.color } : null,
+                    ]}
                   >
                     <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
                       {o.label}

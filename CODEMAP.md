@@ -7,7 +7,7 @@
 - `app/` — מסכים (expo-router, קובץ = נתיב).
 - `lib/` — מודלים, אחסון וחישובים טהורים. אין בו רכיבי מסך, חוץ מ־`i18n.tsx` ו־`payBasis.tsx` שהם Providers.
 - `components/` — רכיבי UI ודיאלוגים משותפים.
-- `theme/` — צבעים, גופן, יישור RTL (`align.ts`), גוונים לגרפים (`shades.ts`).
+- `theme/` — צבעים, גופן, יישור RTL (`align.ts`), גוונים לגרפים (`shades.ts`), צבע לכל מקום עבודה (`workplaceColors.ts`).
 
 ## מודל הנתונים ומפתחות האחסון
 
@@ -15,7 +15,7 @@
 
 | ישות | קובץ | מפתח |
 |---|---|---|
-| מקום עבודה (כולל `archivedAt`, `deletedAt`, `trashed`, `termsHistory`) | `lib/workplaces.ts` | `reporting-hours/workplaces/v1` |
+| מקום עבודה (כולל `archivedAt`, `deletedAt`, `trashed`, `termsHistory`, `colorIndex`) | `lib/workplaces.ts` | `reporting-hours/workplaces/v1` |
 | דיווח (`WorkReport`, עם `courseId` אופציונלי) | `lib/reports.ts` | `reporting-hours/reports/v1` |
 | קורס מחזורי | `lib/courses.ts` | `reporting-hours/courses/v1` |
 | סימוני מפגש (`canceled` / `held`) | `lib/sessions.ts` | `reporting-hours/sessions/v1` |

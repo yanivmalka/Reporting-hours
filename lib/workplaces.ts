@@ -105,6 +105,11 @@ export type Workplace = {
   trashed?: { courses: unknown[]; reports: unknown[]; marks: unknown[]; accumulated?: unknown };
   /** מקום עבודה שנוצר כנתוני הדגמה (lib/demo.ts) */
   demo?: boolean;
+  /**
+   * צבע מקום העבודה — משבצת בפלטה שנגזרת מצבע המערכת
+   * (theme/workplaceColors.ts). נקבע אוטומטית למקום חדש ולנתונים ישנים.
+   */
+  colorIndex?: number;
 };
 
 /** התנאים הכספיים של מקום עבודה — אלה שמשתנים לאורך זמן ונשמרים בהיסטוריה. */
@@ -256,11 +261,37 @@ export async function loadAllPruned(): Promise<Workplace[]> {
     termsHistory: w.termsHistory?.map((t) => ({ ...t, arrivalMode: noWalk(t.arrivalMode) })),
   }));
   const now = Date.now();
-  const kept = all.filter(
+  const pruned = all.filter(
     (w) => w.deletedAt == null || now - w.deletedAt < TRASH_RETENTION_MS,
   );
-  if (kept.length !== all.length) await saveWorkplaces(kept);
+  const kept = withColors(pruned);
+  if (pruned.length !== all.length || kept.some((w, i) => w !== pruned[i])) await saveWorkplaces(kept);
   return kept;
+}
+
+/**
+ * צבע למקומות שעוד אין להם: לפי מיקומם בין המקומות הפעילים (כך נצבעו עד
+ * עכשיו בלוח הבקרה), ולמקום באשפה — המשבצת הפנויה הבאה.
+ */
+function withColors(list: Workplace[]): Workplace[] {
+  if (list.every((w) => w.colorIndex != null)) return list;
+  const live = list.filter((w) => w.deletedAt == null);
+  return list.map((w) => {
+    if (w.colorIndex != null) return w;
+    const pos = live.indexOf(w);
+    return { ...w, colorIndex: pos >= 0 ? pos % WORKPLACE_COLORS : freeColor(list) };
+  });
+}
+
+/** מספר המשבצות בפלטת צבעי מקומות העבודה (theme/workplaceColors.ts). */
+const WORKPLACE_COLORS = 8;
+
+/** המשבצת הפחות בשימוש בין המקומות הפעילים — למקום עבודה חדש. */
+export function freeColor(list: readonly Pick<Workplace, 'colorIndex' | 'deletedAt'>[]): number {
+  const used = new Array(WORKPLACE_COLORS).fill(0);
+  for (const w of list) if (w.deletedAt == null && w.colorIndex != null) used[w.colorIndex % WORKPLACE_COLORS] += 1;
+  const min = Math.min(...used);
+  return used.indexOf(min);
 }
 
 /** מקומות העבודה הפעילים בלבד (לא כולל אשפה). */
@@ -337,7 +368,7 @@ export async function upsertWorkplace(
         }
         return { ...w, ...draft, id: w.id, termsHistory };
       })
-    : [...all, { ...draft, id: makeId() }];
+    : [...all, { ...draft, colorIndex: draft.colorIndex ?? freeColor(all), id: makeId() }];
   await saveWorkplaces(next);
   return next.filter((w) => w.deletedAt == null);
 }

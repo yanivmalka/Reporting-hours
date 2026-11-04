@@ -43,6 +43,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { workplaceColor } from '../theme/workplaceColors';
 
 const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
@@ -157,7 +158,7 @@ export default function WorkplaceDetailScreen() {
         </View>
       ) : null}
 
-      <View style={styles.hero}>
+      <View style={[styles.hero, { borderStartWidth: 8, borderStartColor: workplaceColor(colors, w) }]}>
         <Text style={styles.heroLabel}>{next === current ? 'התקופה הנוכחית' : 'התשלום הבא'}</Text>
         <View style={styles.heroAmountRow}>
           <Text style={styles.heroAmount}>{money(next.reported)}</Text>
