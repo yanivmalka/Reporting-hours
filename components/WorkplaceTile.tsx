@@ -84,6 +84,13 @@ export function WorkplaceTile({
                 {reported > 0 ? (
                   <View style={{ width: `${Math.max(2, (reported / planned) * 100)}%`, backgroundColor: color }} />
                 ) : null}
+                {planned > scale ? (
+                  // הפוטנציאל גבוה מהסקאלה — הפס קטוע (קו שבור בקצה).
+                  <>
+                    <View style={[styles.cut, { end: 14, backgroundColor: colors.surface }]} />
+                    <View style={[styles.cut, { end: 22, backgroundColor: colors.surface }]} />
+                  </>
+                ) : null}
               </View>
             ) : reported > 0 ? (
               <View style={[styles.fillRow, { width: `${frac(reported) * 100}%`, backgroundColor: color }]} />
@@ -132,6 +139,7 @@ export function WorkplaceTile({
 
 const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   StyleSheet.create({
+    cut: { position: 'absolute', top: '-30%', bottom: '-30%', width: 3, transform: [{ rotate: '18deg' }] },
     card: {
       borderRadius: 16,
       backgroundColor: c.surface,
