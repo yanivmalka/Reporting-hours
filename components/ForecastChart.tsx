@@ -235,7 +235,8 @@ export function ForecastChart({
                   accessibilityLabel={`${MONTH_LONG[m.month0]} ${m.year}: דווח ${money(t.reported)}, פוטנציאל ${money(t.planned)}${pct != null ? `, מימוש ${pct}%` : ''}`}
                   style={[styles.col, isNow && styles.colNow, sel && styles.colSel, selectedMonth != null && !sel && styles.dim]}
                 >
-                  {clipped ? (
+                  {/* סכום הפוטנציאל מעל כל עמודה שיש לה תכנון — לא רק מעל עמודה קטועה. */}
+                  {t.planned > 0 ? (
                     <Text style={styles.colFull} numberOfLines={1}>
                       {compact(t.planned, res === 'year')}
                     </Text>
@@ -291,8 +292,8 @@ export function ForecastChart({
           <Text style={styles.footerText}>
             {res === 'month'
               ? 'רקע בהיר — פוטנציאל לפי תכנון · % — מימוש'
-              : `רקע בהיר — פוטנציאל · המספר מעל העמודה — % מימוש${
-                  totals.some((t) => t.planned > scale) ? ' · קו שבור — פוטנציאל גבוה מהגרף, הסכום המלא מעליו' : ''
+              : `רקע בהיר — פוטנציאל · מעל העמודה — סכום הפוטנציאל ו־% מימוש${
+                  totals.some((t) => t.planned > scale) ? ' · קו שבור — פוטנציאל גבוה מהגרף' : ''
                 } · לחיצה על חודש מסננת את הרשימה`}
           </Text>
         </View>
