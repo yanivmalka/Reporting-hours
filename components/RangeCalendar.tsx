@@ -11,6 +11,7 @@ import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
+import { useShowHebrewDates } from '../lib/hebrewDatePref';
 import { useI18n } from '../lib/i18n';
 import { useSwipe } from './useSwipe';
 import { radius, spacing } from '../theme/colors';
@@ -125,6 +126,7 @@ function MonthGrid({
   onTap: (day: string) => void;
 }) {
   const styles = useStyles(makeStyles);
+  const heb = useShowHebrewDates();
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y, m - 1, 1).getDay();
   const days = new Date(y, m, 0).getDate();
@@ -138,7 +140,7 @@ function MonthGrid({
         <Text style={[styles.title, active && styles.titleActive]}>
           {MONTHS[m - 1]} {y}
         </Text>
-        <Text style={styles.titleHeb}>{hebrewMonthSpan(y, m - 1)}</Text>
+        {heb ? <Text style={styles.titleHeb}>{hebrewMonthSpan(y, m - 1)}</Text> : null}
       </View>
       <View style={styles.week}>
         {WEEKDAYS.map((w) => (
@@ -166,7 +168,7 @@ function MonthGrid({
                 <Text style={[styles.dayText, isEdge && styles.dayTextEdge, count === 0 && styles.dayTextEmpty]}>
                   {Number(cell.slice(8))}
                 </Text>
-                <Text style={[styles.dayHeb, isEdge && styles.dayTextEdge]}>{hebrewDay(cell)}</Text>
+                {heb ? <Text style={[styles.dayHeb, isEdge && styles.dayTextEdge]}>{hebrewDay(cell)}</Text> : null}
               </View>
               <Text style={[styles.count, count === 0 && styles.countHidden]}>{count || '·'}</Text>
             </Pressable>

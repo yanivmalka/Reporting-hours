@@ -6,7 +6,7 @@ import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { useConfirm } from '../components/ConfirmDialog';
-import { useSessionCancel } from '../components/SessionCancelDialog';
+import { useSessionCancel, useSessionMove } from '../components/SessionCancelDialog';
 import { DatePicker, longDate } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
@@ -102,6 +102,7 @@ export default function ReportScreen() {
   const [lockedStart, setLockedStart] = useState<string | null>(null);
   const confirm = useConfirm();
   const sessionDialog = useSessionCancel();
+  const moveDialog = useSessionMove();
   const colorOf = useWorkplaceColor();
   const { basis } = usePayBasis();
   const [workplaces, setWorkplaces] = useState<Workplace[] | null>(null);
@@ -844,15 +845,6 @@ export default function ReportScreen() {
           <Text style={styles.stepTitle}>
             {selectedCourse ? 'השעות לפי הקורס — אפשר לעדכן' : 'מתי עבדת?'}
           </Text>
-          {selectedCourse && !editId && !extraKind ? (
-            <Pressable
-              onPress={() => cancelSession(selectedCourse, true)}
-              accessibilityRole="button"
-              style={styles.linkBtn}
-            >
-              <Text style={styles.linkText}>השיעור לא התקיים? סימון כבוטל</Text>
-            </Pressable>
-          ) : null}
           {!viaCourse && extraCandidates.length > 0 ? (
             <FormField label="מפגש נוסף לקורס (רשות)">
               <SelectField<string | null>
@@ -965,15 +957,6 @@ export default function ReportScreen() {
       {step === 'summary' ? (
         <>
           <Text style={styles.stepTitle}>בדיקה ושמירה</Text>
-          {selectedCourse && !editId && !extraKind ? (
-            <Pressable
-              onPress={() => cancelSession(selectedCourse, true)}
-              accessibilityRole="button"
-              style={styles.linkBtn}
-            >
-              <Text style={styles.linkText}>השיעור לא התקיים? סימון כבוטל</Text>
-            </Pressable>
-          ) : null}
           <FormField label="נושא / הערה" hint="רשות — למשל נושא ההרצאה או ההגשה">
             <TextField value={note} onChangeText={setNote} placeholder="תולדות האדריכלות — שיעור 4" />
           </FormField>
@@ -1129,6 +1112,30 @@ export default function ReportScreen() {
             <Button label="המשך" onPress={goNext} />
           ) : null}
           {step !== 'date' ? <Button label="חזרה" variant="secondary" onPress={goBack} /> : null}
+          {(step === 'times' || step === 'summary') && selectedCourse && !editId && !extraKind ? (
+            <>
+              <Pressable
+                onPress={() => cancelSession(selectedCourse, true)}
+                accessibilityRole="button"
+                style={styles.linkBtn}
+              >
+                <Text style={styles.linkText}>השיעור לא התקיים? סימון כבוטל</Text>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  moveDialog.open({
+                    course: selectedCourse,
+                    date,
+                    onDone: () => setExitReason('cancelled'),
+                  })
+                }
+                accessibilityRole="button"
+                style={styles.linkBtn}
+              >
+                <Text style={styles.linkText}>העברת השיעור לתאריך אחר</Text>
+              </Pressable>
+            </>
+          ) : null}
           <Pressable
             onPress={() => setExitReason('cancelled')}
             style={styles.cancel}
@@ -1164,6 +1171,7 @@ export default function ReportScreen() {
       </Modal>
       {confirm.dialog}
       {sessionDialog.dialog}
+      {moveDialog.dialog}
     </Screen>
   );
 }

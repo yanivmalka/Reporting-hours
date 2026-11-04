@@ -11,6 +11,8 @@ import { FormField } from '../components/FormField';
 import { Screen } from '../components/Screen';
 import { TextField } from '../components/TextField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
+import { SessionDots, SessionDotsLegend, dotDescription, sessionDots, type SessionDot } from '../components/SessionDots';
+import { removeCanceledFromPotential } from '../lib/sessions';
 import {
   WEEKDAY_NAMES,
   courseScheduleLabel,
@@ -42,11 +44,15 @@ type Form = {
   breakMinutes: string;
   from: string;
   to: string;
+  /** מפגשים פרטניים נוספים */
+  extraDates: string[];
 };
 
 type Errors = Partial<Record<keyof Form, string>>;
 
 const BREAK_OPTIONS = [0, 10, 15, 20, 30];
+
+const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 /** טופס קורס מחזורי: שם, יום בשבוע, שעות קבועות, הפסקה ותקופה. */
 export default function CourseFormScreen() {
@@ -83,8 +89,16 @@ export default function CourseFormScreen() {
           breakMinutes: '0',
           from: presets[2].from,
           to: presets[2].to,
+          extraDates: [],
         },
   );
+  /** מפגש שנבחר בעיגולים (תצוגה) — מציג את פרטיו */
+  const [picked, setPicked] = useState<SessionDot | null>(null);
+  /** תאריך למפגש נוסף (בעריכה) */
+  const [extraDate, setExtraDate] = useState(todayISO());
+  const [extraError, setExtraError] = useState<string | null>(null);
+  /** רענון אחרי שינוי סימוני מפגשים ("עדכן פוטנציאל") */
+  const [marksTick, setMarksTick] = useState(0);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const endRef = useRef<TimeInputHandle>(null);
@@ -111,6 +125,7 @@ export default function CourseFormScreen() {
           breakMinutes: String(course.breakMinutes),
           from: course.from,
           to: course.to,
+          extraDates: course.extraDates ?? [],
         };
         setForm({
           name: course.name,
@@ -120,6 +135,7 @@ export default function CourseFormScreen() {
           breakMinutes: String(course.breakMinutes),
           from: course.from,
           to: course.to,
+          extraDates: course.extraDates ?? [],
         });
       }
     });
@@ -185,6 +201,7 @@ export default function CourseFormScreen() {
       breakMinutes: Number(form.breakMinutes) || 0,
       from: form.from,
       to: form.to,
+      extraDates: [...new Set(form.extraDates)].sort(),
     };
     // שינוי מועד (יום, שעות, תקופה) בקורס קיים — מתריעים לפני שמירה על שני דברים:
     //  1. דיווחים ישנים בלי `courseId` שמשויכים לפי יום ושעות, ויתנתקו מהקורס.
@@ -266,11 +283,103 @@ export default function CourseFormScreen() {
     breakMinutes: Number(form.breakMinutes) || 0,
   };
   const perSession = sessionAcademicHours(preview);
-  const sessions = occurrences(
-    { ...preview, id: '', workplaceId, name: '', weekday: form.weekday, from: form.from, to: form.to },
-    form.from,
-    form.to,
-  ).length;
+  /** הקורס כפי שבטופס — לחישוב המפגשים והעיגולים */
+  const asCourse: Course = {
+    ...preview,
+    id: id ?? '',
+    workplaceId,
+    name: form.name,
+    weekday: form.weekday,
+    from: form.from,
+    to: form.to,
+    extraDates: form.extraDates,
+  };
+  const sessions = occurrences(asCourse, form.from, form.to).length;
+  // טווח העיגולים: מתחילת הקורס ועד המפגש האחרון (כולל נוספים / מועברים אחרי הסוף).
+  const lastExtra = form.extraDates.reduce((m, d) => (d > m ? d : m), form.to);
+  const firstExtra = form.extraDates.reduce((m, d) => (d < m ? d : m), form.from);
+  const dots = id ? sessionDots(asCourse, firstExtra, `${Number(lastExtra.slice(0, 4)) + 1}${lastExtra.slice(4)}`, allReports) : [];
+  void marksTick;
+  const byMonth = dots.reduce<Record<string, SessionDot[]>>((acc, d) => {
+    (acc[d.date.slice(0, 7)] ??= []).push(d);
+    return acc;
+  }, {});
+  const canceledDots = dots.filter((d) => d.state === 'canceled');
+  const counts = {
+    reported: dots.filter((d) => d.state === 'reported').length,
+    canceled: canceledDots.length,
+    auto: dots.filter((d) => d.state === 'auto').length,
+    extra: dots.filter((d) => d.kind === 'extra').length,
+  };
+  const sessionsCard =
+    dots.length > 0 ? (
+      <View style={styles.viewCard}>
+        <Text style={styles.cardTitle}>מפגשי הקורס</Text>
+        <Text style={styles.dateLabel}>
+          {[
+            counts.reported === 1 ? 'דווח 1' : `${counts.reported} דווחו`,
+            counts.canceled ? (counts.canceled === 1 ? 'בוטל 1' : `${counts.canceled} בוטלו`) : null,
+            counts.auto ? (counts.auto === 1 ? 'בוטל 1 אוטומטית' : `${counts.auto} בוטלו אוטומטית`) : null,
+            counts.extra ? (counts.extra === 1 ? 'מפגש נוסף 1' : `${counts.extra} מפגשים נוספים`) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+        {Object.entries(byMonth).map(([key, list]) => (
+          <View key={key} style={styles.monthRow}>
+            <Text style={styles.monthName}>{MONTH_NAMES[Number(key.slice(5, 7)) - 1]}</Text>
+            <View style={styles.monthDots}>
+              <SessionDots dots={list} selected={picked?.date} onPress={(d) => setPicked(d)} />
+            </View>
+          </View>
+        ))}
+        {picked ? (
+          <Pressable
+            disabled={!picked.reportId}
+            onPress={() => picked.reportId && router.push({ pathname: '/report-view', params: { id: picked.reportId } })}
+            accessibilityRole={picked.reportId ? 'link' : 'text'}
+            style={styles.pickedRow}
+          >
+            <Text style={styles.pickedText}>{dotDescription(picked)}</Text>
+            {picked.reportId ? <Text style={styles.pickedLink}>לדיווח ‹</Text> : null}
+          </Pressable>
+        ) : (
+          <Text style={styles.dateLabel}>לחיצה על עיגול מציגה את פרטי המפגש</Text>
+        )}
+        <View style={styles.legend}>
+          <SessionDotsLegend />
+        </View>
+      </View>
+    ) : null;
+
+  function addExtra() {
+    if (!form) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(extraDate)) {
+      setExtraError('בחר תאריך');
+      return;
+    }
+    if (form.extraDates.includes(extraDate) || occursOn({ ...asCourse, extraDates: [] }, extraDate)) {
+      setExtraError('כבר יש מפגש בתאריך הזה');
+      return;
+    }
+    setExtraError(null);
+    set('extraDates', [...form.extraDates, extraDate].sort());
+  }
+
+  function updatePotential() {
+    if (!id) return;
+    confirm({
+      title: 'לעדכן את הפוטנציאל?',
+      message: `${canceledDots.length === 1 ? 'המפגש שבוטל יוסר' : `${canceledDots.length} המפגשים שבוטלו יוסרו`} גם מהפוטנציאל, כאילו לא תוכננו. אפשר להחזיר מפגש בודד מדף הדיווח שלו ("המפגש התקיים").`,
+      confirmLabel: 'עדכון פוטנציאל',
+      onConfirm: async () => {
+        const n = await removeCanceledFromPotential([id]);
+        setMarksTick((t) => t + 1);
+        setPicked(null);
+        showToast(n === 1 ? 'מפגש אחד הוסר מהפוטנציאל' : `${n} מפגשים הוסרו מהפוטנציאל`);
+      },
+    });
+  }
 
   if (viewing) {
     const rows: [string, string][] = [
@@ -295,6 +404,7 @@ export default function CourseFormScreen() {
             </View>
           ))}
         </View>
+        {sessionsCard}
         <Button label="עריכה" onPress={() => setViewing(false)} />
         <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
       </Screen>
@@ -415,6 +525,51 @@ export default function CourseFormScreen() {
         </View>
       ) : null}
 
+      <FormField label="מפגשים נוספים" hint="מפגש פרטני מעבר ליום הקבוע, בשעות הקורס">
+        {form.extraDates.length > 0 ? (
+          <View style={styles.chips}>
+            {form.extraDates.map((d) => (
+              <Pressable
+                key={d}
+                onPress={() => set('extraDates', form.extraDates.filter((x) => x !== d))}
+                accessibilityRole="button"
+                accessibilityLabel={`הסרת המפגש הנוסף ב־${formatISODate(d)}`}
+                style={styles.chip}
+              >
+                <Text style={styles.chipText}>{formatISODate(d)} ✕</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        <View style={styles.dates}>
+          <View style={styles.dateCol}>
+            <DateField
+              value={extraDate}
+              onChange={(v) => {
+                setExtraDate(v);
+                setExtraError(null);
+              }}
+              invalid={Boolean(extraError)}
+            />
+          </View>
+          <Button label="הוספת מפגש" variant="secondary" onPress={addExtra} />
+        </View>
+        {extraError ? <Text style={styles.error}>{extraError}</Text> : null}
+      </FormField>
+
+      {id && canceledDots.length > 0 ? (
+        <View style={styles.viewCard}>
+          <Text style={styles.cardTitle}>מפגשים שבוטלו ונשארו בפוטנציאל</Text>
+          <SessionDots dots={canceledDots} />
+          <Text style={styles.dateLabel}>
+            הם יורדים מהצפי בלבד. "עדכון פוטנציאל" מסיר אותם גם מהפוטנציאל.
+          </Text>
+          <View style={styles.legend}>
+            <Button label="עדכון פוטנציאל" variant="secondary" onPress={updatePotential} />
+          </View>
+        </View>
+      ) : null}
+
       <Button label={id ? 'שמירת שינויים' : 'הוספת הקורס'} onPress={handleSave} loading={saving} />
       {fromView ? <Button label="חזרה" variant="secondary" onPress={backToView} /> : null}
       {id && loaded ? (
@@ -516,6 +671,24 @@ const makeStyles = (colors: AppColors) =>
     },
     viewRowLast: { borderBottomWidth: 0 },
     viewValue: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
+    cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT, paddingTop: 12 },
+    monthRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingTop: spacing.sm },
+    monthName: { width: 56, fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT, paddingTop: 7 },
+    monthDots: { flex: 1, minWidth: 0 },
+    pickedRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+      padding: spacing.sm,
+      borderRadius: radius.md,
+      backgroundColor: colors.background,
+    },
+    pickedText: { flex: 1, fontSize: 13, color: colors.text, textAlign: TEXT_RIGHT },
+    pickedLink: { fontSize: 13, fontWeight: '700', color: colors.brand },
+    legend: { paddingVertical: spacing.sm },
+    error: { fontSize: 13, color: colors.danger, textAlign: TEXT_RIGHT },
     summaryText: {
       fontSize: 13,
       color: colors.brandDark,

@@ -10,6 +10,7 @@ import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { hebrewDate, hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
+import { useShowHebrewDates } from '../lib/hebrewDatePref';
 import { useI18n } from '../lib/i18n';
 import { useSwipe } from './useSwipe';
 import { radius, spacing } from '../theme/colors';
@@ -50,10 +51,11 @@ function shortLabel(value: string): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
-function chipLabel(value: string): string {
+function chipLabel(value: string, heb: boolean): string {
   const d = parse(value);
   if (!d) return value;
-  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1} · ${hebrewDate(value, false)}`;
+  const base = `${WEEKDAYS[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
+  return heb ? `${base} · ${hebrewDate(value, false)}` : base;
 }
 
 type DatePickerProps = {
@@ -66,6 +68,7 @@ type DatePickerProps = {
 
 export function DatePicker({ value, onChange, workedDates, invalid }: DatePickerProps) {
   const styles = useStyles(makeStyles);
+  const heb = useShowHebrewDates();
   const [open, setOpen] = useState(false);
   const today = iso(new Date());
   const yesterday = iso(new Date(Date.now() - 864e5));
@@ -82,7 +85,7 @@ export function DatePicker({ value, onChange, workedDates, invalid }: DatePicker
   const chips: { key: string; label: string }[] = [
     { key: today, label: 'היום' },
     { key: yesterday, label: 'אתמול' },
-    ...recent.map((d) => ({ key: d, label: chipLabel(d) })),
+    ...recent.map((d) => ({ key: d, label: chipLabel(d, heb) })),
   ];
 
   return (
@@ -95,7 +98,7 @@ export function DatePicker({ value, onChange, workedDates, invalid }: DatePicker
       >
         <View style={styles.displayTexts}>
           <Text style={styles.displayText}>{gregorianLong(value)}</Text>
-          {parse(value) ? <Text style={styles.displayHeb}>{hebrewDate(value)}</Text> : null}
+          {heb && parse(value) ? <Text style={styles.displayHeb}>{hebrewDate(value)}</Text> : null}
         </View>
         <Text style={styles.calendarIcon}>📅</Text>
       </Pressable>
@@ -147,6 +150,7 @@ export function DateField({
   invalid?: boolean;
 }) {
   const styles = useStyles(makeStyles);
+  const heb = useShowHebrewDates();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -160,7 +164,7 @@ export function DateField({
           <Text style={styles.displayText} numberOfLines={1}>
             {shortLabel(value)}
           </Text>
-          {parse(value) ? (
+          {heb && parse(value) ? (
             <Text style={styles.displayHeb} numberOfLines={1}>
               {hebrewDate(value)}
             </Text>
@@ -195,6 +199,7 @@ function CalendarModal({
   onClose: () => void;
 }) {
   const styles = useStyles(makeStyles);
+  const heb = useShowHebrewDates();
   const { isRTL } = useI18n();
   const initial = parse(value) ?? new Date();
   const [cursor, setCursor] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
@@ -228,9 +233,11 @@ function CalendarModal({
               <Text style={styles.monthTitle}>
                 {MONTHS[cursor.getMonth()]} {cursor.getFullYear()}
               </Text>
-              <Text style={styles.monthHeb}>
-                {hebrewMonthSpan(cursor.getFullYear(), cursor.getMonth())}
-              </Text>
+              {heb ? (
+                <Text style={styles.monthHeb}>
+                  {hebrewMonthSpan(cursor.getFullYear(), cursor.getMonth())}
+                </Text>
+              ) : null}
             </View>
             <Pressable onPress={() => move(1)} style={styles.navBtn} accessibilityLabel="חודש הבא">
               <Text style={styles.navText}>{isRTL ? '←' : '→'}</Text>
@@ -255,7 +262,7 @@ function CalendarModal({
                   key={cell}
                   style={styles.cell}
                   onPress={() => onPick(cell)}
-                  accessibilityLabel={longDate(cell)}
+                  accessibilityLabel={heb ? longDate(cell) : gregorianLong(cell)}
                 >
                   <View
                     style={[
@@ -267,9 +274,11 @@ function CalendarModal({
                     <Text style={[styles.dayText, selected && styles.dayTextSelected]}>
                       {Number(cell.slice(8))}
                     </Text>
-                    <Text style={[styles.dayHeb, selected && styles.dayTextSelected]}>
-                      {hebrewDay(cell)}
-                    </Text>
+                    {heb ? (
+                      <Text style={[styles.dayHeb, selected && styles.dayTextSelected]}>
+                        {hebrewDay(cell)}
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={[styles.dot, worked.has(cell) && styles.dotOn]} />
                 </Pressable>

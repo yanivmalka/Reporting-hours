@@ -9,6 +9,7 @@ import { ForecastChart, HEADROOM, realization } from '../components/ForecastChar
 import { useFlash } from '../components/useFlash';
 import { useSwipe } from '../components/useSwipe';
 import { WorkplaceTile } from '../components/WorkplaceTile';
+import { SessionDots, SessionDotsLegend, sessionDots } from '../components/SessionDots';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -310,19 +311,53 @@ export default function DashboardScreen() {
   const rowsAll = data.workplaces.map((w, i) => {
     let reported = 0;
     let planned = 0;
+    let forecastSum = 0;
     const periods = inView.flatMap((m) => {
       const c = m.byWorkplace[w.id];
       reported += c?.reported ?? 0;
       planned += c?.planned ?? 0;
+      forecastSum += c?.forecast ?? 0;
       return c?.periods ?? [];
     });
     const last = single ? periods[periods.length - 1] : undefined;
     const active = last && (last.reported > 0 || last.planned > 0) ? last : undefined;
-    return { workplace: w, color: series[i].color, reported, planned, last: active };
+    return { workplace: w, color: series[i].color, reported, planned, forecast: forecastSum, periods, last: active };
   });
   const totalAll = {
     reported: rowsAll.reduce((a, r) => a + r.reported, 0),
     planned: rowsAll.reduce((a, r) => a + r.planned, 0),
+    forecast: rowsAll.reduce((a, r) => a + r.forecast, 0),
+  };
+  /** פירוט המפגשים לפי קורס בתקופות שבתצוגה — עיגולים; לחיצה מנווטת למפגש. */
+  const sessionsOf = (row: (typeof rowsAll)[number]) => {
+    if (row.periods.length === 0) return null;
+    const start = row.periods.reduce((m, p) => (p.period.start < m ? p.period.start : m), row.periods[0].period.start);
+    const end = row.periods.reduce((m, p) => (p.period.end > m ? p.period.end : m), row.periods[0].period.end);
+    const groups = data.courses
+      .filter((c) => c.workplaceId === row.workplace.id)
+      .map((c) => ({ course: c, dots: sessionDots(c, start, end, data.reports) }))
+      .filter((g) => g.dots.length > 0);
+    if (groups.length === 0) return null;
+    return (
+      <View style={styles.sessions}>
+        {groups.map((g) => (
+          <View key={g.course.id} style={styles.sessionGroup}>
+            <Text style={styles.sessionCourse}>{g.course.name}</Text>
+            <SessionDots
+              dots={g.dots}
+              onPress={(d) =>
+                d.reportId
+                  ? router.push({ pathname: '/report-view', params: { id: d.reportId } })
+                  : d.state === 'open'
+                    ? router.push({ pathname: '/report', params: { course: g.course.id, date: d.date } })
+                    : router.push({ pathname: '/course-form', params: { id: g.course.id, view: '1' } })
+              }
+            />
+          </View>
+        ))}
+        <SessionDotsLegend />
+      </View>
+    );
   };
   const rows = rowsAll
     .filter((r) => (!selWp || r.workplace.id === selWp) && (r.reported > 0 || r.planned > 0 || r.workplace.id === selWp))
@@ -444,13 +479,19 @@ export default function DashboardScreen() {
             {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.planned)}</Text> : null}
           </View>
         </View>
-        <Text style={styles.totalPct}>
-          {pctTotal == null
-            ? 'אין תכנון קורסים לתקופה'
-            : pctTotal > 100
-              ? `${pctTotal}% — הדיווח עולה על התכנון`
-              : `מימוש ${pctTotal}% מהפוטנציאל`}
-        </Text>
+        {/* מימוש מימין, ומשמאל — הצפי, רק כשהוא שונה מהפוטנציאל */}
+        <View style={styles.pctRow}>
+          <Text style={styles.totalPct}>
+            {pctTotal == null
+              ? 'אין תכנון קורסים לתקופה'
+              : pctTotal > 100
+                ? `${pctTotal}% — הדיווח עולה על התכנון`
+                : `מימוש ${pctTotal}% מהפוטנציאל`}
+          </Text>
+          {Math.round(sel ? sel.forecast : totalAll.forecast) !== Math.round(sel ? sel.planned : totalAll.planned) ? (
+            <Text style={styles.totalForecast}>צפי {money(sel ? sel.forecast : totalAll.forecast)}</Text>
+          ) : null}
+        </View>
       </View>
 
       {rows.map((row) => (
@@ -460,6 +501,8 @@ export default function DashboardScreen() {
           color={row.color}
           reported={row.reported}
           planned={row.planned}
+          forecast={row.forecast}
+          sessions={open.has(row.workplace.id) ? sessionsOf(row) : null}
           scale={scaleRows}
           expanded={open.has(row.workplace.id)}
           onToggle={() =>
@@ -636,6 +679,11 @@ const makeStyles = (colors: AppColors) =>
     totalLabel: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     totalValue: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     totalPlanned: { color: colors.brandDark },
+    pctRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: spacing.sm },
+    totalForecast: { fontSize: 13, fontWeight: '700', color: colors.brand },
+    sessions: { gap: spacing.sm, paddingBottom: 4 },
+    sessionGroup: { gap: 4 },
+    sessionCourse: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     wpCard: {
       flexDirection: 'row',
       alignItems: 'center',

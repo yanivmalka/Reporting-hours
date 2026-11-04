@@ -34,6 +34,7 @@ import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { REST_DAY_KIND_LABELS, type RestDayKind } from '../lib/holidays';
 import { useHolidaySettings } from '../lib/sessions';
+import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { PAY_BASIS_LABELS, usePayBasis, type PayBasis } from '../lib/payBasis';
 import { useTheme } from '../theme/ThemeContext';
@@ -67,6 +68,7 @@ export default function SettingsScreen() {
   const [statuses, setStatuses] = useState<StatusMap>({});
   const [mode, setMode] = useRedeemMode();
   const [holidays, setHoliday] = useHolidaySettings();
+  const showHeb = useShowHebrewDates();
   const confirm = useConfirm();
 
   useFocusEffect(
@@ -164,8 +166,8 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>לו״ז — ביטול אוטומטי של מפגשים</Text>
         <Text style={styles.note}>
-          מפגשי קורסים שחלים בימים המסומנים כאן מסומנים בלו״ז כ"בוטל": הם לא נספרים בשעות
-          המתוכננות ולא מופיעים כדיווח חסר. חל גם על קורסים קיימים, ומפגש בודד אפשר להחזיר מהלו״ז.
+          מפגשי קורסים שחלים בימים המסומנים כאן מסומנים בלו״ז כ"בוטל אוטומטית": הם לא נכללים
+          בפוטנציאל ולא מופיעים כדיווח חסר. חל גם על קורסים קיימים, ומפגש בודד אפשר להחזיר מהלו״ז.
         </Text>
         <View style={styles.checkGroup}>
           {HOLIDAY_OPTIONS.map(({ kind, detail }, i) => {
@@ -193,6 +195,31 @@ export default function SettingsScreen() {
               </Pressable>
             );
           })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>תאריכונים</Text>
+        <View style={styles.checkGroup}>
+          <Pressable
+            onPress={() => {
+              void setShowHebrewDates(!showHeb);
+              showToast(showHeb ? 'התאריך העברי הוסתר בתאריכונים' : 'התאריך העברי מוצג בתאריכונים');
+            }}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: showHeb }}
+            style={({ pressed }) => [styles.checkRow, pressed && { opacity: 0.85 }]}
+          >
+            <Icon
+              name={showHeb ? 'checkbox-marked' : 'checkbox-blank-outline'}
+              size={26}
+              color={showHeb ? colors.brand : colors.textMuted}
+            />
+            <View style={styles.checkTexts}>
+              <Text style={styles.checkTitle}>הצגת תאריך עברי</Text>
+              <Text style={styles.note}>בכל בחירת תאריך: ליד התאריך שנבחר, בכותרת החודש ובכל יום בתאריכון</Text>
+            </View>
+          </Pressable>
         </View>
       </View>
 

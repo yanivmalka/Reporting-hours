@@ -12,7 +12,15 @@
  */
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { readJSON, writeJSON } from './storage';
-import { currentCancel, loadCancelIndex, type CancelIndex } from './sessions';
+import {
+  currentCancel,
+  currentMoves,
+  keptInPotential,
+  loadCancelIndex,
+  type CancelIndex,
+  type Cancellation,
+  type MovesIndex,
+} from './sessions';
 import { parseTime } from './time';
 
 export type Course = {
@@ -32,6 +40,8 @@ export type Course = {
   from: string;
   /** סוף התקופה (כולל), "YYYY-MM-DD" */
   to: string;
+  /** מפגשים פרטניים נוספים ("YYYY-MM-DD"), בשעות הקורס — מעבר ליום הקבוע */
+  extraDates?: string[];
   /** נוצר כנתוני הדגמה */
   demo?: boolean;
 };
@@ -93,14 +103,74 @@ export function sessionMinutes(course: Pick<Course, 'start' | 'end' | 'breakMinu
   return Math.max(0, e - s - Math.max(0, course.breakMinutes || 0));
 }
 
-/** האם הקורס מתקיים בתאריך נתון (יום בשבוע + בתוך התקופה). */
-export function occursOn(course: Course, date: string): boolean {
+/** האם התאריך הוא מפגש קבוע של הקורס (יום בשבוע + בתוך התקופה). */
+function regularOn(course: Course, date: string): boolean {
   return date >= course.from && date <= course.to && parseISO(date).getDay() === course.weekday;
 }
 
 /**
+ * מפגש של קורס בתאריך:
+ *   - kind: 'regular' (המועד הקבוע) · 'extra' (מפגש פרטני שנוסף) · 'movedIn' (הועבר לכאן);
+ *   - cancel: למה לא מתקיים (בוטל / הוסר / הועבר / חג), או null.
+ */
+export type CourseSession = {
+  date: string;
+  kind: 'regular' | 'extra' | 'movedIn';
+  /** ב־'movedIn' — התאריך המקורי */
+  movedFrom?: string;
+  cancel: Cancellation | null;
+};
+
+/**
+ * כל המפגשים של קורס בטווח [start, end] (כולל), ממוינים — גם כאלה שבוטלו,
+ * הוסרו, הועברו או חלים בחג (עם `cancel`). לתצוגה מלאה ולחישובי פוטנציאל.
+ */
+export function courseSessions(
+  course: Course,
+  start: string,
+  end: string,
+  cancel: CancelIndex = currentCancel(),
+  moves: MovesIndex = currentMoves(),
+): CourseSession[] {
+  const out = new Map<string, CourseSession>();
+  const from = start > course.from ? start : course.from;
+  const to = end < course.to ? end : course.to;
+  if (from <= to) {
+    const d = parseISO(from);
+    d.setDate(d.getDate() + ((course.weekday - d.getDay() + 7) % 7));
+    for (; iso(d) <= to; d.setDate(d.getDate() + 7)) {
+      const date = iso(d);
+      out.set(date, { date, kind: 'regular', cancel: cancel(course.id, date) });
+    }
+  }
+  for (const date of course.extraDates ?? []) {
+    if (date < start || date > end || out.has(date)) continue;
+    out.set(date, { date, kind: 'extra', cancel: cancel(course.id, date, true) });
+  }
+  for (const m of moves(course.id)) {
+    if (m.date < start || m.date > end || out.has(m.date)) continue;
+    out.set(m.date, { date: m.date, kind: 'movedIn', movedFrom: m.from, cancel: cancel(course.id, m.date, true) });
+  }
+  return [...out.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** האם הקורס מתקיים בתאריך נתון (מועד קבוע, מפגש נוסף או מפגש שהועבר אליו) — בלי לבדוק ביטולים. */
+export function occursOn(course: Course, date: string, moves: MovesIndex = currentMoves()): boolean {
+  return (
+    regularOn(course, date) ||
+    (course.extraDates ?? []).includes(date) ||
+    moves(course.id).some((m) => m.date === date)
+  );
+}
+
+/** ביטול של מפגש בתאריך — ביטול אוטומטי בחג חל רק על המועד הקבוע. */
+export function sessionCancel(course: Course, date: string, cancel: CancelIndex = currentCancel()): Cancellation | null {
+  return cancel(course.id, date, !regularOn(course, date));
+}
+
+/**
  * הקורסים שמתקיימים בתאריך (אפשר לצמצם למקום עבודה), לפי שעת התחלה.
- * עם אינדקס ביטולים — בלי מפגשים מבוטלים (חג, "לא התקיים").
+ * עם אינדקס ביטולים — בלי מפגשים מבוטלים (חג, "לא התקיים", הועבר).
  */
 export function coursesOn(
   courses: readonly Course[],
@@ -110,26 +180,37 @@ export function coursesOn(
 ): Course[] {
   return courses
     .filter(
-      (c) => (!workplaceId || c.workplaceId === workplaceId) && occursOn(c, date) && !cancel(c.id, date),
+      (c) =>
+        (!workplaceId || c.workplaceId === workplaceId) && occursOn(c, date) && !sessionCancel(c, date, cancel),
     )
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 
-/** תאריכי המפגשים של קורס בטווח [start, end] (כולל), בלי מפגשים מבוטלים. */
+/** תאריכי המפגשים שמתקיימים בטווח [start, end] (כולל) — בלי מבוטלים, כולל נוספים ומועברים. */
 export function occurrences(
   course: Course,
   start: string,
   end: string,
   cancel: CancelIndex = currentCancel(),
 ): string[] {
-  const from = start > course.from ? start : course.from;
-  const to = end < course.to ? end : course.to;
-  if (from > to) return [];
-  const d = parseISO(from);
-  d.setDate(d.getDate() + ((course.weekday - d.getDay() + 7) % 7));
-  const out: string[] = [];
-  for (; iso(d) <= to; d.setDate(d.getDate() + 7)) out.push(iso(d));
-  return out.filter((date) => !cancel(course.id, date));
+  return courseSessions(course, start, end, cancel)
+    .filter((s) => !s.cancel)
+    .map((s) => s.date);
+}
+
+/**
+ * מפגשי הפוטנציאל בטווח: מה שתוכנן — כולל מפגשים שבוטלו ידנית (`canceled`),
+ * בלי מפגשים שהוסרו, הועברו מכאן או חלים בחג.
+ */
+export function potentialSessions(
+  course: Course,
+  start: string,
+  end: string,
+  cancel: CancelIndex = currentCancel(),
+): { date: string; canceled: boolean }[] {
+  return courseSessions(course, start, end, cancel)
+    .filter((s) => !s.cancel || keptInPotential(s.cancel))
+    .map((s) => ({ date: s.date, canceled: s.cancel != null }));
 }
 
 /** דקות עבודה מתוכננות למקום עבודה בטווח תאריכים — לפי הקורסים שלו. */
