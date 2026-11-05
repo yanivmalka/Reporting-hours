@@ -21,6 +21,7 @@
 | סימוני מפגש (`canceled` / `held`) | `lib/sessions.ts` | `reporting-hours/sessions/v1` |
 | הגדרות ביטול אוטומטי בחגים | `lib/sessions.ts` | `reporting-hours/holiday-cancel/v2` |
 | סיבות ביטול (רשימה גלובלית) | `lib/cancelReasons.ts` | `reporting-hours/cancel-reasons/v1` |
+| לוח החופשות | `lib/vacations.ts` (נשמר דרך `saveVacations` ב־`lib/sessions.ts`) | `reporting-hours/vacations/v1` |
 | סטטוס דוחות שכר (נשלח / שולם) | `lib/payroll.ts` | `reporting-hours/payroll/v1` |
 | מונה דקות מצטברות | `lib/accumulated.ts` | `reporting-hours/accumulated/v2` |
 | אופן פדיון דקות | `lib/redeem.ts` | `reporting-hours/redeem-mode/v1` |
@@ -36,7 +37,7 @@
 אין רשומה שמורה של "ממתין לדיווח". המצב נגזר בכל טעינה:
 
 1. **מתוכנן**: `coursesOn` / `occurrences` ב־`lib/courses.ts` מחשבות את המפגשים מהקורסים, ומדלגות על מפגשים מבוטלים דרך `CancelIndex`.
-2. **מבוטל**: `lib/sessions.ts` מסמן ביטול ידני כסימון `canceled` עם סיבה. ביטול אוטומטי בחג (`lib/holidays.ts`) מחושב ולא נשמר, ו"המפגש התקיים" שומר סימון `held`.
+2. **מבוטל**: `lib/sessions.ts` מסמן ביטול ידני כסימון `canceled` עם סיבה. ביטול אוטומטי בחג (`lib/holidays.ts`) וחופשה מלוח החופשות (`lib/vacations.ts`, `kind: 'vacation'`) מחושבים ולא נשמרים, ו"המפגש התקיים" שומר סימון `held`.
 3. **חסר**: מפגש שלא בוטל ואין לו דיווח (`courseReported`). מוצג בהתראות הבית (`missingAlerts` ב־`lib/home.ts`) ובלו״ז.
 4. **דווח**: דיווח עם `courseId`. דיווחים ישנים בלי מזהה משויכים לפי שם הקורס או חפיפה בשעות (`covers`, `reportsOfCourse`).
 5. **נעול**: הדוח לשכר של התקופה נשלח (`isLocked`) או שולם (`isPaid`), ב־`lib/payroll.ts`.
@@ -86,19 +87,20 @@
 | `payments.tsx`, `tax.tsx`, `profile.tsx` | תשלומים, מס, פרטים אישיים |
 | `archive.tsx`, `trash.tsx` | ארכיון ואשפה |
 | `settings.tsx`, `data.tsx` | דקות מצטברות (מונה ובסיס חישוב שכר); ניהול נתונים וגיבוי |
-| `holidays.tsx` | חגים וחופשות: מתגי הביטול האוטומטי |
+| `holidays.tsx` | חגים וחופשות: מתגי הביטול האוטומטי, לוח החופשות (`VacationBoard`) וסיבות הביטול |
 
 ## חישובים (`lib/`)
 
 - זמן ושעות: `time.ts`, `academic.ts` (45 דק׳), `accumulated.ts`, `redeem.ts`.
 - כסף: `pay.ts`, `payBasis.tsx`, `travel.ts`, `payroll.ts`, `forecast.ts`.
-- לוח שנה: `hebrewDate.ts`, `holidays.ts`, `sessions.ts`.
+- לוח שנה: `hebrewDate.ts`, `holidays.ts`, `sessions.ts`, `vacations.ts`.
 - מסכים: `home.ts` (כולל `nextRelevantDay`), `dashboard.ts` (כולל `deadlineRelative`), `recommend.ts`, `dayStatus.ts`.
 - תשתית: `storage.ts`, `sync.ts`, `firebase.ts`, `authPlatform(.web).ts`, `backup.ts`, `update.ts`, `rtl.ts`, `i18n.tsx`, `strings.ts`, `demo.ts`.
 
 ## רכיבים בולטים (`components/`)
 
 - דיאלוגים: `ConfirmDialog`, `SessionCancelDialog`, `PaymentDialog`.
+- חופשות: `Vacations` — `VacationBoard` (הלוח המרכזי), `VacationsCard` (בדף קורס / מקום עבודה, עם "התעלם" בעריכה), `useVacationEditor`.
 - ניווט וכותרות: `AppDrawer`, `Screen`, `ExitGuard`.
 - תשתית: `CloudSync` (סנכרון), `BackupScheduler` / `BackupSection`, `UpdateChecker`, `DemoSeeder`.
 - תצוגה: `Charts`, `ForecastChart`, `WorkplaceTile`, `ReportCard`, `RangeCalendar`, `WeekStrip`, `TrashList`, `PlanList`.

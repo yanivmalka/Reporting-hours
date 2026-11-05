@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import { ActivityIndicator, Keyboard, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
@@ -12,6 +12,7 @@ import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
 import { TextField } from '../components/TextField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
+import { VacationsCard } from '../components/Vacations';
 import { SessionDots, SessionDotsByMonth, SessionDotsLegend, dotDescription, sessionDots, type SessionDot } from '../components/SessionDots';
 import { removeCanceledFromPotential, removeFromPlan, returnToPlan } from '../lib/sessions';
 import {
@@ -100,6 +101,13 @@ export default function CourseFormScreen() {
   const [extraError, setExtraError] = useState<string | null>(null);
   /** רענון אחרי שינוי סימוני מפגשים ("עדכן פוטנציאל") */
   const [marksTick, setMarksTick] = useState(0);
+  // ב־web הדף מרונדר מראש בלי פרמטרים (תמיד "קורס חדש"). הרינדור הראשון
+  // בדפדפן הוא מצב טעינה, כמו בשרת, ורק אחריו הקורס — אחרת פתיחה ישירה של
+  // ?id= גורמת לאי־התאמה (#418). כמו ב־app/workplace-form.tsx.
+  const [hydrated, setHydrated] = useState(Platform.OS !== 'web');
+  useEffect(() => setHydrated(true), []);
+  // חופשה שנוספה / שהתעלמו ממנה משנה את העיגולים — רענון אחרי בניית האינדקס מחדש.
+  const refreshMarks = () => setMarksTick((t) => t + 1);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const endRef = useRef<TimeInputHandle>(null);
@@ -163,7 +171,7 @@ export default function CourseFormScreen() {
     setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
 
-  if (!form) {
+  if (!form || !hydrated) {
     return (
       <Screen scroll={false}>
         <View style={styles.center}>
@@ -306,6 +314,7 @@ export default function CourseFormScreen() {
     reported: dots.filter((d) => d.state === 'reported').length,
     canceled: canceledDots.length,
     auto: dots.filter((d) => d.state === 'auto').length,
+    vacation: dots.filter((d) => d.state === 'vacation').length,
     extra: dots.filter((d) => d.kind === 'extra').length,
   };
   const sessionsCard =
@@ -317,6 +326,7 @@ export default function CourseFormScreen() {
             counts.reported === 1 ? 'דווח 1' : `${counts.reported} דווחו`,
             counts.canceled ? (counts.canceled === 1 ? 'בוטל 1' : `${counts.canceled} בוטלו`) : null,
             counts.auto ? (counts.auto === 1 ? 'בוטל 1 אוטומטית' : `${counts.auto} בוטלו אוטומטית`) : null,
+            counts.vacation ? (counts.vacation === 1 ? 'מפגש 1 בחופשה' : `${counts.vacation} בחופשה`) : null,
             counts.extra ? (counts.extra === 1 ? 'מפגש נוסף 1' : `${counts.extra} מפגשים נוספים`) : null,
           ]
             .filter(Boolean)
@@ -437,6 +447,7 @@ export default function CourseFormScreen() {
           ))}
         </View>
         {sessionsCard}
+        {id && workplaceId ? <VacationsCard target={{ kind: 'course', id, workplaceId }} onChanged={refreshMarks} /> : null}
         <Button label="עריכה" onPress={() => setViewing(false)} />
         <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
       </Screen>
@@ -590,6 +601,10 @@ export default function CourseFormScreen() {
       </FormField>
 
       {sessionsCard}
+
+      {id && workplaceId ? (
+        <VacationsCard target={{ kind: 'course', id, workplaceId }} editable onChanged={refreshMarks} />
+      ) : null}
 
       {id && canceledDots.length > 0 ? (
         <View style={styles.viewCard}>

@@ -1,7 +1,8 @@
 /**
  * עיגולי מפגשים של קורס — אותו קוד צבעים בלוח הבקרה ובדף הקורס:
  *   ✓ ירוק — דווח · מסגרת — מתוכנן / טרם דווח · אדום מקווקו — בוטל (נשאר בפוטנציאל) ·
- *   אפור מחוק — הוסר מהפוטנציאל / חג · "←" — הועבר · + קטן בפינה — מפגש נוסף.
+ *   אפור מחוק — הוסר מהפוטנציאל / חג · מקווקו בצבע המערכת — חופשה · "←" — הועבר ·
+ *   + קטן בפינה — מפגש נוסף.
  * תצוגה בלבד: לחיצה על עיגול מועברת ל־`onPress` (ניווט או הצגת פרטים).
  */
 import { StyleSheet, View } from 'react-native';
@@ -13,7 +14,7 @@ import { spacing } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
-export type DotState = 'reported' | 'open' | 'canceled' | 'removed' | 'auto' | 'moved';
+export type DotState = 'reported' | 'open' | 'canceled' | 'removed' | 'auto' | 'vacation' | 'moved';
 
 export type SessionDot = CourseSession & { state: DotState; reportId?: string };
 
@@ -36,7 +37,9 @@ export function sessionDots<R extends ReportLike & { id: string }>(
           ? 'removed'
           : s.cancel?.kind === 'auto'
             ? 'auto'
-            : s.cancel?.kind === 'moved'
+            : s.cancel?.kind === 'vacation'
+              ? 'vacation'
+              : s.cancel?.kind === 'moved'
               ? 'moved'
               : 'open';
     return { ...s, state, reportId: report?.id };
@@ -55,6 +58,7 @@ export function dotDescription(s: SessionDot): string {
     canceled: 'בוטל — נשאר בפוטנציאל',
     removed: 'בוטל והוסר מהפוטנציאל',
     auto: 'בוטל אוטומטית',
+    vacation: 'חופשה',
     moved: 'הועבר',
   };
   parts.push(label[s.state]);
@@ -77,6 +81,7 @@ function useTones(): Record<DotState, Tone> {
     canceled: { bg: mix(colors.danger, colors.surface, 0.85), fg: colors.danger, border: colors.danger, dashed: true },
     removed: { bg: colors.background, fg: colors.textMuted, border: colors.textMuted, dashed: true, strike: true },
     auto: { bg: colors.background, fg: colors.textMuted, border: colors.textMuted, dashed: true, strike: true },
+    vacation: { bg: colors.brandLight, fg: colors.brand, border: colors.brand, dashed: true, strike: true },
     moved: { bg: colors.background, fg: colors.textMuted, border: colors.textMuted, dashed: true, strike: true },
   };
 }
@@ -197,6 +202,7 @@ export function SessionDotsLegend() {
     { state: 'open', label: '', text: 'מתוכנן' },
     { state: 'canceled', label: '', text: 'בוטל' },
     { state: 'auto', label: '', text: 'חג' },
+    { state: 'vacation', label: '', text: 'חופשה' },
     { state: 'moved', label: '←', text: 'הועבר' },
     { state: 'open', label: '', text: 'מפגש נוסף', extra: true },
   ];

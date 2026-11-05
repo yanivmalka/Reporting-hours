@@ -1,13 +1,14 @@
 /**
  * חגים וחופשות: אילו ימים מיוחדים מבטלים מפגשים אוטומטית (ארבעה מתגים), ורשימת
  * סיבות הביטול הגלובלית (הוספה, שינוי שם, מחיקה, סדר). כלל התשלום לכל סיבה —
- * בדף עריכת מקום העבודה, בקבוצה "ביטולים". בהמשך — גם לוח החופשות המרכזי.
+ * בדף עריכת מקום העבודה, בקבוצה "ביטולים". ולוח החופשות המרכזי (components/Vacations.tsx).
  */
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Icon } from '../components/Icon';
 import { Pressable } from '../components/Pressable';
+import { VacationBoard } from '../components/Vacations';
 import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { REST_DAY_KIND_LABELS, type RestDayKind } from '../lib/holidays';
@@ -87,6 +88,15 @@ export default function HolidaysScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionLabel}>לוח חופשות</Text>
+        <Text style={styles.note}>
+          מפגשים שחלים בחופשה מתבטלים: הם לא נכללים בפוטנציאל ובצפי ולא מופיעים כדיווח חסר.
+          חופשה כללית חלה על כל המוסדות, וכל מקום עבודה או קורס יכול להתעלם ממנה בדף שלו.
+        </Text>
+        <VacationBoard />
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionLabel}>סיבות ביטול</Text>
         <Text style={styles.note}>
           מוצגות לבחירה מהירה בביטול מפגש. אם מוסד משלם על ביטול בגלל סיבה מסוימת — מגדירים זאת
@@ -141,10 +151,6 @@ export default function HolidaysScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>לוח חופשות</Text>
-        <Text style={styles.note}>בקרוב: לוח החופשות המרכזי של המוסדות.</Text>
-      </View>
     </Screen>
   );
 }

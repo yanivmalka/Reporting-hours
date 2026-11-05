@@ -9,6 +9,8 @@ import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { courseScheduleLabel, loadCourses, type Course } from '../lib/courses';
+import { VacationsCard } from '../components/Vacations';
+import { useVacations, vacationsForWorkplace } from '../lib/vacations';
 import { currentPayPeriod, dateRange } from '../lib/dashboard';
 import { periodTitle } from '../lib/payroll';
 import { formatISODate, todayISO } from '../lib/time';
@@ -93,22 +95,23 @@ type FormState = {
 type Errors = Partial<Record<keyof FormState, string>> & { contactErrors?: Record<string, string> };
 
 /**
- * קבוצות הטופס, לפי הסדר: כללי · שכר ותשלום · (ביטולים) · קורסים · הגעה
+ * קבוצות הטופס, לפי הסדר: כללי · שכר ותשלום · (ביטולים) · קורסים · חופשות · הגעה
  * ונסיעות · דוחות שכר · ניהול. בעריכה — קבוצות מתקפלות עם שורת תקציר;
  * ביצירה — וויזארד, צעד לכל קבוצה.
  */
-type GroupKey = 'general' | 'pay' | 'cancel' | 'courses' | 'arrival' | 'payroll' | 'manage';
+type GroupKey = 'general' | 'pay' | 'cancel' | 'courses' | 'vacations' | 'arrival' | 'payroll' | 'manage';
 const GROUP_TITLES: Record<GroupKey, string> = {
   general: 'כללי',
   pay: 'שכר ותשלום',
   cancel: 'ביטולים',
   courses: 'קורסים',
+  vacations: 'חופשות',
   arrival: 'הגעה ונסיעות',
   payroll: 'דוחות שכר',
   manage: 'ניהול',
 };
-const EDIT_GROUPS: GroupKey[] = ['general', 'pay', 'cancel', 'courses', 'arrival', 'payroll', 'manage'];
-/** ביצירה: קורסים וניהול — רק אחרי שמירה. */
+const EDIT_GROUPS: GroupKey[] = ['general', 'pay', 'cancel', 'courses', 'vacations', 'arrival', 'payroll', 'manage'];
+/** ביצירה: קורסים, חופשות וניהול — רק אחרי שמירה. */
 const NEW_STEPS: GroupKey[] = ['general', 'pay', 'cancel', 'arrival', 'payroll'];
 /** לאיזו קבוצה שייכת כל שגיאה (לפתיחת הקבוצה / לחזרה לצעד). */
 const ERROR_GROUP: Partial<Record<string, GroupKey>> = {
@@ -230,6 +233,7 @@ export default function WorkplaceFormScreen() {
   const [deletion, setDeletion] = useState<WorkplaceDeletion | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const reasons = useCancelReasons();
+  const vacations = useVacations();
   /** ביצירה: הצעד בוויזארד */
   const [wizStep, setWizStep] = useState(0);
   /** בעריכה: הקבוצות הפתוחות. "עריכת כתובות" מדוח השכר (?focus=payroll) — דוחות שכר פתוחה */
@@ -545,6 +549,12 @@ export default function WorkplaceFormScreen() {
       }
       case 'courses':
         return courses.length === 0 ? 'אין קורסים' : courses.length === 1 ? 'קורס אחד' : `${courses.length} קורסים`;
+      case 'vacations': {
+        const today = todayISO();
+        const { inherited, own } = vacationsForWorkplace(vacations, id ?? '');
+        const upcoming = [...inherited, ...own].filter((v) => v.to >= today && !(id && v.exclude.includes(id)));
+        return upcoming.length === 0 ? 'אין חופשות קרובות' : upcoming.length === 1 ? 'חופשה קרובה אחת' : `${upcoming.length} חופשות קרובות`;
+      }
       case 'arrival':
         return [ARRIVAL_MODE_LABELS[form.arrivalMode], form.address.trim() || null].filter(Boolean).join(' · ');
       case 'payroll':
@@ -1000,6 +1010,7 @@ export default function WorkplaceFormScreen() {
                 })}
             </>
           ),
+          vacations: id ? <VacationsCard target={{ kind: 'workplace', id }} editable bare /> : null,
           courses: (
             <>
           <FormField
