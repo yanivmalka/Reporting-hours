@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { Icon } from '../components/Icon';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { SelectField } from '../components/SelectField';
@@ -72,8 +73,12 @@ export default function ReportsScreen() {
   const [wpFilter, setWpFilter] = useState<string | null>(params.wp || null);
   /** החודש המוצג בלוח השנה, "YYYY-MM" — ברירת מחדל: החודש הנוכחי */
   const [calMonth, setCalMonth] = useState(() => todayISO().slice(0, 7));
-  /** יום / טווח שנבחר בלוח; null = כל החודש */
+  /** טווח שנבחר בלוח (רק במצב "בחירת טווח"); null = כל החודש */
   const [range, setRange] = useState<DateRangeValue>(null);
+  /** מצב "בחירת טווח" — רק כשהתיבה מסומנת לחיצה על ימים בוחרת טווח ומסננת */
+  const [rangeMode, setRangeMode] = useState(false);
+  /** בלי בחירת טווח: היום שנבחר בלחיצה — הרשימה נגללת אליו, בלי סינון */
+  const [focusDay, setFocusDay] = useState<string | null>(null);
   /** כל הדיווחים, בלי הגבלת חודש */
   const [allTime, setAllTime] = useState(false);
   /**
@@ -83,7 +88,17 @@ export default function ReportsScreen() {
   const [periodMode, setPeriodMode] = useState<'current' | 'previous' | null>(null);
   /** ראש לוח השנה החודשי בתוך הגלילה — כשהוא נגלל החוצה מוצג פס השבוע המוצמד */
   const [calTop, setCalTop] = useState<number | null>(null);
+  const [calHeight, setCalHeight] = useState(0);
   const [pinned, setPinned] = useState(false);
+  /** גובה הפס המוצמד (נמדד) — כדי שהיום שגוללים אליו לא יוסתר מתחתיו */
+  const [stripHeight, setStripHeight] = useState(120);
+  const scrollRef = useRef<ScrollView>(null);
+  /** מיקומי הימים ברשימה הנוכחית: ראש הרשימה + y של כל יום (המופע העליון) */
+  const listTop = useRef(0);
+  const dayPos = useRef<{ key: string; map: Map<string, number> }>({ key: '', map: new Map() });
+  /** גלילה שממתינה למדידת הרשימה: ליום מסוים, או לתחילת שבוע */
+  const pending = useRef<{ kind: 'day' | 'week'; date: string } | null>(null);
+  const resolveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** השבוע שמוצג בפס המכווץ (יום ראשון שלו) */
   const [weekStart, setWeekStart] = useState(() => weekStartOf(todayISO()));
 
@@ -91,19 +106,66 @@ export default function ReportsScreen() {
   // שייך אליהם — קופצים לשבוע של תחילת הבחירה, של היום (בחודש הנוכחי) או ל־1 בחודש.
   useEffect(() => {
     setWeekStart((ws) => {
-      if (range) {
+      const sel = range ?? (focusDay ? { from: focusDay, to: focusDay } : null);
+      if (sel) {
         const end = shiftWeek(ws, 1);
-        return range.from >= ws && range.from < end ? ws : weekStartOf(range.from);
+        return sel.from >= ws && sel.from < end ? ws : weekStartOf(sel.from);
       }
       if (monthOfWeek(ws) === calMonth) return ws;
       const today = todayISO();
       return weekStartOf(today.startsWith(calMonth) ? today : `${calMonth}-01`);
     });
-  }, [calMonth, range]);
+  }, [calMonth, range, focusDay]);
 
-  /** מעבר שבוע בפס המכווץ — החודש המוצג ברשימה מתעדכן איתו. */
+  /** הגלילה בפועל: לפי המיקומים שנמדדו, מתחת לפס המוצמד, בגלילה מונפשת. */
+  function resolveScroll() {
+    const p = pending.current;
+    if (!p) return;
+    const dates = [...dayPos.current.map.keys()].sort();
+    let target: string | undefined;
+    if (p.kind === 'week') {
+      const end = shiftWeek(p.date, 1);
+      target = dates.find((d) => d >= p.date && d < end);
+    } else {
+      target = dates.find((d) => d >= p.date) ?? dates[dates.length - 1];
+    }
+    pending.current = null;
+    if (!target) return;
+    const y = listTop.current + (dayPos.current.map.get(target) ?? 0);
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - stripHeight - 8), animated: true });
+  }
+
+  /** מבקש גלילה — מתבצעת אחרי שהרשימה (אולי של חודש אחר) נמדדה. */
+  function requestScroll(kind: 'day' | 'week', date: string) {
+    pending.current = { kind, date };
+    scheduleResolve();
+  }
+
+  function scheduleResolve() {
+    if (!pending.current) return;
+    if (resolveTimer.current) clearTimeout(resolveTimer.current);
+    resolveTimer.current = setTimeout(resolveScroll, 120);
+  }
+
+  /** מדידת יום ברשימה — המופע העליון של כל תאריך. */
+  function onDayLayout(date: string, y: number) {
+    const map = dayPos.current.map;
+    const prev = map.get(date);
+    if (prev == null || y < prev) map.set(date, y);
+    scheduleResolve();
+  }
+
+  /** לחיצה על יום בלי בחירת טווח: מסמנים אותו וגוללים אליו ברשימה. */
+  function focusOn(day: string) {
+    setFocusDay(day);
+    if (day.slice(0, 7) !== calMonth) setCalMonth(day.slice(0, 7));
+    requestScroll('day', day);
+  }
+
+  /** מעבר שבוע בפס המכווץ — החודש המוצג ברשימה מתעדכן, והרשימה נגללת לתחילת השבוע. */
   function changeWeek(ws: string) {
     setWeekStart(ws);
+    requestScroll('week', ws);
     const mm = monthOfWeek(ws);
     if (mm !== calMonth) {
       setCalMonth(mm);
@@ -115,6 +177,7 @@ export default function ReportsScreen() {
   function goToday() {
     const today = todayISO();
     setRange(null);
+    setFocusDay(null);
     setCalMonth(today.slice(0, 7));
     setWeekStart(weekStartOf(today));
   }
@@ -135,6 +198,7 @@ export default function ReportsScreen() {
         // מקום עבודה יחיד — התקופה שלו כטווח בלוח השנה.
         const p = when === 'current' ? currentPayPeriod(w.payday) : previousPayPeriod(w.payday);
         setCalMonth(p.start.slice(0, 7));
+        setRangeMode(true);
         setRange({ from: p.start, to: p.end });
       } else if (!params.wp) {
         setPeriodMode(when);
@@ -148,6 +212,7 @@ export default function ReportsScreen() {
       setPeriodMode(null);
       setAllTime(false);
       setCalMonth(params.to.slice(0, 7));
+      setRangeMode(true);
       setRange({ from: params.from, to: params.to });
     }
   }, [params.from, params.to, params.n]);
@@ -259,26 +324,43 @@ export default function ReportsScreen() {
           : dateRange(range.from, range.to, true)
         : monthName(calMonth);
 
+  // מיקומי הימים שנמדדו שייכים לרשימה מסוימת — בכל שינוי שלה מתחילים מחדש.
+  const listKey = `${tab}|${planFrom}|${planTo}|${wpFilter}|${periodMode}|${allTime}|${reloadTick}|${reports.length}`;
+  if (dayPos.current.key !== listKey) dayPos.current = { key: listKey, map: new Map() };
+
+  /** הסימון בתאריכון: הטווח (במצב טווח) או היום שאליו גוללים */
+  const shownRange: DateRangeValue = rangeMode ? range : focusDay ? { from: focusDay, to: focusDay } : null;
+  const dayPress = rangeMode ? undefined : focusOn;
+
   const showCalendar = !periodMode && !allTime;
   const strip =
     showCalendar && pinned ? (
-      <WeekStrip
-        weekStart={weekStart}
-        onWeekChange={changeWeek}
-        onToday={goToday}
-        range={range}
-        onRangeChange={setRange}
-        counts={counts}
-      />
+      <View onLayout={(e) => setStripHeight(e.nativeEvent.layout.height)}>
+        <WeekStrip
+          weekStart={weekStart}
+          onWeekChange={changeWeek}
+          onToday={() => {
+            goToday();
+            requestScroll('day', todayISO());
+          }}
+          range={shownRange}
+          onRangeChange={setRange}
+          onDayPress={dayPress}
+          counts={counts}
+          onTitlePress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        />
+      </View>
     ) : null;
 
   return (
     <Screen
       overlay={strip}
+      scrollRef={scrollRef}
       onScroll={(e) => {
         const y = e.nativeEvent.contentOffset.y;
-        // מספיק שכותרת החודש נגללה מחוץ למסך — הפס המוצמד מחליף את הלוח.
-        const next = calTop != null && y > calTop + 48;
+        // הפס המוצמד מחליף את התאריכון החודשי רק כשהתאריכון כמעט כולו נגלל
+        // מתחתיו — כך לא מוצגים שניהם יחד.
+        const next = calTop != null && calHeight > 0 && y > calTop + calHeight - stripHeight;
         if (next !== pinned) setPinned(next);
       }}
     >
@@ -311,22 +393,50 @@ export default function ReportsScreen() {
       ) : (
         <>
           <View
-            onLayout={(e) => setCalTop(e.nativeEvent.layout.y)}
+            onLayout={(e) => {
+              setCalTop(e.nativeEvent.layout.y);
+              setCalHeight(e.nativeEvent.layout.height);
+            }}
+            style={pinned ? styles.calHidden : undefined}
           >
           <RangeCalendar
             month={calMonth}
             onMonthChange={(m) => {
               setCalMonth(m);
               setRange(null);
+              setFocusDay(null);
             }}
-            range={range}
+            range={shownRange}
             onRangeChange={setRange}
+            onDayPress={dayPress}
             counts={counts}
           />
           </View>
           <View style={styles.calActions}>
+            <Pressable
+              onPress={() => {
+                setRangeMode((on) => !on);
+                setRange(null);
+                setFocusDay(null);
+              }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: rangeMode }}
+              hitSlop={6}
+              style={styles.checkRow}
+            >
+              <Icon
+                name={rangeMode ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                size={22}
+                color={rangeMode ? colors.brand : colors.textMuted}
+              />
+              <Text style={styles.checkText}>בחירת טווח</Text>
+            </Pressable>
             <Text style={styles.calHint}>
-              {range ? 'לחיצה על יום נוסף — טווח' : 'לחיצה על יום — סינון; יום נוסף — טווח'}
+              {rangeMode
+                ? range
+                  ? 'לחיצה על יום נוסף — טווח'
+                  : 'לחיצה על יום — סינון; יום נוסף — טווח'
+                : 'לחיצה על יום — מעבר אליו ברשימה'}
             </Text>
             {range ? (
               <Pressable onPress={() => setRange(null)} hitSlop={8}>
@@ -342,7 +452,9 @@ export default function ReportsScreen() {
       )}
 
       {tab === 'plan' ? (
+        <View onLayout={(e) => (listTop.current = e.nativeEvent.layout.y)}>
         <PlanList
+          onDayLayout={onDayLayout}
           courses={courses}
           workplaces={workplaces}
           reports={reports}
@@ -352,6 +464,7 @@ export default function ReportsScreen() {
           basis={basis}
           onChanged={() => setReloadTick((n) => n + 1)}
         />
+        </View>
       ) : (
         <>
       <View style={styles.summary}>
@@ -387,10 +500,10 @@ export default function ReportsScreen() {
           <Text style={styles.emptyText}>אין דיווחים שמתאימים לסינון.</Text>
         </View>
       ) : (
-        <View style={styles.list}>
+        <View style={styles.list} onLayout={(e) => (listTop.current = e.nativeEvent.layout.y)}>
           {filtered.map((report) => (
+            <View key={report.id} onLayout={(e) => onDayLayout(report.date, e.nativeEvent.layout.y)}>
             <ReportCard
-              key={report.id}
               report={report}
               workplaceName={nameOf(report.workplaceId)}
               color={workplaceOf(report.workplaceId) ? workplaceColor(colors, workplaceOf(report.workplaceId)) : undefined}
@@ -399,6 +512,7 @@ export default function ReportsScreen() {
               locked={lockOf(report) != null}
               onPress={() => router.push({ pathname: '/report-view', params: { id: report.id } })}
             />
+            </View>
           ))}
         </View>
       )}
@@ -415,7 +529,7 @@ export default function ReportsScreen() {
               pathname: '/report',
               params: {
                 wp: wpFilter ?? '',
-                date: range && range.from === range.to ? range.from : '',
+                date: shownRange && shownRange.from === shownRange.to ? shownRange.from : '',
               },
             })
           }
@@ -461,6 +575,19 @@ const makeStyles = (colors: AppColors) =>
     fontSize: 12,
     color: colors.textMuted,
     textAlign: TEXT_RIGHT,
+  },
+  calHidden: {
+    opacity: 0,
+  },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  checkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
   },
   calLink: {
     alignSelf: 'flex-start',

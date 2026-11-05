@@ -43,6 +43,8 @@ type Props = {
   onRangeChange: (range: DateRangeValue) => void;
   /** מספר דיווחים לכל תאריך */
   counts: Record<string, number>;
+  /** כשמוגדר — לחיצה על יום קוראת לו במקום לבחור טווח (מצב "מעבר ליום"). */
+  onDayPress?: (day: string) => void;
 };
 
 /**
@@ -63,7 +65,7 @@ const TWO_MONTHS_MIN_WIDTH = 600;
 /** רוחב מרבי לחודש אחד — כדי שהתאים לא יימתחו במסך רחב. */
 const MONTH_MAX_WIDTH = 340;
 
-export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts }: Props) {
+export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts, onDayPress }: Props) {
   const styles = useStyles(makeStyles);
   const { isRTL } = useI18n();
   const [width, setWidth] = useState(0);
@@ -76,7 +78,7 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
   const two = width >= TWO_MONTHS_MIN_WIDTH;
   // במסך רחב: החודש הקודם לצד החודש המוצג (בעברית — הקודם מימין).
   const months = two ? [shiftMonth(month, -1), month] : [month];
-  const tap = (day: string) => onRangeChange(nextRange(range, day));
+  const tap = (day: string) => (onDayPress ? onDayPress(day) : onRangeChange(nextRange(range, day)));
 
   return (
     <View style={styles.wrap} {...swipe} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>

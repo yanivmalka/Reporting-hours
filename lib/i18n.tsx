@@ -3,9 +3,10 @@
  *
  * השפה נשמרת ב־AsyncStorage ונטענת בהפעלה. useI18n() מספק את פונקציית
  * התרגום t(), את כיווניות הטקסט (isRTL) ואת פירמוט המשך המתורגם.
- * החלפת השפה מתפריט ההמבורגר (components/AppDrawer.tsx) מיידית מבחינת
- * הטקסטים; כיוון ה־RTL של הפריסה עצמה מתעדכן ב־web מיד, ובאנדרואיד
- * חל במלואו לאחר הפעלה מחדש (מגבלת I18nManager).
+ * הכיוון (isRTL) נגזר מהשפה שנבחרה, ורכיבים שתלויים בכיוון (צד המגירה,
+ * חצים, יישור) קוראים אותו מכאן ולא מ־I18nManager — כך הם מתעדכנים מיד.
+ * רק שפות שב־AVAILABLE_LANGS ניתנות לבחירה; שפה שנשמרה ואינה זמינה
+ * (למשל אנגלית מגרסה קודמת) חוזרת לעברית בטעינה.
  */
 import {
   createContext,
@@ -21,6 +22,7 @@ import { formatDuration as formatDurationRaw } from './time';
 import { readJSON, writeJSON } from './storage';
 import {
   LANG_LABELS,
+  AVAILABLE_LANGS,
   RTL_LANGS,
   STRINGS,
   type Lang,
@@ -34,7 +36,10 @@ export type TranslateVars = Record<string, string | number>;
 type I18nContextValue = {
   lang: Lang;
   isRTL: boolean;
-  setLang: (lang: Lang) => void;
+  /** מחליף שפה; מחזיר false (ולא מחליף) כששפה עדיין לא זמינה. */
+  setLang: (lang: Lang) => boolean;
+  /** האם אפשר כבר לעבור לשפה */
+  isLangAvailable: (lang: Lang) => boolean;
   /** תרגום לפי נתיב מנוקד, למשל t('report.title'); תומך ב־"{name}". */
   t: (key: string, vars?: TranslateVars) => string;
   /** פירמוט משך בדקות בשפה הנוכחית. */
@@ -76,7 +81,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     let active = true;
     readJSON<Lang | null>(STORAGE_KEY, null).then((saved) => {
       if (!active) return;
-      if (saved === 'he' || saved === 'en') setLangState(saved);
+      if (saved && AVAILABLE_LANGS.includes(saved)) setLangState(saved);
+      else if (saved) void writeJSON(STORAGE_KEY, 'he');
       setReady(true);
     });
     return () => {
@@ -96,9 +102,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, [lang, isRTL]);
 
+  const isLangAvailable = useCallback((l: Lang) => AVAILABLE_LANGS.includes(l), []);
+
   const setLang = useCallback((next: Lang) => {
+    if (!AVAILABLE_LANGS.includes(next)) return false;
     setLangState(next);
     void writeJSON(STORAGE_KEY, next);
+    return true;
   }, []);
 
   const t = useCallback(
@@ -126,12 +136,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       lang,
       isRTL,
       setLang,
+      isLangAvailable,
       t,
       formatDuration,
       langLabels: LANG_LABELS,
       ready,
     }),
-    [lang, isRTL, setLang, t, formatDuration, ready],
+    [lang, isRTL, setLang, isLangAvailable, t, formatDuration, ready],
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

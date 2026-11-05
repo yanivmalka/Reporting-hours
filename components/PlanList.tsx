@@ -54,6 +54,7 @@ export function PlanList({
   wpFilter,
   basis,
   onChanged,
+  onDayLayout,
 }: {
   courses: readonly Course[];
   workplaces: readonly Workplace[];
@@ -63,6 +64,8 @@ export function PlanList({
   wpFilter: string | null;
   basis: PayBasis;
   onChanged: () => void;
+  /** מיקום כרטיס היום בתוך הרשימה (y יחסית לראש הרשימה) — לגלילה ליום */
+  onDayLayout?: (date: string, y: number) => void;
 }) {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
@@ -148,7 +151,11 @@ export function PlanList({
         </View>
       ) : (
         [...days].map(([date, list]) => (
-          <View key={date} style={styles.day}>
+          <View
+            key={date}
+            style={styles.day}
+            onLayout={onDayLayout ? (e) => onDayLayout(date, e.nativeEvent.layout.y) : undefined}
+          >
             <Text style={styles.dayTitle}>{dayTitle(date)}</Text>
             {list.map((r) => {
               const t = tone[r.status];

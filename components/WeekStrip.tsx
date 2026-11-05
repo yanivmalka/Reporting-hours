@@ -50,9 +50,13 @@ type Props = {
   range: DateRangeValue;
   onRangeChange: (range: DateRangeValue) => void;
   counts: Record<string, number>;
+  /** כשמוגדר — לחיצה על יום קוראת לו במקום לבחור טווח (מצב "מעבר ליום"). */
+  onDayPress?: (day: string) => void;
+  /** לחיצה על שם החודש — למשל חזרה לתאריכון החודשי */
+  onTitlePress?: () => void;
 };
 
-export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts }: Props) {
+export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts, onDayPress, onTitlePress }: Props) {
   const styles = useStyles(makeStyles);
   const statusOf = useDayStatus();
   const { colors } = useTheme();
@@ -121,7 +125,18 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
         >
           <Icon name={isRTL ? 'chevron-right' : 'chevron-left'} size={24} color={colors.brand} />
         </Pressable>
-        <Text style={styles.title}>{title}</Text>
+        {onTitlePress ? (
+          <Pressable
+            onPress={onTitlePress}
+            style={styles.titleBtn}
+            accessibilityRole="button"
+            accessibilityLabel="חזרה לתאריכון החודשי"
+          >
+            <Text style={styles.title}>{title}</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.title}>{title}</Text>
+        )}
         <Pressable
           onPress={() => go(1)}
           style={styles.nav}
@@ -184,7 +199,7 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
                     <Pressable
                       key={day}
                       style={styles.cell}
-                      onPress={() => onRangeChange(nextRange(range, day))}
+                      onPress={() => (onDayPress ? onDayPress(day) : onRangeChange(nextRange(range, day)))}
                       accessibilityLabel={day}
                     >
                       <Text style={styles.weekday}>{WEEKDAYS[i]}</Text>
@@ -252,6 +267,10 @@ const makeStyles = (c: ColorScheme) =>
       fontSize: 16,
       fontWeight: '800',
       color: c.text,
+    },
+    titleBtn: {
+      flex: 1,
+      paddingVertical: spacing.xs,
     },
     todayBtn: {
       flexDirection: 'row',
