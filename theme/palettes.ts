@@ -1,12 +1,12 @@
 /**
  * ערכות צבעים לאפליקציה.
  *
- * כל ערכה מגדירה זוג סכימות — בהירה וכהה — עם אותו מבנה מפתחות בדיוק.
- * ThemeContext בוחר את הערכה הפעילה ואת הסכימה (בהיר/כהה/מערכת) ומספק
- * את התוצאה דרך useTheme(). אף רכיב לא מייבא צבעים ישירות מכאן.
+ * כל ערכה מגדירה סכימה בהירה אחת (האפליקציה תמיד בהירה).
+ * ThemeContext בוחר את הערכה הפעילה ומספק אותה דרך useTheme().
+ * אף רכיב לא מייבא צבעים ישירות מכאן.
  */
 
-/** מבנה סכימת צבעים בודדת (בהירה או כהה). */
+/** מבנה סכימת הצבעים של ערכה. */
 export type ColorScheme = {
   brand: string;
   brandDark: string;
@@ -31,24 +31,20 @@ export type ColorScheme = {
 
 export type PaletteId = 'teal' | 'indigo' | 'ocean' | 'forest' | 'graphite';
 
-/** מצב התצוגה שהמשתמש בחר; 'system' נגזר מהגדרת מערכת ההפעלה. */
-export type ThemeMode = 'light' | 'dark' | 'system';
-
 export type Palette = {
   id: PaletteId;
   labelHe: string;
   labelEn: string;
-  light: ColorScheme;
-  dark: ColorScheme;
+  colors: ColorScheme;
+  /** גוון שני לחצי העיגול בבורר הערכות בתפריט */
+  swatchTint: string;
 };
 
 /*
  * עקרונות העיצוב (2026):
- * - בהיר: רקע ניטרלי קריר כמעט־לבן, משטחים לבנים, גבולות עדינים; צבע המותג
+ * - רקע ניטרלי קריר כמעט־לבן, משטחים לבנים, גבולות עדינים; צבע המותג
  *   בגוון 700 (ניגודיות של 4.5:1 לפחות מול טקסט לבן).
- * - כהה: לא שחור מוחלט — רקע כהה עם נגיעה מהגוון, משטחים מוגבהים מעט
- *   בהירים יותר; צבע המותג בגוון 300–400 עם טקסט כהה עליו.
- * - אותם צבעי סטטוס בכל הערכות, מכוילים לכל מצב.
+ * - אותם צבעי סטטוס בכל הערכות.
  */
 const STATUS_LIGHT = {
   success: '#15803D',
@@ -56,14 +52,6 @@ const STATUS_LIGHT = {
   danger: '#DC2626',
   dangerText: '#B91C1C',
   dangerSoft: '#FDECEC',
-} as const;
-
-const STATUS_DARK = {
-  success: '#4ADE80',
-  warning: '#FBBF24',
-  danger: '#F87171',
-  dangerText: '#FCA5A5',
-  dangerSoft: '#3A1A1C',
 } as const;
 
 /** ניטרליים משותפים — אפור־כחלחל (slate) קריר. */
@@ -76,115 +64,71 @@ const NEUTRAL_LIGHT = {
   textOnBrand: '#FFFFFF',
 } as const;
 
-/** ניטרליים כהים: רקע עם נגיעה מגוון המותג, משטח מוגבה, טקסט רך. */
-const darkNeutrals = (background: string, surface: string, border: string) => ({
-  background,
-  surface,
-  border,
-  text: '#E8ECF1',
-  textMuted: '#9AA6B4',
-});
-
 export const PALETTES: readonly Palette[] = [
   {
     id: 'teal',
     labelHe: 'טורקיז',
     labelEn: 'Teal',
-    light: {
+    colors: {
       brand: '#0F766E',
       brandDark: '#115E59',
       brandLight: '#E0F2EF',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    dark: {
-      brand: '#2DD4BF',
-      brandDark: '#5EEAD4',
-      brandLight: '#0F2F2C',
-      ...darkNeutrals('#0B1214', '#131C1F', '#24313A'),
-      textOnBrand: '#042F2E',
-      ...STATUS_DARK,
-    },
+    swatchTint: '#2DD4BF',
   },
   {
     id: 'indigo',
     labelHe: 'אינדיגו',
     labelEn: 'Indigo',
-    light: {
+    colors: {
       brand: '#4F46E5',
       brandDark: '#3730A3',
       brandLight: '#EAE9FD',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    dark: {
-      brand: '#A5B4FC',
-      brandDark: '#C7D2FE',
-      brandLight: '#1F2147',
-      ...darkNeutrals('#0C0E18', '#151827', '#272B40'),
-      textOnBrand: '#1E1B4B',
-      ...STATUS_DARK,
-    },
+    swatchTint: '#A5B4FC',
   },
   {
     id: 'ocean',
     labelHe: 'כחול',
     labelEn: 'Ocean',
-    light: {
+    colors: {
       brand: '#1D4ED8',
       brandDark: '#1E3A8A',
       brandLight: '#E3ECFD',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    dark: {
-      brand: '#60A5FA',
-      brandDark: '#93C5FD',
-      brandLight: '#13254A',
-      ...darkNeutrals('#0A101C', '#121A29', '#233046'),
-      textOnBrand: '#0A1A3A',
-      ...STATUS_DARK,
-    },
+    swatchTint: '#60A5FA',
   },
   {
     id: 'forest',
     labelHe: 'אזמרגד',
     labelEn: 'Emerald',
-    light: {
+    colors: {
       brand: '#047857',
       brandDark: '#065F46',
       brandLight: '#DDF3EA',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    dark: {
-      brand: '#34D399',
-      brandDark: '#6EE7B7',
-      brandLight: '#0E2E22',
-      ...darkNeutrals('#0A1310', '#121D19', '#23332C'),
-      textOnBrand: '#022C22',
-      ...STATUS_DARK,
-    },
+    swatchTint: '#34D399',
   },
   {
     id: 'graphite',
     labelHe: 'גרפיט',
     labelEn: 'Graphite',
-    light: {
+    colors: {
       brand: '#334155',
       brandDark: '#1E293B',
       brandLight: '#E8ECF1',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    dark: {
-      brand: '#CBD5E1',
-      brandDark: '#E2E8F0',
-      brandLight: '#232B36',
-      ...darkNeutrals('#0D1014', '#161A20', '#2A313B'),
-      textOnBrand: '#0F172A',
-      ...STATUS_DARK,
-    },
+    swatchTint: '#CBD5E1',
   },
 ];
 

@@ -23,11 +23,6 @@ const he = {
     title: 'תפריט',
     navigation: 'ניווט',
     appearance: 'מראה',
-    mode: {
-      light: 'בהיר',
-      dark: 'כהה',
-      system: 'אוטומטי',
-    },
     palette: 'ערכת צבעים',
     language: 'שפה',
   },
@@ -193,11 +188,6 @@ const en: StringTree = {
     title: 'Menu',
     navigation: 'Navigation',
     appearance: 'Appearance',
-    mode: {
-      light: 'Light',
-      dark: 'Dark',
-      system: 'System',
-    },
     palette: 'Color palette',
     language: 'Language',
   },

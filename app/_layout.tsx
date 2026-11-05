@@ -44,12 +44,10 @@ function SyncedTree({ children }: { children: ReactNode }) {
 
 /** קליפת האפליקציה — כותרת, ניווט ותפריט ההמבורגר — תלויי ערכת צבעים ושפה. */
 function Chrome() {
-  const { colors, resolvedScheme } = useTheme();
+  const { colors } = useTheme();
   const { t } = useI18n();
-  // במצב כהה: סרגל עליון בצבע משטח (Material 3) ולא צבע מותג בוהק.
-  const dark = resolvedScheme === 'dark';
-  const barBg = dark ? colors.surface : colors.brand;
-  const barFg = dark ? colors.text : colors.textOnBrand;
+  const barBg = colors.brand;
+  const barFg = colors.textOnBrand;
   const wide = useWideLayout();
 
   return (
