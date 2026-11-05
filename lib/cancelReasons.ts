@@ -10,7 +10,7 @@
  * - מפגש מבוטל בתשלום נכלל בדוח השכר (שורה לכל מפגש + סיכום לפי סיבה), בצפי
  *   ובפוטנציאל.
  */
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { sessionMinutes, type Course } from './courses';
 import type { PayBasis } from './payBasis';
@@ -68,8 +68,14 @@ export async function saveCancelReasons(list: CancelReason[]): Promise<void> {
 
 export const makeReasonId = () => `r_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-/** רשימת הסיבות כ־hook — מתעדכנת מיד בכל שינוי. */
+/**
+ * רשימת הסיבות כ־hook — מתעדכנת מיד בכל שינוי. נטענת מחדש מהאחסון בכל עלייה
+ * של רכיב, כדי לקלוט סיבות שהגיעו בסנכרון מהשרת אחרי עליית האפליקציה.
+ */
 export function useCancelReasons(): readonly CancelReason[] {
+  useEffect(() => {
+    void loadCancelReasons();
+  }, []);
   return useSyncExternalStore(
     (l) => {
       listeners.add(l);
