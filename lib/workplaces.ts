@@ -1,4 +1,5 @@
 import { readJSON, writeJSON } from './storage';
+import type { PayBasis } from './payBasis';
 
 /**
  * מודל הנתונים של מקום עבודה (סעיף 3 ב־WISHLIST) והפעולות לשמירה/טעינה שלו.
@@ -105,6 +106,11 @@ export type Workplace = {
   trashed?: { courses: unknown[]; reports: unknown[]; marks: unknown[]; accumulated?: unknown };
   /** מקום עבודה שנוצר כנתוני הדגמה (lib/demo.ts) */
   demo?: boolean;
+  /**
+   * בסיס חישוב השכר השעתי של המקום: שעות אקדמיות (45 דק׳) או רגילות.
+   * חסר — ההגדרה הכללית הישנה (`basisFor` ב־lib/payBasis.tsx).
+   */
+  payBasis?: PayBasis;
   /**
    * צבע מקום העבודה — משבצת בפלטה שנגזרת מצבע המערכת
    * (theme/workplaceColors.ts). נקבע אוטומטית למקום חדש ולנתונים ישנים.

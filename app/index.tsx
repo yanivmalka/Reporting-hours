@@ -326,7 +326,6 @@ export default function HomeScreen() {
           <AlertCard
             key={a.key}
             alert={a}
-            faded
             onAction={() => runAction(a)}
             onDismiss={() => setRevealed((r) => r.filter((k) => k !== a.key))}
           />
@@ -451,13 +450,10 @@ function AlertCard({
   alert,
   onAction,
   onDismiss,
-  faded,
 }: {
   alert: HomeAlert;
   onAction: () => void;
   onDismiss: () => void;
-  /** התראה מוסתרת שמוצגת שוב — בצבע מעט דהוי */
-  faded?: boolean;
 }) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -469,7 +465,7 @@ function AlertCard({
       disabled={!alert.action}
       accessibilityRole={alert.action ? 'button' : undefined}
       accessibilityLabel={alert.action ? `${alert.title} — ${alert.action.label}` : undefined}
-      style={({ pressed }) => [styles.alert, faded && styles.alertFaded, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.alert, pressed && styles.pressed]}
     >
       <View style={[styles.alertIcon, { borderColor: fg }]}>
         <Icon name={alert.icon} size={20} color={fg} />
@@ -639,7 +635,6 @@ const makeStyles = (colors: AppColors) =>
     },
     noAlertsText: { fontSize: 15, color: colors.textMuted },
     showLink: { color: colors.brand, fontWeight: '700' },
-    alertFaded: { opacity: 0.6 },
     alert: {
       flexDirection: 'row',
       alignItems: 'flex-start',

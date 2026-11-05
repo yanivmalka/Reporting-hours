@@ -33,6 +33,14 @@ export const PAY_BASIS_LABELS: Record<PayBasis, string> = {
 /** ברירת המחדל — שעות אקדמיות (סעיף 7א). */
 export const DEFAULT_PAY_BASIS: PayBasis = 'academic';
 
+/**
+ * בסיס החישוב של מקום עבודה: ההגדרה שלו, ואם לא נקבעה — הבסיס הכללי
+ * (ההגדרה הישנה, שהייתה אחת לכל האפליקציה).
+ */
+export function basisFor(w: { payBasis?: PayBasis } | null | undefined, fallback: PayBasis): PayBasis {
+  return w?.payBasis ?? fallback;
+}
+
 const STORAGE_KEY = 'reporting-hours/pay-basis/v1';
 
 function isPayBasis(value: unknown): value is PayBasis {

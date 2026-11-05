@@ -13,7 +13,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { sessionMinutes, type Course } from './courses';
-import type { PayBasis } from './payBasis';
+import { basisFor, type PayBasis } from './payBasis';
 import type { Cancellation } from './sessions';
 import { readJSON, writeJSON } from './storage';
 import { workplaceAt, type Workplace } from './workplaces';
@@ -111,6 +111,7 @@ export function canceledSessionPay(
   cancel: Cancellation | null,
   basis: PayBasis,
 ): number {
+  basis = basisFor(w, basis);
   const rule = cancelRuleFor(w, cancel);
   if (rule.kind === 'none') return 0;
   const at = workplaceAt(w, date);

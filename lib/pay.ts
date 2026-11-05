@@ -18,7 +18,7 @@
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { netMinutes, type WorkReport } from './reports';
 import { reportedWorkdays } from './travel';
-import type { PayBasis } from './payBasis';
+import { basisFor, type PayBasis } from './payBasis';
 import { workplaceAt, type PaymentType, type Workplace } from './workplaces';
 
 const REGULAR_HOUR_MINUTES = 60;
@@ -63,7 +63,7 @@ export function reportPay(
 ): number | null {
   const w = workplaceAt(workplace as Workplace, report.date);
   if (w.paymentType === 'monthly') return null;
-  return nonNegative(w.rate) * payableHours(report, basis);
+  return nonNegative(w.rate) * payableHours(report, basisFor(workplace, basis));
 }
 
 /**
@@ -123,7 +123,7 @@ export function payBreakdown(
     const mine = reports.filter((r) => r.workplaceId === workplace.id);
     const hours =
       workplace.paymentType === 'hourly'
-        ? mine.reduce((sum, r) => sum + payableHours(r, basis), 0)
+        ? mine.reduce((sum, r) => sum + payableHours(r, basisFor(workplace, basis)), 0)
         : 0;
     return {
       workplaceId: workplace.id,

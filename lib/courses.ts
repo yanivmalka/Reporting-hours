@@ -330,3 +330,38 @@ export function periodPresets(today: Date = new Date()): PeriodPreset[] {
     { key: 'summer', label: 'סמסטר קיץ', from: `${y + 1}-07-01`, to: `${y + 1}-09-30` },
   ];
 }
+
+// ───────────────────────── מצב קורס: פעיל · מתוכנן · הסתיים ─────────────────────────
+
+export type CourseStatus = 'active' | 'planned' | 'ended';
+
+export const COURSE_STATUS_LABELS: Record<CourseStatus, string> = {
+  active: 'פעילים',
+  planned: 'מתוכננים',
+  ended: 'הסתיימו',
+};
+
+/** תאריך המפגש האחרון של הקורס (כולל נוספים ומועברים); בלי מפגשים — סוף התקופה. */
+export function lastSessionDate(course: Course): string {
+  const all = courseSessions(course, '0000-01-01', '9999-12-31');
+  return all.length ? all[all.length - 1].date : course.to;
+}
+
+/**
+ * מצב הקורס ביחס להיום:
+ *   - הסתיים — תאריך המפגש האחרון שלו כבר עבר.
+ *   - פעיל — יש לו מפגש בחודש הנוכחי, או שהוא מתחיל בשבוע הנוכחי.
+ *   - מתוכנן — כל קורס אחר.
+ */
+export function courseStatus(course: Course, today: string): CourseStatus {
+  if (lastSessionDate(course) < today) return 'ended';
+  const month = today.slice(0, 7);
+  const [y, m] = month.split('-').map(Number);
+  const monthEnd = iso(new Date(y, m, 0));
+  if (courseSessions(course, `${month}-01`, monthEnd).length > 0) return 'active';
+  const t = parseISO(today);
+  const weekStart = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() - t.getDay()));
+  const weekEnd = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() - t.getDay() + 6));
+  if (course.from >= weekStart && course.from <= weekEnd) return 'active';
+  return 'planned';
+}

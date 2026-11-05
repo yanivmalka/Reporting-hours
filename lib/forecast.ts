@@ -19,7 +19,7 @@ import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { potentialSessions, sessionMinutes, type Course } from './courses';
 import { currentPayPeriod, expectedPaymentDate, isoDate, totalsFor, type PayPeriod } from './dashboard';
-import type { PayBasis } from './payBasis';
+import { basisFor, type PayBasis } from './payBasis';
 import { expectedPayment, reportLate, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
 import { travelCostForDay } from './travel';
@@ -84,6 +84,7 @@ function amountFor(
   basis: PayBasis,
   withoutCanceled: boolean,
 ): number {
+  basis = basisFor(w, basis);
   const dates = new Set<string>();
   let pay = 0;
   for (const c of courses) {
@@ -155,6 +156,7 @@ export function periodForecast(
   basis: PayBasis,
   today: Date = new Date(),
 ): PeriodForecast {
+  basis = basisFor(w, basis);
   const todayIso = isoDate(today);
   const mine = reports.filter((r) => r.workplaceId === w.id && r.date >= period.start && r.date <= period.end);
   const t = totalsFor([w], mine, basis);

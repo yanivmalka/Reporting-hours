@@ -9,6 +9,7 @@ import { courseReported, coursesOn, type Course } from './courses';
 import type { WorkReport } from './reports';
 import { parseTime } from './time';
 import { activeWorkplaces, type Workplace } from './workplaces';
+import { beforeTracking } from './trackingStart';
 
 export type DayStatus = 'done' | 'missing' | 'planned';
 
@@ -31,13 +32,16 @@ export function dayStatus(date: string, input: DayStatusInput, now: Date = new D
   let planned = false;
   for (const c of sessions) {
     if (courseReported(c, date, input.reports)) continue;
+    // לפני תחילת העבודה עם המערכת — מפגש שלא דווח אינו חסר.
+    if (beforeTracking(date)) continue;
     const ended = date < today || (date === today && nowMin >= (parseTime(c.end) ?? 0));
     if (ended) missing = true;
     else planned = true;
   }
   if (missing) return 'missing';
   if (planned) return 'planned';
-  if (sessions.length > 0 || input.reports.some((r) => r.date === date)) return 'done';
+  if (input.reports.some((r) => r.date === date)) return 'done';
+  if (sessions.length > 0 && !beforeTracking(date)) return 'done';
   return null;
 }
 

@@ -22,8 +22,9 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
+import { beforeTracking } from '../lib/trackingStart';
 
-type Status = 'pending' | 'reported' | 'canceled' | 'moved';
+type Status = 'pending' | 'reported' | 'canceled' | 'moved' | 'untracked';
 
 type Row = {
   course: Course;
@@ -87,7 +88,9 @@ export function PlanList({
           ? 'moved'
           : s.cancel
             ? 'canceled'
-            : 'pending';
+            : beforeTracking(s.date)
+              ? 'untracked'
+              : 'pending';
       rows.push({
         course,
         workplace,
@@ -114,7 +117,7 @@ export function PlanList({
 
   const open = (r: Row) => {
     if (r.reportId) router.push({ pathname: '/report-view', params: { id: r.reportId } });
-    else if (r.status === 'pending')
+    else if (r.status === 'pending' || r.status === 'untracked')
       router.push({ pathname: '/report', params: { course: r.course.id, date: r.date } });
     else
       sessionDialog.open({
@@ -131,6 +134,7 @@ export function PlanList({
     reported: { label: 'דווח', fg: colors.success, bg: colors.brandLight },
     canceled: { label: 'בוטל', fg: colors.dangerText, bg: colors.dangerSoft },
     moved: { label: 'הועבר', fg: colors.textMuted, bg: colors.background },
+    untracked: { label: 'לפני המעקב', fg: colors.textMuted, bg: colors.background },
   };
 
   return (

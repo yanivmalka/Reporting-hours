@@ -25,7 +25,8 @@
 | סטטוס דוחות שכר (נשלח / שולם) | `lib/payroll.ts` | `reporting-hours/payroll/v1` |
 | מונה דקות מצטברות | `lib/accumulated.ts` | `reporting-hours/accumulated/v2` |
 | אופן פדיון דקות | `lib/redeem.ts` | `reporting-hours/redeem-mode/v1` |
-| בסיס חישוב שכר | `lib/payBasis.tsx` | `reporting-hours/pay-basis/v1` |
+| בסיס חישוב שכר (ברירת מחדל ישנה; לכל מקום — `Workplace.payBasis`) | `lib/payBasis.tsx` | `reporting-hours/pay-basis/v1` |
+| תאריך התחלת עבודה עם המערכת | `lib/trackingStart.ts` | `reporting-hours/tracking-start/v1` |
 | פרטים אישיים | `lib/profile.ts` | `reporting-hours/profile/v1` |
 | הצעות ארכיון שנדחו | `lib/recommend.ts` | `reporting-hours/recommend-dismissed/v1` |
 | התראות בית שנסגרו | `lib/home.ts` | `reporting-hours/home-dismissed/v1` |
@@ -67,6 +68,7 @@
 
 ## ניווט בין רשומות
 
+- `app/report.tsx`: אריח מקום העבודה באשף ← `/workplace`. `app/course-form.tsx` (תצוגה): מקום העבודה ← `/workplace`. `app/settings.tsx`, `app/tax.tsx`: שם המקום ← `/workplace`.
 - `app/report-view.tsx`: שורות לחיצות למקום העבודה (`/workplace`), לקורס (`/course-form?view=1`) ולדוח השכר של התקופה (`/payroll-report`).
 - `app/payroll-report.tsx`: שם מקום העבודה ← `/workplace`; כל מפגש ← `/report-view` (לפי `PayrollSession.reportId`).
 - `app/workplace-form.tsx`: כשהמחיקה חסומה, רשימת הדוחות הנעולים (`WorkplaceDeletion.lockedPeriods`) עם מעבר לכל אחד, ובמקום הדגמה ← `/data`.
@@ -104,5 +106,5 @@
 - ניווט וכותרות: `AppDrawer`, `Screen`, `ExitGuard`.
 - תשתית: `CloudSync` (סנכרון), `BackupScheduler` / `BackupSection`, `UpdateChecker`, `DemoSeeder`.
 - תצוגה: `Charts`, `ForecastChart`, `WorkplaceTile`, `ReportCard`, `RangeCalendar`, `WeekStrip`, `TrashList`, `PlanList`.
-- משותפים: `DateText` (לועזי + עברי בלי שבירה), `Chevrons` (חץ כניסה ‹ וחץ קיפול ⌄/⌃), `DayDot` (נקודות מצב יום ומקרא, לפי `lib/dayStatus.ts`), `useFlash` / `useFade` (הבהוב / עמעום קצר).
+- משותפים: `Checkbox`, `FoldSection` (קבוצה מתקפלת), `MonthSlide` (החלקת חודש בתאריכון), `DateText` (לועזי + עברי בלי שבירה), `Chevrons` (חץ כניסה ‹ וחץ קיפול ⌄/⌃), `DayDot` (נקודות מצב יום ומקרא, לפי `lib/dayStatus.ts`), `useFlash` / `useFade` (הבהוב / עמעום קצר).
 - קלט: `TimeInput`, `DatePicker`, `SelectField`, `TextField`. את `Text` ו־`TextInput` מייבאים תמיד מ־`components/Text`.

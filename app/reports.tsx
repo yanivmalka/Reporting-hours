@@ -6,6 +6,7 @@ import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { SelectField } from '../components/SelectField';
 import { RangeCalendar, type DateRangeValue } from '../components/RangeCalendar';
+import { useDayStatus } from '../components/DayDot';
 import { WeekStrip, monthOfWeek, shiftWeek, weekStartOf } from '../components/WeekStrip';
 import { longDate } from '../components/DatePicker';
 import { todayISO } from '../lib/time';
@@ -80,7 +81,6 @@ export default function ReportsScreen() {
   /** בלי בחירת טווח: היום שנבחר בלחיצה — הרשימה נגללת אליו, בלי סינון */
   const [focusDay, setFocusDay] = useState<string | null>(null);
   /** כל הדיווחים, בלי הגבלת חודש */
-  const [allTime, setAllTime] = useState(false);
   /**
    * "חודש נוכחי / קודם" לפי יום התשלום של כל מקום עבודה (מגיע מלוח הבקרה,
    * כשלא נבחר מקום עבודה יחיד) — גובר על לוח השנה עד שמנקים.
@@ -99,6 +99,8 @@ export default function ReportsScreen() {
   /** גלילה שממתינה למדידת הרשימה: ליום מסוים, או לתחילת שבוע */
   const pending = useRef<{ kind: 'day' | 'week'; date: string } | null>(null);
   const resolveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** בזמן גלילה יזומה (מעבר ליום / לשבוע) — הפס לא עוקב אחרי הגלילה */
+  const autoScrollUntil = useRef(0);
   /** השבוע שמוצג בפס המכווץ (יום ראשון שלו) */
   const [weekStart, setWeekStart] = useState(() => weekStartOf(todayISO()));
 
@@ -132,7 +134,25 @@ export default function ReportsScreen() {
     pending.current = null;
     if (!target) return;
     const y = listTop.current + (dayPos.current.map.get(target) ?? 0);
+    autoScrollUntil.current = Date.now() + 700;
     scrollRef.current?.scrollTo({ y: Math.max(0, y - stripHeight - 8), animated: true });
+  }
+
+  /** פס השבוע עוקב אחרי הגלילה: השבוע של היום העליון שמוצג ברשימה (מתחת לפס). */
+  function followScroll(y: number) {
+    if (Date.now() < autoScrollUntil.current) return;
+    const edge = y + stripHeight + 8 - listTop.current;
+    let top: string | null = null;
+    let topY = -Infinity;
+    for (const [date, dy] of dayPos.current.map) {
+      if (dy <= edge && dy > topY) {
+        top = date;
+        topY = dy;
+      }
+    }
+    if (!top) return;
+    const ws = weekStartOf(top);
+    if (ws !== weekStart) setWeekStart(ws);
   }
 
   /** מבקש גלילה — מתבצעת אחרי שהרשימה (אולי של חודש אחר) נמדדה. */
@@ -187,7 +207,6 @@ export default function ReportsScreen() {
     if (params.wp !== undefined) setWpFilter(params.wp || null);
     const when = params.when;
     if (when === undefined) return;
-    setAllTime(false);
     setPeriodMode(null);
     setRange(null);
     if (/^\d{4}-\d{2}$/.test(when)) {
@@ -210,7 +229,6 @@ export default function ReportsScreen() {
   useEffect(() => {
     if (params.from && params.to) {
       setPeriodMode(null);
-      setAllTime(false);
       setCalMonth(params.to.slice(0, 7));
       setRangeMode(true);
       setRange({ from: params.from, to: params.to });
@@ -230,11 +248,10 @@ export default function ReportsScreen() {
         const p = periodMode === 'current' ? currentPayPeriod(w.payday) : previousPayPeriod(w.payday);
         return r.date >= p.start && r.date <= p.end;
       }
-      if (allTime) return true;
       if (range) return r.date >= range.from && r.date <= range.to;
       return r.date.startsWith(calMonth);
     });
-  }, [byWorkplace, workplaces, periodMode, allTime, range, calMonth]);
+  }, [byWorkplace, workplaces, periodMode, range, calMonth]);
 
   // מספר הדיווחים לכל יום — לסימון בלוח השנה (לפי סינון מקום העבודה).
   const counts = useMemo(() => {
@@ -242,6 +259,20 @@ export default function ReportsScreen() {
     for (const r of byWorkplace) out[r.date] = (out[r.date] ?? 0) + 1;
     return out;
   }, [byWorkplace]);
+
+  // נקודות המצב בתאריכונים — לפי סינון מקום העבודה.
+  const statusInput = useMemo(
+    () =>
+      wpFilter && reports
+        ? {
+            courses: courses.filter((c) => c.workplaceId === wpFilter),
+            workplaces: workplaces.filter((w) => w.id === wpFilter),
+            reports: reports.filter((r) => r.workplaceId === wpFilter),
+          }
+        : undefined,
+    [wpFilter, reports, courses, workplaces],
+  );
+  const filteredStatus = useDayStatus(statusInput);
 
   useFocusEffect(
     useCallback(() => {
@@ -322,28 +353,26 @@ export default function ReportsScreen() {
   const planFrom = range ? range.from : `${calMonth}-01`;
   const planTo = range ? range.to : `${calMonth}-${String(new Date(cy, cm, 0).getDate()).padStart(2, '0')}`;
 
-  const isFiltered = wpFilter != null || range != null || allTime || periodMode != null;
+  const isFiltered = wpFilter != null || range != null || periodMode != null;
   const timeLabel = periodMode
     ? periodMode === 'current'
       ? 'חודש נוכחי — לפי יום התשלום של כל מקום'
       : 'חודש קודם — לפי יום התשלום של כל מקום'
-    : allTime
-      ? 'כל הדיווחים'
-      : range
-        ? range.from === range.to
-          ? longDate(range.from)
-          : dateRange(range.from, range.to, true)
-        : monthName(calMonth);
+    : range
+      ? range.from === range.to
+        ? longDate(range.from)
+        : dateRange(range.from, range.to, true)
+      : monthName(calMonth);
 
   // מיקומי הימים שנמדדו שייכים לרשימה מסוימת — בכל שינוי שלה מתחילים מחדש.
-  const listKey = `${tab}|${planFrom}|${planTo}|${wpFilter}|${periodMode}|${allTime}|${reloadTick}|${reports.length}`;
+  const listKey = `${tab}|${planFrom}|${planTo}|${wpFilter}|${periodMode}|${reloadTick}|${reports.length}`;
   if (dayPos.current.key !== listKey) dayPos.current = { key: listKey, map: new Map() };
 
   /** הסימון בתאריכון: הטווח (במצב טווח) או היום שאליו גוללים */
   const shownRange: DateRangeValue = rangeMode ? range : focusDay ? { from: focusDay, to: focusDay } : null;
   const dayPress = rangeMode ? undefined : focusOn;
 
-  const showCalendar = !periodMode && !allTime;
+  const showCalendar = !periodMode;
   const strip =
     showCalendar && pinned ? (
       <View onLayout={(e) => setStripHeight(e.nativeEvent.layout.height)}>
@@ -359,6 +388,8 @@ export default function ReportsScreen() {
           onDayPress={dayPress}
           counts={counts}
           onTitlePress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          onExpand={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          statusOf={filteredStatus}
           extra={
             <SelectField<string | null>
               compact
@@ -383,6 +414,7 @@ export default function ReportsScreen() {
         // מתחתיו — כך לא מוצגים שניהם יחד.
         const next = calTop != null && calHeight > 0 && y > calTop + calHeight - stripHeight;
         if (next !== pinned) setPinned(next);
+        if (next) followScroll(y);
       }}
     >
       <SegmentedControl<'plan' | 'reports'>
@@ -404,11 +436,7 @@ export default function ReportsScreen() {
         />
       </View>
 
-      {periodMode ? null : allTime ? (
-        <Pressable onPress={() => setAllTime(false)} style={styles.calLink}>
-          <Text style={styles.clear}>חזרה לתצוגה לפי חודש</Text>
-        </Pressable>
-      ) : (
+      {periodMode ? null : (
         <>
           <View
             onLayout={(e) => {
@@ -428,6 +456,7 @@ export default function ReportsScreen() {
             onRangeChange={setRange}
             onDayPress={dayPress}
             counts={counts}
+            statusOf={filteredStatus}
           />
           </View>
           <View style={styles.calActions}>
@@ -449,22 +478,12 @@ export default function ReportsScreen() {
               />
               <Text style={styles.checkText}>בחירת טווח</Text>
             </Pressable>
-            <Text style={styles.calHint}>
-              {rangeMode
-                ? range
-                  ? 'לחיצה על יום נוסף — טווח'
-                  : 'לחיצה על יום — סינון; יום נוסף — טווח'
-                : 'לחיצה על יום — מעבר אליו ברשימה'}
-            </Text>
+            <View style={{ flex: 1 }} />
             {range ? (
               <Pressable onPress={() => setRange(null)} hitSlop={8}>
                 <Text style={styles.clear}>ניקוי — כל החודש</Text>
               </Pressable>
-            ) : (
-              <Pressable onPress={() => setAllTime(true)} hitSlop={8}>
-                <Text style={styles.clear}>כל הדיווחים</Text>
-              </Pressable>
-            )}
+            ) : null}
           </View>
         </>
       )}
@@ -500,7 +519,6 @@ export default function ReportsScreen() {
             onPress={() => {
               setWpFilter(null);
               setRange(null);
-              setAllTime(false);
               setPeriodMode(null);
             }}
           >

@@ -8,10 +8,11 @@
  * לחיצה על יום בוחרת אותו / משלימה טווח — בדיוק כמו בלוח החודשי.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
+import { Animated, Easing, PanResponder, Platform, StyleSheet, View } from 'react-native';
 import { hebrewDay } from '../lib/hebrewDate';
 import { useShowHebrewDates } from '../lib/hebrewDatePref';
 import { DayDot, useDayStatus } from './DayDot';
+import type { DayStatus } from '../lib/dayStatus';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
@@ -56,11 +57,16 @@ type Props = {
   onTitlePress?: () => void;
   /** פעולה נוספת בראש הפס (למשל כפתור סינון) — ליד "היום" */
   extra?: ReactNode;
+  /** מצב היום לנקודות — כשהמסך מסנן; אחרת הכול */
+  statusOf?: (date: string) => DayStatus | null;
+  /** החלקה אנכית על הפס (למטה) — פתיחת התאריכון החודשי */
+  onExpand?: () => void;
 };
 
-export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts, onDayPress, onTitlePress, extra }: Props) {
+export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts, onDayPress, onTitlePress, extra, statusOf: statusOverride, onExpand }: Props) {
   const styles = useStyles(makeStyles);
-  const statusOf = useDayStatus();
+  const ownStatus = useDayStatus();
+  const statusOf = statusOverride ?? ownStatus;
   const { colors } = useTheme();
   const { isRTL } = useI18n();
   const heb = useShowHebrewDates();
@@ -105,6 +111,17 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
     () => go(1),
     () => go(-1),
   );
+  // החלקה אנכית למטה על הפס — פתיחת התאריכון החודשי.
+  const expandRef = useRef(onExpand);
+  expandRef.current = onExpand;
+  const vertical = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 15 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 30) expandRef.current?.();
+      },
+    }),
+  ).current;
   const [y, m, d] = shown.split('-').map(Number);
   const days = Array.from({ length: 7 }, (_, i) => iso(y, m - 1, d + i));
   const now = new Date();
@@ -117,6 +134,7 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
     m1 === m2 ? `${MONTHS[m1]} ${days[6].slice(0, 4)}` : `${MONTHS[m1]}–${MONTHS[m2]} ${days[6].slice(0, 4)}`;
 
   return (
+    <View {...vertical.panHandlers}>
     <View style={styles.wrap} {...swipe}>
       <View style={styles.head}>
         <Pressable
@@ -230,6 +248,7 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
           })}
         </Animated.View>
       </View>
+    </View>
     </View>
   );
 }
