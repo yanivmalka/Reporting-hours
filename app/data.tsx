@@ -26,7 +26,7 @@ type Stats = { reports: number; demoReports: number; workplaces: number; demo: b
 export default function DataScreen() {
   const styles = useThemedStyles(makeStyles);
   const { showToast } = useToast();
-  const { setMode, setPaletteId } = useTheme();
+  const { setPaletteId } = useTheme();
   const { setLang } = useI18n();
   const { setBasis } = usePayBasis();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -95,7 +95,6 @@ export default function DataScreen() {
         showToast(`נמחקו נתוני ההדגמה: ${parts.join(', ')}${kept}`);
       } else {
         await resetAllData();
-        setMode('system');
         setPaletteId(DEFAULT_PALETTE_ID);
         setLang('he');
         setBasis(DEFAULT_PAY_BASIS);

@@ -469,8 +469,8 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
                     style={[drawerStyles.swatch, selected && drawerStyles.swatchSelected]}
                   >
                     <View style={drawerStyles.swatchDisc}>
-                      <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.light.brand }]} />
-                      <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.dark.brand }]} />
+                      <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.colors.brand }]} />
+                      <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.swatchTint }]} />
                     </View>
                   </Pressable>
                 );

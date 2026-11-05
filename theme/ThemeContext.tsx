@@ -6,8 +6,6 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { useColorScheme } from 'react-native';
-import { useHydrated } from '../lib/useHydrated';
 import { readJSON, writeJSON } from '../lib/storage';
 import { fallbackColors } from './colors';
 import {
@@ -17,30 +15,24 @@ import {
   type ColorScheme,
   type Palette,
   type PaletteId,
-  type ThemeMode,
 } from './palettes';
 
 /**
- * ניהול הערכה הפעילה (צבע + בהיר/כהה) ואספקתה לכל עץ הרכיבים דרך useTheme().
+ * ניהול ערכת הצבעים הפעילה ואספקתה לכל עץ הרכיבים דרך useTheme().
+ * האפליקציה תמיד בהירה — אין מצב כהה.
  *
  * הבחירה נשמרת מקומית (אותו מנגנון אחסון של שאר האפליקציה) כך שהיא נשמרת
- * בין הפעלות, גם באתר וגם באפליקציית האנדרואיד. המשתמש מחליף ערכה ומצב
- * תצוגה מתוך תפריט ההמבורגר (components/AppDrawer.tsx).
+ * בין הפעלות, גם באתר וגם באפליקציית האנדרואיד. המשתמש מחליף ערכה מתוך תפריט ההמבורגר (components/AppDrawer.tsx).
  */
 
 type ThemeContextValue = {
-  /** צבעי הערכה הפעילה — לפי הערכה שנבחרה והמצב (בהיר/כהה) שהוכרע */
+  /** צבעי הערכה הפעילה */
   colors: ColorScheme;
   /** מזהה ערכת הצבעים הנבחרת */
   paletteId: PaletteId;
-  /** מצב התצוגה שהמשתמש בחר (system = לפי הגדרת מערכת ההפעלה) */
-  mode: ThemeMode;
-  /** המצב שהוכרע בפועל אחרי פתרון 'system' */
-  resolvedScheme: 'light' | 'dark';
   /** כל הערכות הזמינות, לבניית בורר בתפריט */
   palettes: readonly Palette[];
   setPaletteId: (id: PaletteId) => void;
-  setMode: (mode: ThemeMode) => void;
 };
 
 const STORAGE_KEY = 'reporting-hours/theme/v1';
@@ -48,11 +40,8 @@ const STORAGE_KEY = 'reporting-hours/theme/v1';
 const DEFAULT_VALUE: ThemeContextValue = {
   colors: fallbackColors,
   paletteId: DEFAULT_PALETTE_ID,
-  mode: 'system',
-  resolvedScheme: 'light',
   palettes: PALETTES,
   setPaletteId: () => {},
-  setMode: () => {},
 };
 
 const ThemeContext = createContext<ThemeContextValue>(DEFAULT_VALUE);
@@ -66,27 +55,17 @@ function isPaletteId(value: unknown): value is PaletteId {
   return PALETTES.some((p) => p.id === value);
 }
 
-function isThemeMode(value: unknown): value is ThemeMode {
-  return value === 'light' || value === 'dark' || value === 'system';
-}
-
 export function ThemeProvider({ children }: PropsWithChildren) {
-  // ברינדור מראש (web) אין מצב מערכת — עד סיום ה־hydration מצב בהיר, כמו בשרת.
-  const hydrated = useHydrated();
-  const deviceScheme = useColorScheme();
-  const systemScheme = hydrated ? deviceScheme : 'light';
   const [paletteId, setPaletteId] = useState<PaletteId>(DEFAULT_PALETTE_ID);
-  const [mode, setMode] = useState<ThemeMode>('system');
   const [loaded, setLoaded] = useState(false);
 
   // טעינת הבחירה השמורה פעם אחת בעליית האפליקציה.
   useEffect(() => {
     let active = true;
-    readJSON<{ paletteId?: unknown; mode?: unknown }>(STORAGE_KEY, {}).then(
+    readJSON<{ paletteId?: unknown }>(STORAGE_KEY, {}).then(
       (saved) => {
         if (!active) return;
         if (isPaletteId(saved.paletteId)) setPaletteId(saved.paletteId);
-        if (isThemeMode(saved.mode)) setMode(saved.mode);
         setLoaded(true);
       },
     );
@@ -97,25 +76,17 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
   // שמירת הבחירה בכל שינוי, רק אחרי שהטעינה הראשונית הסתיימה.
   useEffect(() => {
-    if (loaded) writeJSON(STORAGE_KEY, { paletteId, mode });
-  }, [loaded, paletteId, mode]);
-
-  // תמיד בהיר: בורר בהיר/כהה/אוטומטי הוסר מהתפריט.
-  const resolvedScheme = 'light' as 'light' | 'dark';
-  void systemScheme;
+    if (loaded) writeJSON(STORAGE_KEY, { paletteId });
+  }, [loaded, paletteId]);
 
   const value = useMemo<ThemeContextValue>(() => {
-    const palette = getPalette(paletteId);
     return {
-      colors: resolvedScheme === 'dark' ? palette.dark : palette.light,
+      colors: getPalette(paletteId).colors,
       paletteId,
-      mode,
-      resolvedScheme,
       palettes: PALETTES,
       setPaletteId,
-      setMode,
     };
-  }, [paletteId, mode, resolvedScheme]);
+  }, [paletteId]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

@@ -25,4 +25,4 @@ export const radius = {
 export type AppColors = ColorScheme;
 
 /** ערכת ברירת המחדל (טורקיז, בהיר) — לשימוש מחוץ לעץ הרכיבים בלבד. */
-export const fallbackColors: ColorScheme = getPalette(DEFAULT_PALETTE_ID).light;
+export const fallbackColors: ColorScheme = getPalette(DEFAULT_PALETTE_ID).colors;
