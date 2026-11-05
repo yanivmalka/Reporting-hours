@@ -18,6 +18,9 @@ import {
 } from '../lib/dashboard';
 import { Button } from '../components/Button';
 import { ReportCard } from '../components/ReportCard';
+import { PlanList } from '../components/PlanList';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { loadCourses, type Course } from '../lib/courses';
 import { Screen } from '../components/Screen';
 import { reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
@@ -37,6 +40,11 @@ function byNewest(a: WorkReport, b: WorkReport): number {
   return b.createdAt - a.createdAt;
 }
 
+/**
+ * "יומן": תכנון ודיווחים בדף אחד, עם בורר "תכנון · דיווחים". התאריכון, השורה
+ * המוצמדת וסינון מקום העבודה משותפים. ?tab=reports פותח על "דיווחים"
+ * (ברירת המחדל — "תכנון").
+ */
 export default function ReportsScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
@@ -45,7 +53,20 @@ export default function ReportsScreen() {
   const [reports, setReports] = useState<WorkReport[] | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
   // סינון התחלתי יכול להגיע מלוח הבקרה: ?wp=<מזהה>&when=current|previous|YYYY-MM
-  const params = useLocalSearchParams<{ wp?: string; when?: string; from?: string; to?: string; n?: string }>();
+  const params = useLocalSearchParams<{
+    wp?: string;
+    when?: string;
+    from?: string;
+    to?: string;
+    n?: string;
+    tab?: string;
+  }>();
+  const [tab, setTab] = useState<'plan' | 'reports'>(params.tab === 'reports' ? 'reports' : 'plan');
+  useEffect(() => {
+    if (params.tab === 'reports' || params.tab === 'plan') setTab(params.tab);
+  }, [params.tab, params.n]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [reloadTick, setReloadTick] = useState(0);
   const [statuses, setStatuses] = useState<Record<string, PayrollStatus>>({});
   /** סינון: מזהה מקום עבודה; null = הכול */
   const [wpFilter, setWpFilter] = useState<string | null>(params.wp || null);
@@ -160,8 +181,9 @@ export default function ReportsScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus()]).then(([r, w, st]) => {
+      Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus(), loadCourses()]).then(([r, w, st, crs]) => {
         if (!active) return;
+        setCourses(crs);
         setStatuses(st);
         setReports([...r].sort(byNewest));
         setWorkplaces(w);
@@ -169,7 +191,7 @@ export default function ReportsScreen() {
       return () => {
         active = false;
       };
-    }, []),
+    }, [reloadTick]),
   );
 
   if (reports === null) {
@@ -219,6 +241,11 @@ export default function ReportsScreen() {
     return isLocked(statuses[statusKey(w.id, p.start)]) ? p.start : null;
   };
 
+  // חלון התכנון: הטווח שנבחר, או החודש שבתאריכון.
+  const [cy, cm] = calMonth.split('-').map(Number);
+  const planFrom = range ? range.from : `${calMonth}-01`;
+  const planTo = range ? range.to : `${calMonth}-${String(new Date(cy, cm, 0).getDate()).padStart(2, '0')}`;
+
   const isFiltered = wpFilter != null || range != null || allTime || periodMode != null;
   const timeLabel = periodMode
     ? periodMode === 'current'
@@ -255,6 +282,14 @@ export default function ReportsScreen() {
         if (next !== pinned) setPinned(next);
       }}
     >
+      <SegmentedControl<'plan' | 'reports'>
+        options={[
+          { value: 'plan', label: 'תכנון' },
+          { value: 'reports', label: 'דיווחים' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
       <View style={styles.filters}>
         <SelectField<string | null>
           label="מקום עבודה:"
@@ -306,6 +341,19 @@ export default function ReportsScreen() {
         </>
       )}
 
+      {tab === 'plan' ? (
+        <PlanList
+          courses={courses}
+          workplaces={workplaces}
+          reports={reports}
+          from={planFrom}
+          to={planTo}
+          wpFilter={wpFilter}
+          basis={basis}
+          onChanged={() => setReloadTick((n) => n + 1)}
+        />
+      ) : (
+        <>
       <View style={styles.summary}>
         <Text style={styles.summaryLine}>{timeLabel}</Text>
         <Text style={styles.summaryTitle}>
@@ -353,6 +401,9 @@ export default function ReportsScreen() {
             />
           ))}
         </View>
+      )}
+
+        </>
       )}
 
       <View style={styles.action}>

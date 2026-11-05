@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, type Ref, useEffect, useState } from 'react';
 import {
   Keyboard,
   Platform,
@@ -25,6 +25,8 @@ type ScreenProps = {
   onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
   /** שכבה קבועה בראש המסך, מעל התוכן הנגלל (פקד מוצמד) */
   overlay?: ReactNode;
+  /** הפניה ל־ScrollView — לגלילה יזומה (למשל אל קבוצה בטופס) */
+  scrollRef?: Ref<ScrollView>;
 };
 
 /**
@@ -62,7 +64,7 @@ function useKeyboardHeight(): number {
 }
 
 /** מעטפת מסך אחידה: רקע, שוליים בטוחים וריווח פנימי. */
-export function Screen({ children, scroll = true, keyboardFooter = false, onScroll, overlay }: ScreenProps) {
+export function Screen({ children, scroll = true, keyboardFooter = false, onScroll, overlay, scrollRef }: ScreenProps) {
   const styles = useThemedStyles(makeStyles);
   const keyboard = useKeyboardHeight();
   const { height: windowHeight } = useWindowDimensions();
@@ -84,6 +86,7 @@ export function Screen({ children, scroll = true, keyboardFooter = false, onScro
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {scroll ? (
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"

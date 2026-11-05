@@ -96,7 +96,7 @@ export default function ReportScreen() {
     date: presetDate,
     course: presetCourse,
   } = useLocalSearchParams<{ id?: string; wp?: string; date?: string; course?: string }>();
-  // מקום עבודה / תאריך שנבחרו מראש (למשל מ"הדיווחים שלי" המסונן) — פעם אחת.
+  // מקום עבודה / תאריך שנבחרו מראש (למשל מ"יומן" המסונן) — פעם אחת.
   const presetApplied = useRef(false);
   /**
    * כניסה ישירה — תאריך וקורס ידועים (מהלו״ז, מדיווח חסר, מהתראה): מסך אחד
@@ -1193,11 +1193,11 @@ export default function ReportScreen() {
           <Pressable
             onPress={() => {
               setCountdown(null);
-              router.replace('/reports');
+              router.replace({ pathname: '/reports', params: { tab: 'reports' } });
             }}
             style={styles.cancel}
           >
-            <Text style={styles.cancelText}>להדיווחים שלי</Text>
+            <Text style={styles.cancelText}>ליומן</Text>
           </Pressable>
         </View>
       ) : (

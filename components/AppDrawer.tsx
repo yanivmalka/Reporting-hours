@@ -130,7 +130,7 @@ type NavLink = { href: Href; key: string; icon: string };
 const MAIN_LINKS: NavLink[] = [
   { href: '/', key: 'nav.homeLink', icon: 'home-outline' },
   { href: '/report', key: 'nav.report', icon: 'clipboard-edit-outline' },
-  { href: '/reports', key: 'nav.reports', icon: 'format-list-bulleted' },
+  { href: '/reports', key: 'nav.reports', icon: 'calendar-month-outline' },
   { href: '/dashboard', key: 'nav.dashboard', icon: 'view-dashboard-outline' },
   { href: '/workplaces', key: 'nav.workplaces', icon: 'briefcase-outline' },
 ];
