@@ -14,6 +14,7 @@ import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useShowHebrewDates } from '../lib/hebrewDatePref';
 import { useI18n } from '../lib/i18n';
+import { MonthSlide } from './MonthSlide';
 import { useSwipe } from './useSwipe';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
@@ -77,7 +78,6 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
   const thisMonth = today.slice(0, 7);
   const two = width >= TWO_MONTHS_MIN_WIDTH;
   // במסך רחב: החודש הקודם לצד החודש המוצג (בעברית — הקודם מימין).
-  const months = two ? [shiftMonth(month, -1), month] : [month];
   const tap = (day: string) => (onDayPress ? onDayPress(day) : onRangeChange(nextRange(range, day)));
 
   return (
@@ -90,19 +90,24 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
           <Text style={styles.navText}>{isRTL ? '←' : '→'}</Text>
         </Pressable>
       </View>
-      <View style={styles.months}>
-        {months.map((mk) => (
-          <MonthGrid
-            key={mk}
-            month={mk}
-            active={two && mk === month}
-            range={range}
-            counts={counts}
-            today={today}
-            onTap={tap}
-          />
-        ))}
-      </View>
+      <MonthSlide
+        pageKey={month}
+        render={(shownMonth) => (
+          <View style={styles.months}>
+            {(two ? [shiftMonth(shownMonth, -1), shownMonth] : [shownMonth]).map((mk) => (
+              <MonthGrid
+                key={mk}
+                month={mk}
+                active={two && mk === shownMonth}
+                range={range}
+                counts={counts}
+                today={today}
+                onTap={tap}
+              />
+            ))}
+          </View>
+        )}
+      />
       {month !== thisMonth ? (
         <Pressable onPress={() => onMonthChange(thisMonth)} hitSlop={6} accessibilityRole="button" style={styles.todayRow}>
           <Text style={styles.todayLink}>חזרה לחודש הנוכחי</Text>
