@@ -16,7 +16,7 @@ import { Modal, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { hebrewDate } from '../lib/hebrewDate';
 import { longDayLabel } from '../lib/home';
-import { moveSession, restoreSession, setSessionMark, type Cancellation } from '../lib/sessions';
+import { moveSession, removeFromPlan, restoreSession, returnToPlan, setSessionMark, type Cancellation } from '../lib/sessions';
 import { DateField } from './DatePicker';
 import type { Course } from '../lib/courses';
 import { radius, spacing } from '../theme/colors';
@@ -36,6 +36,11 @@ export type SessionCancelRequest = {
   cancel?: Cancellation | null;
   /** אחרי שמירה (ביטול או החזרה) */
   onDone?: (canceled: boolean) => void;
+  /**
+   * "המפגש התקיים" — אחרי ביטול הסימון. כשמועבר, נקרא במקום onDone
+   * (למשל כדי לפתוח דיווח ישיר על המפגש).
+   */
+  onHeld?: () => void;
 };
 
 export function useSessionCancel() {
@@ -88,7 +93,7 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
                 : canceled.kind === 'moved'
                   ? `${canceled.reason}. "המפגש התקיים" מחזיר אותו לתאריך המקורי.`
                   : `${canceled.reason ? `סיבה: ${canceled.reason}` : 'לא צוינה סיבה.'} ${
-                      canceled.kind === 'removed' ? 'הוסר מהפוטנציאל.' : 'נשאר בפוטנציאל ויורד מהצפי.'
+                      canceled.kind === 'removed' ? 'נמחק מהתכנון.' : 'נשאר בפוטנציאל ויורד מהצפי.'
                     }`}
             </Text>
           ) : (
@@ -109,7 +114,7 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
               </View>
               {[
                 { remove: false, title: 'השאר בפוטנציאל', sub: 'נשמר מה שציפית; יורד רק מהצפי' },
-                { remove: true, title: 'הסר גם מהפוטנציאל', sub: 'כאילו המפגש לא תוכנן מעולם' },
+                { remove: true, title: 'מחיקת המפגש מהתכנון', sub: 'המפגש לא ייספר בפוטנציאל ובצפי' },
               ].map((o) => (
                 <Pressable
                   key={o.title}
@@ -128,35 +133,72 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
             </>
           )}
 
-          <View style={styles.actions}>
-            <View style={styles.action}>
-              <Button label={canceled ? 'סגירה' : 'חזרה'} variant="secondary" onPress={onClose} disabled={busy} />
-            </View>
-            <View style={styles.action}>
-              {canceled ? (
-                <Button
-                  label="המפגש התקיים"
-                  loading={busy}
-                  onPress={() =>
-                    run(() => restoreSession(request.course.id, request.date), 'המפגש הוחזר ללו״ז', false)
+          {canceled ? (
+            <View style={styles.stack}>
+              <Button
+                label="המפגש התקיים"
+                loading={busy}
+                onPress={async () => {
+                  setBusy(true);
+                  try {
+                    await restoreSession(request.course.id, request.date);
+                    if (request.onHeld) request.onHeld();
+                    else {
+                      showToast('המפגש הוחזר ללו״ז');
+                      request.onDone?.(false);
+                    }
+                  } finally {
+                    setBusy(false);
+                    onClose();
                   }
-                />
-              ) : (
+                }}
+              />
+              {canceled.kind === 'canceled' ? (
                 <Button
-                  label="סימון כבוטל"
+                  label="מחיקת המפגש מהתכנון"
                   variant="danger"
-                  loading={busy}
+                  disabled={busy}
                   onPress={() =>
                     run(
-                      () => setSessionMark(request.course.id, request.date, removeToo ? 'removed' : 'canceled', reason),
-                      removeToo ? 'המפגש בוטל והוסר מהפוטנציאל' : 'המפגש סומן כבוטל',
+                      () => removeFromPlan(request.course.id, request.date, canceled.reason),
+                      'המפגש נמחק מהתכנון',
                       true,
                     )
                   }
                 />
-              )}
+              ) : canceled.kind === 'removed' ? (
+                <Button
+                  label="החזרה לתכנון"
+                  variant="secondary"
+                  disabled={busy}
+                  onPress={() =>
+                    run(
+                      () => returnToPlan(request.course.id, request.date, canceled.reason),
+                      'המפגש הוחזר לתכנון',
+                      true,
+                    )
+                  }
+                />
+              ) : null}
+              <Button label="סגירה" variant="secondary" onPress={onClose} disabled={busy} />
             </View>
-          </View>
+          ) : (
+            <View style={styles.stack}>
+              <Button
+                label="סימון כבוטל"
+                variant="danger"
+                loading={busy}
+                onPress={() =>
+                  run(
+                    () => setSessionMark(request.course.id, request.date, removeToo ? 'removed' : 'canceled', reason),
+                    removeToo ? 'המפגש נמחק מהתכנון' : 'המפגש סומן כבוטל',
+                    true,
+                  )
+                }
+              />
+              <Button label="חזרה" variant="secondary" onPress={onClose} disabled={busy} />
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -282,4 +324,5 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     optionTitle: { fontSize: 14, fontWeight: '700', color: c.text, textAlign: layout.textStart },
     optionSub: { fontSize: 12, color: c.textMuted, textAlign: layout.textStart },
     action: {},
+    stack: { gap: spacing.sm, marginTop: spacing.sm },
   });

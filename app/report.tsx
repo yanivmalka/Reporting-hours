@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import { ActivityIndicator, Keyboard, Modal, PanResponder, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Keyboard, Modal, PanResponder, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
@@ -14,6 +14,8 @@ import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { useToast } from '../components/Toast';
+import { useFade } from '../components/useFlash';
+import { nextRelevantDay, unreportedOn } from '../lib/home';
 import { toAcademic } from '../lib/academic';
 import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../lib/accumulated';
 import { formatHours, payableHours, reportPay } from '../lib/pay';
@@ -96,6 +98,13 @@ export default function ReportScreen() {
   } = useLocalSearchParams<{ id?: string; wp?: string; date?: string; course?: string }>();
   // מקום עבודה / תאריך שנבחרו מראש (למשל מ"הדיווחים שלי" המסונן) — פעם אחת.
   const presetApplied = useRef(false);
+  /**
+   * כניסה ישירה — תאריך וקורס ידועים (מהלו״ז, מדיווח חסר, מהתראה): מסך אחד
+   * "דיווח מפגש" בלי פס שלבים, עם "שמירה" ו"ביטול" שחוזר למקום המוצא.
+   */
+  const [direct, setDirect] = useState(Boolean(presetCourse) && !editId);
+  /** באשף המלא: דילגנו על בחירת הקורס (מפגש אחד בלבד ביום) — "חזרה" מהשעות לתאריך */
+  const [skippedCourse, setSkippedCourse] = useState(false);
   /** הדיווח המקורי בעריכה (לתיקון המונה ולמחיקה) */
   const [editing, setEditing] = useState<WorkReport | null>(null);
   /** בעריכה: הדוח לשכר של החודש נשלח — הדיווח נעול */
@@ -123,6 +132,8 @@ export default function ReportScreen() {
   const [exitReason, setExitReason] = useState<'saved' | 'cancelled' | null>(null);
   const [pendingLeave, setPendingLeave] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const endRef = useRef<TimeInputHandle>(null);
+  // מעבר בין שלבים: עמעום קצר, בלי החלקה.
+  const stepFade = useFade(step);
 
   // ── החלקה בין שלבים ──
   // בעברית השלב הבא נמצא משמאל: החלקה ימינה (כמו דפדוף בספר) — קדימה,
@@ -150,6 +161,39 @@ export default function ReportScreen() {
   const [saving, setSaving] = useState(false);
   /** ערכים שמולאו מראש (קורס שנבחר במסך הבית) — לא נחשבים "שינוי שלא נשמר" */
   const [baseline, setBaseline] = useState({ start: '', end: '', note: '', breaks: 0 });
+
+  /**
+   * פתיחת האשף על תאריך: שלב התאריך עם התאריך כבר בחור; אם ביום יש מפגש
+   * אחד בלבד שטרם דווח — דילוג ישיר לשלב השעות עם הקורס הזה.
+   */
+  function openOnDate(
+    d: string,
+    crs: readonly Course[] = courses,
+    list: readonly Workplace[] = workplaces ?? [],
+    reports: readonly WorkReport[] = existing,
+  ) {
+    setDate(d);
+    setErrors({});
+    const open = unreportedOn(crs, list, reports, d);
+    if (open.length === 1) {
+      const c = open[0];
+      const breakMin = c.breakMinutes > 0 ? c.breakMinutes : 0;
+      setCourseId(c.id);
+      setExtraKind(null);
+      setWorkplaceId(c.workplaceId);
+      setNote(c.name);
+      setStart(c.start);
+      setEnd(c.end);
+      setBreaks(breakMin ? [{ id: makeBreakId(), minutes: String(breakMin) }] : []);
+      setBaseline({ start: c.start, end: c.end, note: c.name, breaks: breakMin ? 1 : 0 });
+      setViaCourse(true);
+      setSkippedCourse(true);
+      setStep('times');
+      return;
+    }
+    setSkippedCourse(false);
+    setStep('date');
+  }
 
   // נטען מחדש בכל כניסה למסך כדי לשקף מקומות עבודה שנוספו בינתיים.
   useFocusEffect(
@@ -210,6 +254,14 @@ export default function ReportScreen() {
           if (presetWp && list.some((w) => w.id === presetWp)) setWorkplaceId(presetWp);
           if (presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)) setDate(presetDate);
           if (presetWp && list.some((w) => w.id === presetWp)) return;
+          // כניסה מלאה (הכפתור בדף הבית): נפתח על היום הרלוונטי הבא, ואם יש
+          // בו מפגש אחד בלבד שטרם דווח — ישר לשלב השעות.
+          const target =
+            presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)
+              ? presetDate
+              : nextRelevantDay(crs, list, reports).date;
+          openOnDate(target, crs, list, reports);
+          return;
         }
         setWorkplaceId((current) => {
           if (current && list.some((w) => w.id === current)) return current;
@@ -496,6 +548,9 @@ export default function ReportScreen() {
     setEnd(c.end);
     setBreaks(c.breakMinutes > 0 ? [{ id: makeBreakId(), minutes: String(c.breakMinutes) }] : []);
   }
+  // הדיווח החסר הקרוב (מהיום אחורה) — לקישור "הדיווח החסר הבא".
+  const nextMissingAll = nextRelevantDay(courses, workplaces, existing);
+  const nextMissing = nextMissingAll.kind === 'none' ? null : nextMissingAll;
   // קורסים שכבר דווחו באותו יום (אותו מקום עבודה ואותו נושא) — מסומנים ✓.
   // קורס "דווח" — יש באותו יום דיווח לאותו מקום שחופף בשעות לקורס (או שנושאו שם הקורס).
   const reportedCourse = (c: Course) => courseReported(c, date, existing, editing?.id);
@@ -556,11 +611,20 @@ export default function ReportScreen() {
       else router.replace({ pathname: '/report-view', params: { id: editId } });
       return;
     }
+    if (step !== 'times') setSkippedCourse(false);
     if (step === 'course' || step === 'workplace') {
       if (step === 'workplace' && activeCourses.length > 0) setStep('course');
       else setStep('date');
     } else if (step === 'times')
-      setStep(viaCourse ? 'course' : lockWp && activeCourses.length === 0 ? 'date' : 'workplace');
+      setStep(
+        viaCourse
+          ? skippedCourse
+            ? 'date'
+            : 'course'
+          : lockWp && activeCourses.length === 0
+            ? 'date'
+            : 'workplace',
+      );
     else if (step === 'summary') setStep('times');
   }
 
@@ -571,9 +635,11 @@ export default function ReportScreen() {
     else if (step === 'workplace' && workplaceId) setStep('times');
   }
   swipeRef.current = {
-    next: swipeNext,
+    next: () => {
+      if (!direct) swipeNext();
+    },
     back: () => {
-      if (step !== 'date' && step !== 'done' && !(editId && step === 'times')) goBack();
+      if (step !== 'date' && step !== 'done' && !direct && !(editId && step === 'times')) goBack();
     },
   };
 
@@ -600,7 +666,16 @@ export default function ReportScreen() {
     // דיווח חדש — שוב שומרים מפני יציאה בלי שמירה, מול טופס ריק.
     setBaseline({ start: '', end: '', note: '', breaks: 0 });
     setExitReason(null);
-    setStep('date');
+    setDirect(false);
+    // "דיווח נוסף" — על היום הרלוונטי הבא (היום, או הדיווח החסר הקרוב אחורה).
+    openOnDate(nextRelevantDay(courses, workplaces ?? [], existing).date);
+  }
+
+  /** יציאה מהאשף למקום המוצא. עם שינויים שלא נשמרו — דיאלוג "לצאת בלי לשמור?". */
+  function leave() {
+    Keyboard.dismiss();
+    if (navigation.canGoBack()) navigation.goBack();
+    else router.replace('/');
   }
 
   /**
@@ -665,6 +740,8 @@ export default function ReportScreen() {
 
   return (
     <Screen keyboardFooter>
+      {direct && step !== 'done' ? <Stack.Screen options={{ title: 'דיווח מפגש' }} /> : null}
+      {direct ? null : (
       <View style={styles.stepper}>
         {STEPS.map((x, i) => {
           const isDone = i < stepIndex && step !== 'done';
@@ -694,10 +771,11 @@ export default function ReportScreen() {
           );
         })}
       </View>
+      )}
 
       {context}
 
-      <View {...pan.panHandlers} style={styles.swipeArea}>
+      <Animated.View {...pan.panHandlers} style={[styles.swipeArea, stepFade]}>
 
       {/* ── 1. תאריך ── */}
       {step === 'date' ? (
@@ -711,6 +789,23 @@ export default function ReportScreen() {
               invalid={Boolean(errors.date)}
             />
           </FormField>
+          {activeCourses.length > 0 && activeCourses.every(reportedCourse) ? (
+            <View style={styles.allDone}>
+              <Text style={styles.allDoneText}>✓ כל המפגשים ביום זה דווחו</Text>
+              <View style={styles.allDoneLinks}>
+                {date !== todayISO() ? (
+                  <Pressable onPress={() => openOnDate(todayISO())} accessibilityRole="link" hitSlop={6}>
+                    <Text style={styles.linkText}>היום</Text>
+                  </Pressable>
+                ) : null}
+                {nextMissing && nextMissing.date !== date ? (
+                  <Pressable onPress={() => openOnDate(nextMissing.date)} accessibilityRole="link" hitSlop={6}>
+                    <Text style={styles.linkText}>הדיווח החסר הבא</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
           {activeCourses.length > 0 ? (
             <View style={styles.dayCourses}>
               <Text style={styles.dayCoursesTitle}>
@@ -843,7 +938,7 @@ export default function ReportScreen() {
       {step === 'times' ? (
         <>
           <Text style={styles.stepTitle}>
-            {selectedCourse ? 'השעות לפי הקורס — אפשר לעדכן' : 'מתי עבדת?'}
+            {direct ? 'השעות לפי הקורס — אפשר לעדכן' : selectedCourse ? 'השעות לפי הקורס — אפשר לעדכן' : 'מתי עבדת?'}
           </Text>
           {!viaCourse && extraCandidates.length > 0 ? (
             <FormField label="מפגש נוסף לקורס (רשות)">
@@ -1031,7 +1126,8 @@ export default function ReportScreen() {
           {editing ? (
             <Button
               label="מחיקת הדיווח"
-              variant="danger"
+              variant="dangerLink"
+              icon="trash-can-outline"
               onPress={() =>
                 confirm({
                   title: 'למחוק את הדיווח?',
@@ -1076,7 +1172,7 @@ export default function ReportScreen() {
         </View>
       ) : null}
 
-      </View>
+      </Animated.View>
 
       {/* ── ניווט ── */}
       {step === 'done' ? (
@@ -1106,21 +1202,31 @@ export default function ReportScreen() {
         </View>
       ) : (
         <View style={styles.nav}>
-          {step === 'summary' ? (
+          {direct ? (
+            <Button label="שמירה" onPress={handleSave} loading={saving} />
+          ) : step === 'summary' ? (
             <Button label="שמירת הדיווח" onPress={handleSave} loading={saving} />
           ) : step === 'date' || step === 'times' ? (
             <Button label="המשך" onPress={goNext} />
           ) : null}
-          {step !== 'date' ? <Button label="חזרה" variant="secondary" onPress={goBack} /> : null}
+          {/* כפתור משני אחד: "ביטול" (כניסה ישירה, או שלב 1) או "חזרה" לשלב הקודם — אף פעם לא שניהם */}
+          {direct || step === 'date' ? (
+            <Button label="ביטול" variant="secondary" onPress={leave} />
+          ) : (
+            <Button label="חזרה" variant="secondary" onPress={goBack} />
+          )}
           {(step === 'times' || step === 'summary') && selectedCourse && !editId && !extraKind ? (
             <>
-              <Pressable
-                onPress={() => cancelSession(selectedCourse, true)}
-                accessibilityRole="button"
-                style={styles.linkBtn}
-              >
-                <Text style={styles.linkText}>השיעור לא התקיים? סימון כבוטל</Text>
-              </Pressable>
+              <View style={styles.linkRow}>
+                <Text style={styles.linkLead}>השיעור לא התקיים?</Text>
+                <Pressable
+                  onPress={() => cancelSession(selectedCourse, true)}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                >
+                  <Text style={styles.linkText}>סימון כבוטל</Text>
+                </Pressable>
+              </View>
               <Pressable
                 onPress={() =>
                   moveDialog.open({
@@ -1136,13 +1242,6 @@ export default function ReportScreen() {
               </Pressable>
             </>
           ) : null}
-          <Pressable
-            onPress={() => setExitReason('cancelled')}
-            style={styles.cancel}
-            accessibilityRole="link"
-          >
-            <Text style={styles.cancelText}>ביטול</Text>
-          </Pressable>
         </View>
       )}
 
@@ -1394,6 +1493,22 @@ const makeStyles = (colors: AppColors) =>
     alignSelf: 'center',
     paddingVertical: spacing.sm,
   },
+  linkRow: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: spacing.sm,
+  },
+  linkLead: { fontSize: 14, color: colors.textMuted },
+  allDone: {
+    gap: 6,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandLight,
+  },
+  allDoneText: { fontSize: 16, fontWeight: '800', color: colors.success, textAlign: TEXT_RIGHT },
+  allDoneLinks: { flexDirection: 'row', gap: spacing.lg },
   cardCancel: {
     alignSelf: 'flex-start',
     paddingTop: spacing.xs,

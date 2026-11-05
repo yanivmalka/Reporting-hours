@@ -12,7 +12,7 @@
  *
  * מצבי מפגש (סימון לכל קורס + תאריך):
  *   - 'canceled' — "השיעור לא התקיים": נשאר בפוטנציאל (מה שציפית) ויורד מהצפי;
- *   - 'removed'  — בוטל והוסר גם מהפוטנציאל ("עדכן פוטנציאל");
+ *   - 'removed'  — "נמחק מהתכנון": לא בפוטנציאל ולא בצפי, מוסתר מהלו״ז;
  *   - 'moved'    — הועבר לתאריך אחר (`movedTo`); המפגש מופיע בתאריך החדש
  *                  ("הועבר מ…"), והפוטנציאל עובר איתו;
  *   - 'held'     — התקיים למרות חג.
@@ -203,6 +203,22 @@ export async function setSessionMark(
   }
   await writeJSON(MARKS_KEY, list);
   await loadCancelIndex();
+}
+
+/**
+ * "מחיקת המפגש מהתכנון": המפגש לא נספר בפוטנציאל ובצפי, ומוסתר מהלו״ז.
+ * אפשרי גם על מפגש שלא בוטל קודם. הסיבה (אם הייתה) נשמרת.
+ */
+export function removeFromPlan(courseId: string, date: string, reason?: string): Promise<void> {
+  return setSessionMark(courseId, date, 'removed', reason);
+}
+
+/**
+ * "החזרה לתכנון" של מפגש שנמחק מהתכנון: אם היה לו סיבת ביטול — חוזר להיות
+ * "בוטל" (בפוטנציאל, לא בצפי); אחרת חוזר להיות מפגש רגיל.
+ */
+export function returnToPlan(courseId: string, date: string, reason?: string): Promise<void> {
+  return setSessionMark(courseId, date, reason?.trim() ? 'canceled' : null, reason);
 }
 
 /** העברת מפגש לתאריך אחר — נשמר "הועבר ל…" במקור ו"הועבר מ…" ביעד. */

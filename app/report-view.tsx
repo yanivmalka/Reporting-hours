@@ -11,7 +11,7 @@ import { Button } from '../components/Button';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { useConfirm } from '../components/ConfirmDialog';
-import { useSessionCancel } from '../components/SessionCancelDialog';
+import { useSessionCancel, useSessionMove } from '../components/SessionCancelDialog';
 import { adjustAccumulated } from '../lib/accumulated';
 import { courseReport, coursesOn, loadCourses, type Course } from '../lib/courses';
 import { NO_CANCEL } from '../lib/sessions';
@@ -20,7 +20,7 @@ import { hebrewDate } from '../lib/hebrewDate';
 import { reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
 import { isLocked, isPaid, loadPayrollStatus, periodTitle, statusKey } from '../lib/payroll';
-import { academicOf, deleteReport, EXTRA_SESSION_LABELS, loadReports, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
+import { academicOf, deleteReport, EXTRA_SESSION_LABELS, loadReports, netMinutes, totalBreakMinutes, updateReport, type WorkReport } from '../lib/reports';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -49,6 +49,8 @@ export default function ReportViewScreen() {
     course?: Course;
   } | null>(null);
   const sessionDialog = useSessionCancel();
+  const moveDialog = useSessionMove();
+  const [reloadTick, setReloadTick] = useState(0);
   const confirm = useConfirm();
 
   // נטען מחדש בכל חזרה למסך — כדי לשקף עריכה שנשמרה באשף.
@@ -83,7 +85,7 @@ export default function ReportViewScreen() {
       return () => {
         active = false;
       };
-    }, [id]),
+    }, [id, reloadTick]),
   );
 
   if (!data) {
@@ -194,32 +196,57 @@ export default function ReportViewScreen() {
         <>
           <Button label="עריכה" onPress={() => router.push({ pathname: '/report', params: { id: report.id } })} />
           {course && !report.extraKind ? (
-            <Button
-              label="השיעור לא התקיים — סימון כבוטל"
-              variant="secondary"
-              onPress={() =>
-                sessionDialog.open({
-                  course,
-                  date: report.date,
-                  // המפגש בוטל — הדיווח עליו נמחק (וגם הדקות שנצברו ממנו).
-                  onDone: async (canceled) => {
-                    if (!canceled) return;
-                    await deleteReport(report.id);
-                    if (report.carriedMinutes > 0) await adjustAccumulated(report.workplaceId, -report.carriedMinutes);
-                    router.back();
-                  },
-                })
-              }
-            />
+            <>
+              <View style={styles.linkRow}>
+                <Text style={styles.linkLead}>השיעור לא התקיים?</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() =>
+                    sessionDialog.open({
+                      course,
+                      date: report.date,
+                      // המפגש בוטל — הדיווח עליו נמחק (וגם הדקות שנצברו ממנו).
+                      onDone: async (canceled) => {
+                        if (!canceled) return;
+                        await deleteReport(report.id);
+                        if (report.carriedMinutes > 0) await adjustAccumulated(report.workplaceId, -report.carriedMinutes);
+                        router.back();
+                      },
+                    })
+                  }
+                >
+                  <Text style={styles.link}>סימון כבוטל</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                style={styles.linkRow}
+                onPress={() =>
+                  moveDialog.open({
+                    course,
+                    date: report.date,
+                    // השיעור הועבר — הדיווח עובר איתו לתאריך החדש.
+                    onDone: async (to) => {
+                      await updateReport(report.id, { ...report, date: to });
+                      setReloadTick((n) => n + 1);
+                    },
+                  })
+                }
+              >
+                <Text style={styles.link}>העברת השיעור לתאריך אחר</Text>
+              </Pressable>
+            </>
           ) : null}
           <Button
             label="מחיקת הדיווח"
-            variant="danger"
+            variant="dangerLink"
+            icon="trash-can-outline"
             onPress={() =>
               confirm({
                 title: 'למחוק את הדיווח?',
-                message: 'הדיווח יימחק לצמיתות, והדקות שהעביר למונה המצטבר יוחזרו.',
-                confirmLabel: 'מחיקה',
+                message: 'הדיווח יימחק לצמיתות, והדקות שהעביר למונה המצטבר יוחזרו. המפגש יחזור ל"ממתין לדיווח".',
+                confirmLabel: 'מחיקת הדיווח',
                 onConfirm: async () => {
                   await deleteReport(report.id);
                   if (report.carriedMinutes > 0) await adjustAccumulated(report.workplaceId, -report.carriedMinutes);
@@ -230,8 +257,8 @@ export default function ReportViewScreen() {
           />
         </>
       )}
-      <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
       {sessionDialog.dialog}
+      {moveDialog.dialog}
       {confirm.dialog}
     </Screen>
   );
@@ -259,6 +286,9 @@ const makeStyles = (colors: AppColors) =>
     valueLink: { color: colors.brand },
     chevron: { fontSize: 18, color: colors.textMuted, alignSelf: 'center' },
     pressed: { opacity: 0.6 },
+    linkRow: { flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 6, paddingVertical: 6 },
+    linkLead: { fontSize: 14, color: colors.textMuted },
+    link: { fontSize: 14, fontWeight: '700', color: colors.brand, textDecorationLine: 'underline' },
     label: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
     value: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     muted: { fontSize: 14, lineHeight: 20, color: colors.textMuted, textAlign: TEXT_RIGHT },

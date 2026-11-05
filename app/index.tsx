@@ -1,8 +1,8 @@
 /**
- * מסך הבית: ברכה לפי שעת היום ושם פרטי, כפתור דיווח גדול (ממולא מראש
- * לפי הקורס של היום), לו״ז משלשום עד מחרתיים מתוך הקורסים הפעילים (בחירת
- * יום בשורת ימים או בהחלקה),
- * התראות ותזכורות, וקישור ללוח הבקרה.
+ * מסך הבית: ברכה לפי שעת היום ושם פרטי; שורה עליונה — כפתור הדיווח (נפתח על
+ * "היום הרלוונטי הבא", כולל השלמת דיווח חסר מהעבר) ואריח לוח הבקרה; לו״ז
+ * משלשום עד מחרתיים (בחירת יום בשורת ימים או בהחלקה); התראות ותזכורות,
+ * עם אפשרות להציג שוב התראות שהוסתרו.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
@@ -11,12 +11,12 @@ import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
-import { useFlash } from '../components/useFlash';
+import { useFade } from '../components/useFlash';
 import { useSessionCancel } from '../components/SessionCancelDialog';
 import { useSwipe } from '../components/useSwipe';
 import { useCloudSync } from '../components/CloudSync';
 import { loadAccumulated } from '../lib/accumulated';
-import { loadCourses } from '../lib/courses';
+import { loadCourses, timeRange } from '../lib/courses';
 import { onDataChanged } from '../lib/demo';
 import { hebrewDate } from '../lib/hebrewDate';
 import {
@@ -25,7 +25,8 @@ import {
   firstName,
   greetingFor,
   homeAlerts,
-  suggestedSession,
+  nextRelevantDay,
+  type NextRelevant,
   type AgendaDay,
   type AgendaItem,
   type HomeAlert,
@@ -49,7 +50,7 @@ import { useWorkplaceColor } from '../theme/workplaceColors';
 const DISMISSED_KEY = 'reporting-hours/home-dismissed/v1';
 const DISMISSED_MAX = 80;
 
-type Data = { days: AgendaDay[]; alerts: HomeAlert[]; name: string };
+type Data = { days: AgendaDay[]; alerts: HomeAlert[]; name: string; next: NextRelevant };
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -64,10 +65,11 @@ export default function HomeScreen() {
   const [dismissed, setDismissed] = useState<string[]>([]);
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
   const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
-  const [dayDir, setDayDir] = useState<1 | -1>(1);
   // טעינה מחדש אחרי ביטול / החזרה של מפגש
   const [reloadTick, setReloadTick] = useState(0);
   const sessionDialog = useSessionCancel();
+  // התראות מוסתרות שהוצגו שוב ("הצג") — עד שסוגרים שוב
+  const [revealed, setRevealed] = useState<string[]>([]);
 
   // השעה מתעדכנת כל דקה — הברכה וסטטוס המפגשים ("עכשיו" / "ממתין לדיווח").
   useEffect(() => {
@@ -98,6 +100,7 @@ export default function HomeScreen() {
             days: agenda(courses, workplaces, reports, at),
             alerts: homeAlerts({ workplaces, courses, reports, accumulated, payroll, basis, recommendDismissed, now: at }),
             name: firstName(profile.fullName),
+            next: nextRelevantDay(courses, workplaces, reports, at),
           });
         });
       void load();
@@ -109,8 +112,9 @@ export default function HomeScreen() {
     }, [basis, reloadTick]),
   );
 
-  function dismiss(key: string) {
-    const next = [...dismissed.filter((k) => k !== key), key].slice(-DISMISSED_MAX);
+  function dismiss(a: HomeAlert) {
+    const id = dismissId(a);
+    const next = [...dismissed.filter((k) => k !== id && k !== a.key), id].slice(-DISMISSED_MAX);
     setDismissed(next);
     void writeJSON(DISMISSED_KEY, next);
   }
@@ -124,23 +128,25 @@ export default function HomeScreen() {
   const days = data?.days ?? [];
   const today = days[AGENDA_TODAY_INDEX];
   const day = days[dayIdx];
-  const suggestion = today ? suggestedSession(today) : null;
-  const reportHref: Href = suggestion
-    ? { pathname: '/report', params: { course: suggestion.course.id, date: suggestion.date } }
-    : '/report';
-  const visibleAlerts = (data?.alerts ?? []).filter((a) => !dismissed.includes(a.key));
+  const next = data?.next ?? null;
+  const reportHref: Href = next ? { pathname: '/report', params: { date: next.date } } : '/report';
+  const missingMode = next?.kind === 'missing';
+  const allAlerts = data?.alerts ?? [];
+  const isHidden = (a: HomeAlert) => dismissed.includes(dismissId(a)) || dismissed.includes(a.key);
+  const visibleAlerts = allAlerts.filter((a) => !isHidden(a));
+  const hiddenAlerts = allAlerts.filter(isHidden);
+  const hiddenCount = hiddenAlerts.filter((a) => !revealed.includes(a.key)).length;
   const todayIso = now ? isoDate(now) : '';
 
   function pickDay(i: number) {
     if (i < 0 || i >= days.length || i === dayIdx) return;
-    setDayDir(i > dayIdx ? 1 : -1);
     setDayIdx(i);
   }
   const swipe = useSwipe(
     () => pickDay(dayIdx + 1),
     () => pickDay(dayIdx - 1),
   );
-  const flash = useFlash(dayIdx, dayDir);
+  const flash = useFade(dayIdx);
 
   function openCancel(item: AgendaItem) {
     sessionDialog.open({
@@ -148,6 +154,11 @@ export default function HomeScreen() {
       date: item.date,
       cancel: item.cancel,
       onDone: () => setReloadTick((n) => n + 1),
+      // "המפגש התקיים" על מפגש שבוטל — ישר לדיווח המפגש.
+      onHeld:
+        item.status === 'canceled'
+          ? () => router.push({ pathname: '/report', params: { course: item.course.id, date: item.date } })
+          : undefined,
     });
   }
 
@@ -176,24 +187,47 @@ export default function HomeScreen() {
         ) : null}
       </View>
 
-      <Pressable
-        onPress={() => router.push(reportHref)}
-        accessibilityRole="button"
-        accessibilityLabel="דיווח יום עבודה"
-        style={({ pressed }) => [styles.reportBtn, pressed && styles.pressed]}
-      >
-        <View style={styles.reportIcon}>
-          <Icon name="plus" size={32} color={colors.textOnBrand} />
-        </View>
-        <View style={styles.reportTexts}>
-          <Text style={styles.reportTitle}>דיווח יום עבודה</Text>
-          <Text style={styles.reportSub} numberOfLines={2}>
-            {suggestion
-              ? `${suggestion.course.name}\n${suggestion.time} · ממולא מראש`
-              : 'בחירת קורס או מקום עבודה, שעות והפסקות'}
-          </Text>
-        </View>
-      </Pressable>
+      <View style={styles.topRow}>
+        <Pressable
+          onPress={() => router.push(reportHref)}
+          accessibilityRole="button"
+          accessibilityLabel={missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}
+          style={({ pressed }) => [styles.reportBtn, pressed && styles.pressed]}
+        >
+          <View style={styles.reportIcon}>
+            <Icon name={missingMode ? 'clipboard-plus-outline' : 'plus'} size={26} color={colors.textOnBrand} />
+          </View>
+          <View style={styles.reportTexts}>
+            <Text style={styles.reportTitle} numberOfLines={1}>
+              {missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}
+            </Text>
+            {next?.course ? (
+              <>
+                <Text style={styles.reportSub} numberOfLines={1} ellipsizeMode="tail">
+                  {next.course.name}
+                </Text>
+                <Text style={styles.reportSub} numberOfLines={1}>
+                  {next.kind === 'today' ? 'היום' : shortWeekday(next.date)} ·{' '}
+                  {timeRange(next.course.start, next.course.end)}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.reportSub} numberOfLines={2}>
+                בחירת קורס או מקום עבודה, שעות והפסקות
+              </Text>
+            )}
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/dashboard')}
+          accessibilityRole="link"
+          accessibilityLabel="לוח בקרה"
+          style={({ pressed }) => [styles.dashTile, pressed && styles.pressed]}
+        >
+          <Icon name="view-dashboard-outline" size={28} color={colors.brand} />
+          <Text style={styles.dashTileText}>לוח בקרה</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>הלו״ז שלי</Text>
@@ -261,15 +295,9 @@ export default function HomeScreen() {
                             params: { course: item.course.id, date: item.date },
                           })
                 }
-                onLongPress={item.reportId || item.status === 'canceled' ? undefined : () => openCancel(item)}
               />
             ))
           )}
-          {day.items.some((i) => !i.reportId && i.status !== 'canceled') ? (
-            <Text style={styles.hint}>
-              {day.offset > 0 ? 'לחיצה על מפגש — ביטול מראש' : 'לחיצה ארוכה על מפגש — סימון "לא התקיים"'}
-            </Text>
-          ) : null}
         </Animated.View>
       ) : null}
       {sessionDialog.dialog}
@@ -278,26 +306,38 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>התראות ותזכורות</Text>
         {visibleAlerts.length ? <Text style={styles.sectionMeta}>{visibleAlerts.length}</Text> : null}
       </View>
-      {data && visibleAlerts.length === 0 ? (
+      {visibleAlerts.map((a) => (
+        <AlertCard key={a.key} alert={a} onAction={() => runAction(a)} onDismiss={() => dismiss(a)} />
+      ))}
+      {hiddenAlerts
+        .filter((a) => revealed.includes(a.key))
+        .map((a) => (
+          <AlertCard
+            key={a.key}
+            alert={a}
+            faded
+            onAction={() => runAction(a)}
+            onDismiss={() => setRevealed((r) => r.filter((k) => k !== a.key))}
+          />
+        ))}
+      {data && hiddenAlerts.some((a) => !revealed.includes(a.key)) ? (
+        <Pressable
+          onPress={() => setRevealed(hiddenAlerts.map((a) => a.key))}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.noAlerts, pressed && styles.pressed]}
+        >
+          <Icon name="bell-off-outline" size={20} color={colors.textMuted} />
+          <Text style={styles.noAlertsText}>
+            {hiddenCount === 1 ? 'התראה אחת מוסתרת' : `${hiddenCount} התראות מוסתרות`} ·{' '}
+            <Text style={styles.showLink}>הצג</Text>
+          </Text>
+        </Pressable>
+      ) : data && allAlerts.length === 0 ? (
         <View style={styles.noAlerts}>
           <Icon name="bell-outline" size={20} color={colors.textMuted} />
           <Text style={styles.noAlertsText}>אין התראות חדשות</Text>
         </View>
-      ) : (
-        visibleAlerts.map((a) => (
-          <AlertCard key={a.key} alert={a} onAction={() => runAction(a)} onDismiss={() => dismiss(a.key)} />
-        ))
-      )}
-
-      <Pressable
-        onPress={() => router.push('/dashboard')}
-        accessibilityRole="link"
-        style={({ pressed }) => [styles.dashLink, pressed && styles.pressed]}
-      >
-        <Icon name="view-dashboard-outline" size={24} color={colors.brand} />
-        <Text style={styles.dashText}>לוח בקרה</Text>
-        <Icon name="chevron-left" size={22} color={colors.textMuted} />
-      </Pressable>
+      ) : null}
     </Screen>
   );
 }
@@ -329,21 +369,27 @@ function dayDot(
   return { fill: colors.brand, label: 'מפגשים מתוכננים' };
 }
 
+/**
+ * מזהה הסתרה של התראה: המפתח ועוד התוכן. התראה מוסתרת חוזרת לבד כשהתוכן
+ * שלה משתנה (מפתח זהה, כותרת או גוף אחרים).
+ */
+const dismissId = (a: HomeAlert) => `${a.key}#${a.title}|${a.body}`;
+
+const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+
+/** "ב׳ 2.11" */
+function shortWeekday(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${WEEKDAY_SHORT[new Date(y, m - 1, d).getDay()]} ${d}.${m}`;
+}
+
 /** "3.11" */
 const shortDay = (iso: string) => {
   const [, m, d] = iso.split('-').map(Number);
   return `${d}.${m}`;
 };
 
-function SessionRow({
-  item,
-  onPress,
-  onLongPress,
-}: {
-  item: AgendaItem;
-  onPress?: () => void;
-  onLongPress?: () => void;
-}) {
+function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void }) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const tone =
@@ -362,8 +408,7 @@ function SessionRow({
   return (
     <Pressable
       onPress={onPress}
-      onLongPress={onLongPress}
-      disabled={!onPress && !onLongPress}
+      disabled={!onPress}
       style={({ pressed }) => [styles.session, pressed && styles.pressed]}
       accessibilityRole={onPress ? 'button' : undefined}
     >
@@ -395,10 +440,13 @@ function AlertCard({
   alert,
   onAction,
   onDismiss,
+  faded,
 }: {
   alert: HomeAlert;
   onAction: () => void;
   onDismiss: () => void;
+  /** התראה מוסתרת שמוצגת שוב — בצבע מעט דהוי */
+  faded?: boolean;
 }) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -410,7 +458,7 @@ function AlertCard({
       disabled={!alert.action}
       accessibilityRole={alert.action ? 'button' : undefined}
       accessibilityLabel={alert.action ? `${alert.title} — ${alert.action.label}` : undefined}
-      style={({ pressed }) => [styles.alert, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.alert, faded && styles.alertFaded, pressed && styles.pressed]}
     >
       <View style={[styles.alertIcon, { borderColor: fg }]}>
         <Icon name={alert.icon} size={20} color={fg} />
@@ -446,12 +494,15 @@ const makeStyles = (colors: AppColors) =>
     date: { fontSize: 15, color: colors.textMuted, textAlign: TEXT_RIGHT },
     context: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
 
+    topRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
     reportBtn: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md,
-      minHeight: 104,
-      padding: 20,
+      gap: spacing.sm,
+      minHeight: 96,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
       borderRadius: radius.lg,
       backgroundColor: colors.brand,
       elevation: 3,
@@ -461,15 +512,27 @@ const makeStyles = (colors: AppColors) =>
       shadowOffset: { width: 0, height: 4 },
     },
     reportIcon: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: 'rgba(255,255,255,0.18)',
       alignItems: 'center',
       justifyContent: 'center',
     },
-    reportTexts: { flex: 1, gap: 4 },
-    reportTitle: { fontSize: 22, fontWeight: '800', color: colors.textOnBrand, textAlign: TEXT_RIGHT },
+    reportTexts: { flex: 1, minWidth: 0, gap: 2 },
+    reportTitle: { fontSize: 19, fontWeight: '800', color: colors.textOnBrand, textAlign: TEXT_RIGHT },
+    dashTile: {
+      width: 96,
+      minHeight: 96,
+      borderRadius: radius.lg,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    dashTileText: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center' },
     reportSub: { fontSize: 14, color: colors.textOnBrand, opacity: 0.9, textAlign: TEXT_RIGHT },
 
     sectionHead: {
@@ -562,6 +625,8 @@ const makeStyles = (colors: AppColors) =>
       backgroundColor: colors.surface,
     },
     noAlertsText: { fontSize: 15, color: colors.textMuted },
+    showLink: { color: colors.brand, fontWeight: '700' },
+    alertFaded: { opacity: 0.6 },
     alert: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -587,17 +652,4 @@ const makeStyles = (colors: AppColors) =>
     alertActionText: { fontSize: 14, fontWeight: '700', color: colors.brand },
     alertClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
 
-    dashLink: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      minHeight: 56,
-      paddingHorizontal: spacing.md,
-      marginTop: spacing.sm,
-      borderRadius: radius.md,
-      backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
-    dashText: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
   });

@@ -23,6 +23,10 @@ export type ColorScheme = {
   success: string;
   warning: string;
   danger: string;
+  /** אדום כהה לטקסט של פעולה הרסנית (בלי מסגרת ובלי מילוי בוהק) */
+  dangerText: string;
+  /** רקע ורוד בהיר לפעולה הרסנית מודגשת */
+  dangerSoft: string;
 };
 
 export type PaletteId = 'teal' | 'indigo' | 'ocean' | 'forest' | 'sunset' | 'graphite';
@@ -50,12 +54,16 @@ const STATUS_LIGHT = {
   success: '#15803D',
   warning: '#B45309',
   danger: '#DC2626',
+  dangerText: '#B91C1C',
+  dangerSoft: '#FDECEC',
 } as const;
 
 const STATUS_DARK = {
   success: '#4ADE80',
   warning: '#FBBF24',
   danger: '#F87171',
+  dangerText: '#FCA5A5',
+  dangerSoft: '#3A1A1C',
 } as const;
 
 /** ניטרליים משותפים — אפור־כחלחל (slate) קריר. */
