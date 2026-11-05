@@ -30,6 +30,8 @@ export type SessionMark = {
   date: string;
   status: 'canceled' | 'held' | 'removed' | 'moved';
   reason?: string;
+  /** מזהה הסיבה מהרשימה הגלובלית (lib/cancelReasons.ts), כשנבחרה ממנה */
+  reasonId?: string;
   /** במפגש שהועבר ('moved') — התאריך החדש */
   movedTo?: string;
   /** מתי סומן (מילישניות) */
@@ -39,6 +41,8 @@ export type SessionMark = {
 export type Cancellation = {
   /** סיבת הביטול לתצוגה ("ראש השנה", "המרצה חולה"…) — ריק כשלא צוינה */
   reason: string;
+  /** מזהה הסיבה מהרשימה הגלובלית, אם נשמר */
+  reasonId?: string;
   /** בוטל אוטומטית בגלל חג / שבתון */
   auto: boolean;
   /**
@@ -131,8 +135,10 @@ export function cancelIndex(marks: readonly SessionMark[], settings: HolidaySett
   const byKey = new Map(marks.map((m) => [keyOf(m.courseId, m.date), m]));
   return (courseId, date, explicit) => {
     const mark = byKey.get(keyOf(courseId, date));
-    if (mark?.status === 'canceled') return { reason: mark.reason?.trim() ?? '', auto: false, kind: 'canceled' };
-    if (mark?.status === 'removed') return { reason: mark.reason?.trim() ?? '', auto: false, kind: 'removed' };
+    if (mark?.status === 'canceled')
+      return { reason: mark.reason?.trim() ?? '', reasonId: mark.reasonId, auto: false, kind: 'canceled' };
+    if (mark?.status === 'removed')
+      return { reason: mark.reason?.trim() ?? '', reasonId: mark.reasonId, auto: false, kind: 'removed' };
     if (mark?.status === 'moved' && mark.movedTo) {
       return { reason: `הועבר ל־${shortDate(mark.movedTo)}`, auto: false, kind: 'moved', movedTo: mark.movedTo };
     }
@@ -189,6 +195,7 @@ export async function setSessionMark(
   status: SessionMark['status'] | null,
   reason?: string,
   movedTo?: string,
+  reasonId?: string,
 ): Promise<void> {
   const list = (await loadSessionMarks()).filter((m) => keyOf(m.courseId, m.date) !== keyOf(courseId, date));
   if (status) {
@@ -197,6 +204,7 @@ export async function setSessionMark(
       date,
       status,
       reason: reason?.trim() || undefined,
+      reasonId: reason?.trim() ? reasonId : undefined,
       movedTo: status === 'moved' ? movedTo : undefined,
       at: Date.now(),
     });
@@ -209,16 +217,16 @@ export async function setSessionMark(
  * "מחיקת המפגש מהתכנון": המפגש לא נספר בפוטנציאל ובצפי, ומוסתר מהלו״ז.
  * אפשרי גם על מפגש שלא בוטל קודם. הסיבה (אם הייתה) נשמרת.
  */
-export function removeFromPlan(courseId: string, date: string, reason?: string): Promise<void> {
-  return setSessionMark(courseId, date, 'removed', reason);
+export function removeFromPlan(courseId: string, date: string, reason?: string, reasonId?: string): Promise<void> {
+  return setSessionMark(courseId, date, 'removed', reason, undefined, reasonId);
 }
 
 /**
  * "החזרה לתכנון" של מפגש שנמחק מהתכנון: אם היה לו סיבת ביטול — חוזר להיות
  * "בוטל" (בפוטנציאל, לא בצפי); אחרת חוזר להיות מפגש רגיל.
  */
-export function returnToPlan(courseId: string, date: string, reason?: string): Promise<void> {
-  return setSessionMark(courseId, date, reason?.trim() ? 'canceled' : null, reason);
+export function returnToPlan(courseId: string, date: string, reason?: string, reasonId?: string): Promise<void> {
+  return setSessionMark(courseId, date, reason?.trim() ? 'canceled' : null, reason, undefined, reasonId);
 }
 
 /** העברת מפגש לתאריך אחר — נשמר "הועבר ל…" במקור ו"הועבר מ…" ביעד. */

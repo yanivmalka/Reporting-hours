@@ -207,10 +207,10 @@ export function potentialSessions(
   start: string,
   end: string,
   cancel: CancelIndex = currentCancel(),
-): { date: string; canceled: boolean }[] {
+): { date: string; canceled: boolean; cancel: Cancellation | null }[] {
   return courseSessions(course, start, end, cancel)
     .filter((s) => !s.cancel || keptInPotential(s.cancel))
-    .map((s) => ({ date: s.date, canceled: s.cancel != null }));
+    .map((s) => ({ date: s.date, canceled: s.cancel != null, cancel: s.cancel }));
 }
 
 /** דקות עבודה מתוכננות למקום עבודה בטווח תאריכים — לפי הקורסים שלו. */

@@ -377,13 +377,14 @@ export default function CourseFormScreen() {
   function planAction(dot: SessionDot, remove: boolean) {
     if (!id) return;
     const reason = dot.cancel?.reason;
+    const reasonId = dot.cancel?.reasonId;
     const done = (msg: string) => {
       setMarksTick((t) => t + 1);
       setPicked(null);
       showToast(msg);
     };
     if (!remove) {
-      void returnToPlan(id, dot.date, reason).then(() => done('המפגש הוחזר לתכנון'));
+      void returnToPlan(id, dot.date, reason, reasonId).then(() => done('המפגש הוחזר לתכנון'));
       return;
     }
     confirm({
@@ -391,7 +392,7 @@ export default function CourseFormScreen() {
       message: 'המפגש לא ייספר בפוטנציאל ובצפי, ולא יופיע בלו״ז. אפשר להחזיר אותו מכאן.',
       confirmLabel: 'מחיקת המפגש מהתכנון',
       onConfirm: async () => {
-        await removeFromPlan(id, dot.date, reason);
+        await removeFromPlan(id, dot.date, reason, reasonId);
         done('המפגש נמחק מהתכנון');
       },
     });

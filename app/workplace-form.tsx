@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Animated, ScrollView, StyleSheet, View } from 'react-native';
 import { FoldChevron } from '../components/Chevrons';
+import { SelectField } from '../components/SelectField';
+import { CANCEL_PAY_LABELS, useCancelReasons, type CancelPayKind } from '../lib/cancelReasons';
 import { formatShekels } from '../lib/travel';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
@@ -58,7 +60,12 @@ import { EnterChevron } from '../components/Chevrons';
 /** איש קשר בטופס — כל השדות כמחרוזות */
 type ContactRow = { id: string; description: string; name: string; phone: string; email: string };
 
+/** כלל תשלום על ביטול בטופס — הערך כמחרוזת לעריכה חופשית. */
+type CancelPayRow = { kind: CancelPayKind; value: string };
+
 type FormState = {
+  /** כלל תשלום על ביטול, לכל סיבה (מזהה) */
+  cancelPay: Record<string, CancelPayRow>;
   name: string;
   address: string;
   contacts: ContactRow[];
@@ -90,18 +97,19 @@ type Errors = Partial<Record<keyof FormState, string>> & { contactErrors?: Recor
  * ונסיעות · דוחות שכר · ניהול. בעריכה — קבוצות מתקפלות עם שורת תקציר;
  * ביצירה — וויזארד, צעד לכל קבוצה.
  */
-type GroupKey = 'general' | 'pay' | 'courses' | 'arrival' | 'payroll' | 'manage';
+type GroupKey = 'general' | 'pay' | 'cancel' | 'courses' | 'arrival' | 'payroll' | 'manage';
 const GROUP_TITLES: Record<GroupKey, string> = {
   general: 'כללי',
   pay: 'שכר ותשלום',
+  cancel: 'ביטולים',
   courses: 'קורסים',
   arrival: 'הגעה ונסיעות',
   payroll: 'דוחות שכר',
   manage: 'ניהול',
 };
-const EDIT_GROUPS: GroupKey[] = ['general', 'pay', 'courses', 'arrival', 'payroll', 'manage'];
+const EDIT_GROUPS: GroupKey[] = ['general', 'pay', 'cancel', 'courses', 'arrival', 'payroll', 'manage'];
 /** ביצירה: קורסים וניהול — רק אחרי שמירה. */
-const NEW_STEPS: GroupKey[] = ['general', 'pay', 'arrival', 'payroll'];
+const NEW_STEPS: GroupKey[] = ['general', 'pay', 'cancel', 'arrival', 'payroll'];
 /** לאיזו קבוצה שייכת כל שגיאה (לפתיחת הקבוצה / לחזרה לצעד). */
 const ERROR_GROUP: Partial<Record<string, GroupKey>> = {
   name: 'general',
@@ -119,6 +127,7 @@ const ERROR_GROUP: Partial<Record<string, GroupKey>> = {
   taxiNightTime: 'arrival',
   payrollEmail: 'payroll',
   ccEmails: 'payroll',
+  cancelPay: 'cancel',
 };
 const groupsWithErrors = (e: Errors): GroupKey[] =>
   [...new Set(Object.entries(e).filter(([, v]) => Boolean(v)).map(([k]) => ERROR_GROUP[k] ?? 'general'))];
@@ -136,6 +145,9 @@ const ARRIVAL_OPTIONS = (Object.keys(ARRIVAL_MODE_LABELS) as ArrivalMode[])
 function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
   const reminder = d.taxi?.reminder ?? DEFAULT_TAXI_REMINDER;
   return {
+    cancelPay: Object.fromEntries(
+      Object.entries(d.cancelPay ?? {}).map(([k, r]) => [k, { kind: r.kind, value: r.value != null ? String(r.value) : '' }]),
+    ),
     name: d.name,
     address: d.address ?? '',
     contacts: (d.contacts ?? []).map((c) => ({
@@ -210,6 +222,7 @@ export default function WorkplaceFormScreen() {
   /** מה יימחק עם מקום העבודה, והאם מותר (דוח שנשלח / שולם — רק ארכיון) */
   const [deletion, setDeletion] = useState<WorkplaceDeletion | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  const reasons = useCancelReasons();
   /** ביצירה: הצעד בוויזארד */
   const [wizStep, setWizStep] = useState(0);
   /** בעריכה: הקבוצות הפתוחות. "עריכת כתובות" מדוח השכר (?focus=payroll) — דוחות שכר פתוחה */
@@ -428,6 +441,11 @@ export default function WorkplaceFormScreen() {
         form.arrivalMode === 'public_transport'
           ? parseNum(form.tripsPerDay)
           : 0,
+      cancelPay: Object.fromEntries(
+        Object.entries(form.cancelPay)
+          .filter(([, r]) => r.kind !== 'none')
+          .map(([k, r]) => [k, r.kind === 'full' ? { kind: r.kind } : { kind: r.kind, value: parseNum(r.value) || 0 }]),
+      ),
       taxi: isTaxi(form.arrivalMode)
         ? {
             phone: form.taxiPhone.trim(),
@@ -513,6 +531,10 @@ export default function WorkplaceFormScreen() {
         ]
           .filter(Boolean)
           .join(' · ');
+      }
+      case 'cancel': {
+        const paid = reasons.filter((r) => (form.cancelPay[r.id]?.kind ?? 'none') !== 'none');
+        return paid.length === 0 ? 'ללא תשלום על ביטולים' : `בתשלום: ${paid.map((r) => r.name.trim()).join(', ')}`;
       }
       case 'courses':
         return courses.length === 0 ? 'אין קורסים' : courses.length === 1 ? 'קורס אחד' : `${courses.length} קורסים`;
@@ -935,6 +957,41 @@ export default function WorkplaceFormScreen() {
               />
             </FormField>
             </Animated.View>
+          ),
+          cancel: (
+            <>
+              <Text style={styles.courseMeta}>
+                כמה המוסד משלם על מפגש שבוטל, לפי סיבת הביטול. את רשימת הסיבות עורכים ב"חגים וחופשות".
+              </Text>
+              {reasons
+                .filter((r) => r.name.trim())
+                .map((r) => {
+                  const row = form.cancelPay[r.id] ?? { kind: 'none' as CancelPayKind, value: '' };
+                  const setRow = (patch: Partial<CancelPayRow>) =>
+                    set('cancelPay', { ...form.cancelPay, [r.id]: { ...row, ...patch } });
+                  return (
+                    <FormField key={r.id} label={r.name.trim()}>
+                      <SelectField<CancelPayKind>
+                        title={`תשלום על ביטול — ${r.name.trim()}`}
+                        value={row.kind}
+                        options={(Object.keys(CANCEL_PAY_LABELS) as CancelPayKind[]).map((k) => ({
+                          value: k,
+                          label: CANCEL_PAY_LABELS[k],
+                        }))}
+                        onChange={(kind) => setRow({ kind })}
+                      />
+                      {row.kind === 'percent' || row.kind === 'fixed' ? (
+                        <TextField
+                          value={row.value}
+                          onChangeText={(t) => setRow({ value: t.replace(/[^\d.]/g, '') })}
+                          placeholder={row.kind === 'percent' ? 'אחוז מהשכר המתוכנן (למשל 50)' : 'סכום למפגש ב־₪'}
+                          numeric
+                        />
+                      ) : null}
+                    </FormField>
+                  );
+                })}
+            </>
           ),
           courses: (
             <>

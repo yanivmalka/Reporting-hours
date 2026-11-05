@@ -15,11 +15,12 @@
 
 | ישות | קובץ | מפתח |
 |---|---|---|
-| מקום עבודה (כולל `archivedAt`, `deletedAt`, `trashed`, `termsHistory`, `colorIndex`) | `lib/workplaces.ts` | `reporting-hours/workplaces/v1` |
+| מקום עבודה (כולל `archivedAt`, `deletedAt`, `trashed`, `termsHistory`, `colorIndex`, `cancelPay`) | `lib/workplaces.ts` | `reporting-hours/workplaces/v1` |
 | דיווח (`WorkReport`, עם `courseId` אופציונלי) | `lib/reports.ts` | `reporting-hours/reports/v1` |
 | קורס מחזורי | `lib/courses.ts` | `reporting-hours/courses/v1` |
 | סימוני מפגש (`canceled` / `held`) | `lib/sessions.ts` | `reporting-hours/sessions/v1` |
 | הגדרות ביטול אוטומטי בחגים | `lib/sessions.ts` | `reporting-hours/holiday-cancel/v2` |
+| סיבות ביטול (רשימה גלובלית) | `lib/cancelReasons.ts` | `reporting-hours/cancel-reasons/v1` |
 | סטטוס דוחות שכר (נשלח / שולם) | `lib/payroll.ts` | `reporting-hours/payroll/v1` |
 | מונה דקות מצטברות | `lib/accumulated.ts` | `reporting-hours/accumulated/v2` |
 | אופן פדיון דקות | `lib/redeem.ts` | `reporting-hours/redeem-mode/v1` |
@@ -45,6 +46,12 @@
 - **השיעור לא התקיים**: במסך התצוגה (`app/report-view.tsx`) יש כפתור "השיעור לא התקיים — סימון כבוטל", שמופיע רק כשהדיווח משויך לקורס: לפי `courseId` (גם אם הקורס נערך ולא מתקיים עוד בתאריך), ובדיווח ישן בלי מזהה — לפי קורסי אותו יום. הכפתור פותח את `SessionCancelDialog`, ובאישור המפגש מסומן כמבוטל, הדיווח נמחק והדקות שהעביר למונה יורדות.
 - **דיווח שגוי סתם**: "מחיקת הדיווח" במסך התצוגה (`app/report-view.tsx`), וגם בשלב הסיכום של אשף העריכה (`app/report.tsx`). המחיקה לצמיתות, בלי אשפה.
 - **נשלח לשכר**: מבטלים קודם את השליחה בדוח השכר. **שולם**: הדיווח נעול לצמיתות.
+
+## סיבות ביטול ותשלום על ביטול
+
+- רשימת סיבות גלובלית (`lib/cancelReasons.ts`), נערכת ב"חגים וחופשות". סימון ביטול שומר את טקסט הסיבה ואת `reasonId`.
+- כלל תשלום לכל מוסד ולכל סיבה (`Workplace.cancelPay`, בקבוצה "ביטולים" בעריכת מקום העבודה): ללא · מלא · אחוז · סכום קבוע (`canceledSessionPay`).
+- מפגש מבוטל בתשלום: שורה בדוח השכר וסיכום לפי סיבה (`PayrollReport.canceled`, `canceledByReason`), כלול ב־`pay`, בצפי (`expectedFor`) ובפוטנציאל.
 
 ## מחיקה, ארכיון ואשפה
 

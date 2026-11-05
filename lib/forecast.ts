@@ -15,6 +15,7 @@
  *   מפגשים שהוסרו מהפוטנציאל, הועברו לתאריך אחר או חלים בחג — לא בשניהם.
  * המודול טהור — בלי אחסון ובלי React.
  */
+import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { potentialSessions, sessionMinutes, type Course } from './courses';
 import { currentPayPeriod, expectedPaymentDate, isoDate, totalsFor, type PayPeriod } from './dashboard';
@@ -88,7 +89,11 @@ function amountFor(
   for (const c of courses) {
     if (c.workplaceId !== w.id) continue;
     for (const s of potentialSessions(c, period.start, period.end)) {
-      if (withoutCanceled && s.canceled) continue;
+      // צפי: מפגש שבוטל יורד — חוץ מהחלק שהמוסד משלם עליו לפי סיבת הביטול.
+      if (withoutCanceled && s.canceled) {
+        pay += canceledSessionPay(w, c, s.date, s.cancel, basis);
+        continue;
+      }
       dates.add(s.date);
       const at = workplaceAt(w, s.date);
       if (at.paymentType === 'hourly') {

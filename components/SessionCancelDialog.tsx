@@ -25,9 +25,8 @@ import { Button } from './Button';
 import { Pressable } from './Pressable';
 import { TextField } from './TextField';
 import { useToast } from './Toast';
+import { useCancelReasons } from '../lib/cancelReasons';
 
-/** סיבות נפוצות — לבחירה מהירה. */
-const QUICK_REASONS = ['מחלה', 'ביטול מצד המוסד', 'שביתה', 'מבחנים', 'אירוע מיוחד'];
 
 export type SessionCancelRequest = {
   course: Pick<Course, 'id' | 'name'>;
@@ -62,6 +61,9 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
   const styles = useStyles(makeStyles);
   const { showToast } = useToast();
   const [reason, setReason] = useState('');
+  // הסיבות מהרשימה הגלובלית (חגים וחופשות → סיבות ביטול)
+  const reasons = useCancelReasons();
+  const reasonId = reasons.find((r) => r.name.trim() === reason.trim())?.id;
   const [removeToo, setRemoveToo] = useState(false);
   const [busy, setBusy] = useState(false);
   const canceled = request.cancel ?? null;
@@ -101,14 +103,14 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
               <Text style={styles.message}>מפגש מבוטל לא יופיע כדיווח חסר ויורד מהצפי.</Text>
               <TextField value={reason} onChangeText={setReason} placeholder="סיבת הביטול (לא חובה)" />
               <View style={styles.chips}>
-                {QUICK_REASONS.map((r) => (
+                {reasons.filter((r) => r.name.trim()).map((r) => (
                   <Pressable
-                    key={r}
-                    onPress={() => setReason(r)}
+                    key={r.id}
+                    onPress={() => setReason(r.name.trim())}
                     accessibilityRole="button"
-                    style={({ pressed }) => [styles.chip, reason === r && styles.chipOn, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.chip, reason === r.name.trim() && styles.chipOn, pressed && styles.pressed]}
                   >
-                    <Text style={[styles.chipText, reason === r && styles.chipTextOn]}>{r}</Text>
+                    <Text style={[styles.chipText, reason === r.name.trim() && styles.chipTextOn]}>{r.name.trim()}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -160,7 +162,7 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
                   disabled={busy}
                   onPress={() =>
                     run(
-                      () => removeFromPlan(request.course.id, request.date, canceled.reason),
+                      () => removeFromPlan(request.course.id, request.date, canceled.reason, canceled.reasonId),
                       'המפגש נמחק מהתכנון',
                       true,
                     )
@@ -173,7 +175,7 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
                   disabled={busy}
                   onPress={() =>
                     run(
-                      () => returnToPlan(request.course.id, request.date, canceled.reason),
+                      () => returnToPlan(request.course.id, request.date, canceled.reason, canceled.reasonId),
                       'המפגש הוחזר לתכנון',
                       true,
                     )
@@ -190,7 +192,15 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
                 loading={busy}
                 onPress={() =>
                   run(
-                    () => setSessionMark(request.course.id, request.date, removeToo ? 'removed' : 'canceled', reason),
+                    () =>
+                      setSessionMark(
+                        request.course.id,
+                        request.date,
+                        removeToo ? 'removed' : 'canceled',
+                        reason,
+                        undefined,
+                        reasonId,
+                      ),
                     removeToo ? 'המפגש נמחק מהתכנון' : 'המפגש סומן כבוטל',
                     true,
                   )
