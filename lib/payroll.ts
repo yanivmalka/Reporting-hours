@@ -6,8 +6,9 @@
  * - לכל דוח נשמר מצב: הופק (נוצר מייל) / נשלח (סומן ידנית).
  * - "ממתינים": חודשים שהסתיימו, שיש בהם דיווחים, והדוח שלהם טרם סומן כנשלח.
  */
+import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
-import { occursOn, type Course } from './courses';
+import { courseReport, courseSessions, occursOn, type Course } from './courses';
 import { currentPayPeriod, type PayPeriod } from './dashboard';
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
@@ -158,7 +159,21 @@ export type PayrollGroup = {
   netMinutes: number;
 };
 
+/** מפגש שבוטל בתקופה — לשורה בדוח השכר. */
+export type PayrollCanceled = {
+  date: string;
+  course: string;
+  /** סיבת הביטול כפי שנשמרה ("" — לא צוינה) */
+  reason: string;
+  /** הסכום שהמוסד משלם עליו לפי כלל הסיבה (0 — ללא תשלום) */
+  amount: number;
+};
+
 export type PayrollReport = {
+  /** מפגשים שבוטלו בתקופה (כולל סכום, אם המוסד משלם על הסיבה) */
+  canceled: PayrollCanceled[];
+  /** סך התשלום על ביטולים — כלול ב־pay */
+  canceledPay: number;
   workplace: Workplace;
   period: PayPeriod;
   groups: PayrollGroup[];
@@ -236,8 +251,26 @@ export function buildPayrollReport(
   const redeemedPay =
     atEnd.paymentType === 'hourly' ? (Math.max(0, atEnd.rate) * redeemed) / ACADEMIC_HOUR_MINUTES : 0;
   const sessionsMinutes = [...groups.values()].reduce((s, g) => s + g.netMinutes, 0);
+  // מפגשים שבוטלו (ונשארו בפוטנציאל) ולא דווחו — שורה לכל אחד, עם התשלום לפי הסיבה.
+  const canceled: PayrollCanceled[] = [];
+  for (const c of courses) {
+    if (c.workplaceId !== workplace.id) continue;
+    for (const s of courseSessions(c, period.start, period.end)) {
+      if (s.cancel?.kind !== 'canceled' || courseReport(c, s.date, mine)) continue;
+      canceled.push({
+        date: s.date,
+        course: c.name,
+        reason: s.cancel.reason,
+        amount: canceledSessionPay(workplace, c, s.date, s.cancel, basis),
+      });
+    }
+  }
+  canceled.sort((a, b) => a.date.localeCompare(b.date));
+  const canceledPay = canceled.reduce((n, x) => n + x.amount, 0);
   return {
-    pay: workplacePay(workplace, mine, basis) + redeemedPay,
+    canceled,
+    canceledPay,
+    pay: workplacePay(workplace, mine, basis) + redeemedPay + canceledPay,
     redeemedMinutes: redeemed,
     rates: rates.length ? rates : [workplace.rate],
     paymentType,
@@ -250,6 +283,19 @@ export function buildPayrollReport(
     days,
     travel,
   };
+}
+
+/** סיכום הביטולים לפי סיבה. */
+export function canceledByReason(report: Pick<PayrollReport, 'canceled'>): { reason: string; count: number; amount: number }[] {
+  const map = new Map<string, { reason: string; count: number; amount: number }>();
+  for (const c of report.canceled) {
+    const reason = c.reason || 'ללא סיבה';
+    const r = map.get(reason) ?? { reason, count: 0, amount: 0 };
+    r.count++;
+    r.amount += c.amount;
+    map.set(reason, r);
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count);
 }
 
 // ───────────────────────── טקסט המייל ─────────────────────────
@@ -313,6 +359,18 @@ export function payrollBody(report: PayrollReport, profile?: Profile): string {
         academic(s.netMinutes),
       ];
       lines.push(row.map((c, k) => pad(c, W[k])).join(' | '));
+    }
+  }
+  if (report.canceled.length) {
+    lines.push('');
+    lines.push(`■ מפגשים שבוטלו — ${report.canceled.length}`);
+    for (const c of report.canceled) {
+      lines.push(
+        `${ddmmyyyy(c.date)} · ${c.course} · ${c.reason || 'ללא סיבה'}${c.amount > 0 ? ` · ${formatShekels(Math.round(c.amount))}` : ''}`,
+      );
+    }
+    for (const r of canceledByReason(report)) {
+      lines.push(`סה״כ ${r.reason}: ${r.count}${r.amount > 0 ? ` · ${formatShekels(Math.round(r.amount))}` : ''}`);
     }
   }
   if (report.redeemedMinutes > 0) {

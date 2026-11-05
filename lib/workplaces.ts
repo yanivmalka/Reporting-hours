@@ -110,6 +110,11 @@ export type Workplace = {
    * (theme/workplaceColors.ts). נקבע אוטומטית למקום חדש ולנתונים ישנים.
    */
   colorIndex?: number;
+  /**
+   * כלל תשלום על מפגש שבוטל, לכל סיבה (לפי מזהה הסיבה ב־lib/cancelReasons.ts).
+   * חסר — ללא תשלום.
+   */
+  cancelPay?: Record<string, { kind: 'none' | 'full' | 'percent' | 'fixed'; value?: number }>;
 };
 
 /** התנאים הכספיים של מקום עבודה — אלה שמשתנים לאורך זמן ונשמרים בהיסטוריה. */
