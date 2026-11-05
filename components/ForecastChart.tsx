@@ -31,7 +31,8 @@ const BAR_H = 140;
 /** מרווח מעל הערך המקסימלי בפועל — שליש מגובהו */
 export const HEADROOM = 4 / 3;
 
-export const money = (n: number) => `${Math.round(n).toLocaleString('en-US')} ₪`;
+export { money } from '../lib/travel';
+import { money } from '../lib/travel';
 
 /** אחוז מימוש הפוטנציאל, או null כשאין תכנון. */
 /** סכום מקוצר מעל עמודה צרה: "42.2K", "950". */

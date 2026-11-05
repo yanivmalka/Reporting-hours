@@ -9,7 +9,7 @@ import { ForecastChart, HEADROOM, realization } from '../components/ForecastChar
 import { useFlash } from '../components/useFlash';
 import { useSwipe } from '../components/useSwipe';
 import { WorkplaceTile } from '../components/WorkplaceTile';
-import { SessionDots, SessionDotsLegend, sessionDots } from '../components/SessionDots';
+import { SessionDotsByMonth, SessionDotsLegend, sessionDots } from '../components/SessionDots';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -42,7 +42,7 @@ import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { usePayBasis } from '../lib/payBasis';
 import { todayISO } from '../lib/time';
 import { loadReports, type WorkReport } from '../lib/reports';
-import { formatShekels } from '../lib/travel';
+import { formatShekels, money } from '../lib/travel';
 import { loadWorkplaces, paymentTermsLabel, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -56,10 +56,6 @@ const TREND_MONTHS = 6;
 
 const MONTHS_LONG = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
-/** ₪ מעוגל לשקל שלם עם מפריד אלפים, למשל "12,480 ₪". */
-function money(amount: number): string {
-  return `${Math.round(amount).toLocaleString('en-US')} ₪`;
-}
 
 /** שעות עם ספרה אחת אחרי הנקודה (בלי ".0"). */
 function hoursText(hours: number): string {
@@ -343,7 +339,7 @@ export default function DashboardScreen() {
         {groups.map((g) => (
           <View key={g.course.id} style={styles.sessionGroup}>
             <Text style={styles.sessionCourse}>{g.course.name}</Text>
-            <SessionDots
+            <SessionDotsByMonth
               dots={g.dots}
               onPress={(d) =>
                 d.reportId

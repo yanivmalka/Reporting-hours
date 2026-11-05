@@ -16,7 +16,9 @@ import { loadReports } from '../lib/reports';
 import { loadWorkplaces, missingTaxCoordination } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
 import { useThemedStyles } from '../theme/useThemedStyles';
+import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { EnterChevron } from './Chevrons';
 
 type Alert = { key: string; icon: string; title: string; sub: string; href: Href; tone: 'warn' | 'danger' };
 
@@ -28,6 +30,7 @@ const names = (list: string[]) => {
 export function PayrollReminder() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const [alerts, setAlerts] = useState<Alert[]>([]);
 
   useFocusEffect(
@@ -109,7 +112,7 @@ export function PayrollReminder() {
               {a.sub}
             </Text>
           </View>
-          <Text style={[styles.chevron, a.tone === 'danger' && styles.chevronDanger]}>‹</Text>
+          <EnterChevron size={24} color={a.tone === 'danger' ? colors.danger : colors.warning} />
         </Pressable>
       ))}
     </View>

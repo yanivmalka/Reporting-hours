@@ -264,7 +264,8 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     chipOn: { backgroundColor: c.brandLight, borderColor: c.brand },
     chipText: { fontSize: 13, color: c.textMuted },
     chipTextOn: { color: c.brand, fontWeight: '700' },
-    actions: { flexDirection: layout.rowStart, gap: spacing.sm, marginTop: spacing.sm },
+    // כפתורים זה מתחת לזה, ברוחב מלא; הפעולה הראשית (האחרונה בקוד) למעלה.
+    actions: { flexDirection: 'column-reverse', gap: spacing.sm, marginTop: spacing.sm },
     option: {
       flexDirection: layout.rowStart,
       alignItems: 'center',
@@ -280,5 +281,5 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     optionTexts: { flex: 1 },
     optionTitle: { fontSize: 14, fontWeight: '700', color: c.text, textAlign: layout.textStart },
     optionSub: { fontSize: 12, color: c.textMuted, textAlign: layout.textStart },
-    action: { flex: 1 },
+    action: {},
   });

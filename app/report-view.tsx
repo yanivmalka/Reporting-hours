@@ -29,6 +29,7 @@ import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { EnterChevron } from '../components/Chevrons';
 
 const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -153,7 +154,7 @@ export default function ReportViewScreen() {
             <>
               <Text style={styles.label}>{label}</Text>
               <Text style={[styles.value, onPress && styles.valueLink]}>{value}</Text>
-              {onPress ? <Text style={styles.chevron}>‹</Text> : null}
+              {onPress ? <EnterChevron /> : null}
             </>
           );
           const style = [styles.row, i === rows.length - 1 && styles.rowLast];

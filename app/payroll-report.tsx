@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Linking, Modal, Share, StyleSheet, View } from 'react-native';
+import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { Pressable } from '../components/Pressable';
@@ -9,11 +10,12 @@ import { TextField } from '../components/TextField';
 import { usePayBasis } from '../lib/payBasis';
 import { loadProfile, type Profile } from '../lib/profile';
 import { taxPercentOf, workplaceAt } from '../lib/workplaces';
+import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { loadCourses } from '../lib/courses';
-import { dateRange, shortDate } from '../lib/dashboard';
+import { dateRange, deadlineRelative, shortDate } from '../lib/dashboard';
 import {
   buildPayrollReport,
   expectedPayment,
@@ -32,7 +34,7 @@ import {
 } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
 import { formatShekels, hasTravelCost } from '../lib/travel';
-import { formatDateWithHebrew, formatISODate } from '../lib/time';
+import { formatISODate } from '../lib/time';
 import { hebrewDate } from '../lib/hebrewDate';
 import { loadWorkplaces } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
@@ -114,7 +116,8 @@ export default function PayrollReportScreen() {
   }
 
   const { workplace, period } = report;
-  const closed = period.end < new Date().toISOString().slice(0, 10);
+  const deadline = deadlineRelative(period.end);
+  const closed = deadline.late;
 
   async function setSent(sent: boolean) {
     const map = await updatePayrollStatus(workplace.id, period.start, { sentAt: Date.now() });
@@ -195,9 +198,10 @@ export default function PayrollReportScreen() {
         <Pressable
           onPress={() => router.push({ pathname: '/workplace', params: { id: workplace.id } })}
           accessibilityRole="link"
-          style={({ pressed }) => pressed && { opacity: 0.6 }}
+          style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4 }, pressed && { opacity: 0.6 }]}
         >
-          <Text style={styles.title}>{workplace.name} ‹</Text>
+          <Text style={[styles.title, { flexShrink: 1 }]}>{workplace.name}</Text>
+          <EnterChevron size={22} />
         </Pressable>
         <Text style={styles.subtitle}>
           {periodTitle(period)} · {dateRange(period.start, period.end, true)}
@@ -209,14 +213,14 @@ export default function PayrollReportScreen() {
           ]}
         >
           {status.sentAt
-            ? `✓ נשלח ב־${formatDateWithHebrew(new Date(status.sentAt).toISOString().slice(0, 10), false)}`
+            ? <>✓ נשלח ב־<DateText iso={new Date(status.sentAt).toISOString().slice(0, 10)} /></>
             : status.generatedAt
               ? 'נוצר מייל — טרם סומן כנשלח'
               : closed
                 ? `לא נשלח עד היום האחרון לדיווח (${shortDate(period.end)}) — התשלום יידחה לחודש הבא`
-                : period.daysToPayday <= 1
+                : deadline.days === 0
                   ? 'היום האחרון לדיווח שכר — יש לשלוח היום'
-                  : `יום אחרון לדיווח: ${shortDate(period.end)} · עוד ${period.daysToPayday - 1} ימים`}
+                  : `יום אחרון לדיווח: ${shortDate(period.end)} · ${deadline.text}`}
         </Text>
       </View>
 
@@ -326,8 +330,8 @@ export default function PayrollReportScreen() {
           <Text style={styles.label}>תשלום</Text>
           <Text style={[styles.email, status.paidAt ? styles.statusSent : null]}>
             {status.paidAt
-              ? `✓ שולם ${formatShekels(status.paidAmount ?? 0)} ב־${formatDateWithHebrew(status.paidAt, false)}`
-              : `טרם שולם · צפוי עד ${formatDateWithHebrew(expected, false)}`}
+              ? <>✓ שולם {formatShekels(status.paidAmount ?? 0)} ב־<DateText iso={status.paidAt} /></>
+              : <>טרם שולם · צפוי עד <DateText iso={expected} /></>}
           </Text>
           <Button
             label={status.paidAt ? 'עריכת התשלום' : 'סימון כשולם'}
@@ -342,7 +346,7 @@ export default function PayrollReportScreen() {
           <Text style={styles.label}>ביטולים קודמים</Text>
           {status.cancellations.map((c) => (
             <Text key={c.at} style={styles.cc}>
-              {formatDateWithHebrew(new Date(c.at).toISOString().slice(0, 10), false)} — {c.reason}
+              <DateText iso={new Date(c.at).toISOString().slice(0, 10)} /> — {c.reason}
             </Text>
           ))}
         </View>

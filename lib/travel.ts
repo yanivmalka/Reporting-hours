@@ -117,14 +117,17 @@ export function travelBreakdown(
 }
 
 /**
- * הצגת סכום ב־₪ כטקסט קצר, למשל "48 ₪" או "12.50 ₪".
- * שלמים מוצגים בלי שבר; אחרת שתי ספרות אחרי הנקודה.
+ * הפונקציה היחידה להצגת סכום ב־₪ — עם מפריד אלפים, למשל "45,252 ₪" או
+ * "12.50 ₪". שלמים מוצגים בלי שבר; אחרת שתי ספרות אחרי הנקודה.
  */
 export function formatShekels(amount: number): string {
   const safe = Number.isFinite(amount) ? amount : 0;
   const rounded = Math.round(safe * 100) / 100;
   const text = Number.isInteger(rounded)
-    ? String(rounded)
-    : rounded.toFixed(2);
+    ? rounded.toLocaleString('en-US')
+    : rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${text} ₪`;
 }
+
+/** סכום מעוגל לשקל שלם, דרך formatShekels ("12,480 ₪"). */
+export const money = (amount: number): string => formatShekels(Math.round(Number.isFinite(amount) ? amount : 0));

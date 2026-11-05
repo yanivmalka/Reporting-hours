@@ -1,12 +1,13 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
+import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { DateField } from '../components/DatePicker';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
-import { formatDateWithHebrew, todayISO } from '../lib/time';
+import { todayISO } from '../lib/time';
 import { loadWorkplaces, setTaxCoordination, type Workplace } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
 import { useI18n } from '../lib/i18n';
@@ -45,7 +46,7 @@ export default function TaxScreen() {
       <View style={[styles.row, !sent && styles.rowMissing]}>
         <Text style={styles.name}>{w.name}</Text>
         <Text style={[styles.meta, sent ? styles.ok : styles.warn]}>
-          {sent ? `✓ נכלל בתיאום — נשלח ${formatDateWithHebrew(sent, false)}` : `לא נכלל בתיאום ${year}`}
+          {sent ? <>✓ נכלל בתיאום — נשלח <DateText iso={sent} /></> : `לא נכלל בתיאום ${year}`}
         </Text>
         {editing === w.id ? (
           <View style={styles.edit}>

@@ -144,7 +144,8 @@ export default function WorkplaceDetailScreen() {
     setReloadTick((n) => n + 1);
   }
 
-  const isOpen = (key: string, i: number) => open[key] ?? i === 0;
+  // רק התקופה הנוכחית פתוחה כברירת מחדל; השאר מקופלות.
+  const isOpen = (key: string, current: boolean) => open[key] ?? current;
 
   return (
     <Screen>
@@ -260,10 +261,10 @@ export default function WorkplaceDetailScreen() {
       ) : null}
 
       <Text style={styles.section}>דוחות שכר ודיווחים אחרונים</Text>
-      {forecasts.map((f, i) => {
+      {forecasts.map((f) => {
         const key = f.period.start;
         const missing = missingIn(f);
-        const expanded = isOpen(key, i);
+        const expanded = isOpen(key, f.status === 'open');
         const reportStep: StepState =
           f.status === 'open' || missing.length > 0 ? 'now' : f.status === 'planned' ? 'todo' : 'done';
         const sendStep: StepState = f.sentAt ? 'done' : f.status === 'closed' ? 'now' : 'todo';

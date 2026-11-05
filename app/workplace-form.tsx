@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { formatShekels } from '../lib/travel';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
@@ -50,6 +51,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplacePalette } from '../theme/workplaceColors';
+import { EnterChevron } from '../components/Chevrons';
 
 /** מצב הטופס — שדות מספריים נשמרים כמחרוזת כדי לאפשר עריכה חופשית. */
 /** איש קשר בטופס — כל השדות כמחרוזות */
@@ -759,11 +761,11 @@ export default function WorkplaceFormScreen() {
             {[...original.termsHistory].reverse().map((v) => (
               <Text key={v.until} style={styles.courseMeta}>
                 עד {formatISODate(v.until)}:{' '}
-                {v.paymentType === 'monthly' ? `חודשי ${v.rate} ₪` : `${v.rate} ₪ לשעה`}
+                {v.paymentType === 'monthly' ? `חודשי ${formatShekels(v.rate)}` : `${formatShekels(v.rate)} לשעה`}
                 {' · '}
                 {ARRIVAL_MODE_LABELS[v.arrivalMode]}
                 {v.arrivalMode === 'public_transport'
-                  ? ` ${v.travelCostPerDirection} ₪ × ${v.tripsPerDay}`
+                  ? ` ${formatShekels(v.travelCostPerDirection)} × ${v.tripsPerDay}`
                   : ''}
                 {v.taxPercent ? ` · מס ${v.taxPercent}%` : ''}
               </Text>
@@ -870,7 +872,7 @@ export default function WorkplaceFormScreen() {
                   style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
                 >
                   <Text style={styles.linkRowText}>זה מקום הדגמה — אפשר להסיר אותו ב"איפוס נתוני הדגמה"</Text>
-                  <Text style={styles.linkRowChevron}>‹</Text>
+                  <EnterChevron />
                 </Pressable>
               ) : null}
               {original
@@ -889,7 +891,7 @@ export default function WorkplaceFormScreen() {
                         <Text style={styles.linkRowText}>
                           דוח שכר {periodTitle(period)} · {p.paid ? 'שולם' : 'נשלח'}
                         </Text>
-                        <Text style={styles.linkRowChevron}>‹</Text>
+                        <EnterChevron />
                       </Pressable>
                     );
                   })
