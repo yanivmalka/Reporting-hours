@@ -17,8 +17,9 @@
  *                  ("הועבר מ…"), והפוטנציאל עובר איתו;
  *   - 'held'     — התקיים למרות חג.
  * ביטול אוטומטי בחג לא נכלל בפוטנציאל מלכתחילה (המפגש לא תוכנן).
- * חופשה מלוח החופשות (lib/vacations.ts, מצב "ביטול") — כמו חג: לא בפוטנציאל
- * ולא בצפי, מחושבת בכל טעינה ולא חלה על מפגש שכבר דווח, על מפגש נוסף או
+ * חופשה מלוח החופשות (lib/vacations.ts) — מצב "ביטול": כמו חג, לא בפוטנציאל
+ * ולא בצפי; מצב "הזזה": המפגש עובר לשבוע הפנוי הבא אחרי סוף הקורס ומוצג
+ * כ"הועבר". מחושבת בכל טעינה, ולא חלה על מפגש שכבר דווח, על מפגש נוסף או
  * מועבר, ועל מפגש שסומן "התקיים".
  *
  * כל מפגש שלא מתקיים (בוטל, הוסר, הועבר, חג) לא נחשב "דיווח חסר" ולא מקפיץ
@@ -27,12 +28,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { restDays, type RestDayKind } from './holidays';
 import { readJSON, writeJSON } from './storage';
+import { parseTime } from './time';
 import {
+  planShifts,
   readVacations,
   setVacationsCache,
   vacationOn,
   vacationReason,
   VACATIONS_KEY,
+  type ShiftCourse,
+  type ShiftPlan,
   type Vacation,
 } from './vacations';
 
@@ -148,8 +153,10 @@ export function autoCancelReason(date: string, settings: HolidaySettings): strin
 export type VacationContext = {
   vacations: readonly Vacation[];
   workplaceOf: (courseId: string) => string | undefined;
-  /** מפתחות "קורס@תאריך" של מפגשים שדווחו — חופשה לא חלה עליהם */
-  reported: ReadonlySet<string>;
+  /** האם מפגש של קורס בתאריך כבר דווח — חופשה לא חלה עליו */
+  reported: (courseId: string, date: string) => boolean;
+  /** ההזזות המחושבות של חופשות במצב "הזזה" */
+  shifts?: ShiftPlan;
 };
 
 /** בניית אינדקס ביטולים מהסימונים, מההגדרה ומלוח החופשות. */
@@ -169,8 +176,24 @@ export function cancelIndex(
       return { reason: `הועבר ל־${shortDate(mark.movedTo)}`, auto: false, kind: 'moved', movedTo: mark.movedTo };
     }
     if (mark?.status === 'held' || explicit) return null;
-    if (vac && !vac.reported.has(keyOf(courseId, date))) {
+    if (vac && !vac.reported(courseId, date)) {
       const v = vacationOn(vac.vacations, courseId, vac.workplaceOf(courseId), date);
+      if (v?.mode === 'shift') {
+        const to = vac.shifts?.movedTo.get(keyOf(courseId, date));
+        if (to) {
+          return {
+            reason: `הועבר ל־${shortDate(to.date)} · ${vacationReason(v)}`,
+            auto: true,
+            kind: 'moved',
+            movedTo: to.date,
+            vacationId: v.id,
+          };
+        }
+        // לא תוכנן מועד (למשל חג באותו יום) — חג קודם, אחרת כמו ביטול.
+        const holiday = autoCancelReason(date, settings);
+        if (holiday) return { reason: holiday, auto: true, kind: 'auto' };
+        return { reason: vacationReason(v), auto: true, kind: 'vacation', vacationId: v.id };
+      }
       if (v) return { reason: vacationReason(v), auto: true, kind: 'vacation', vacationId: v.id };
     }
     const holiday = autoCancelReason(date, settings);
@@ -179,13 +202,17 @@ export function cancelIndex(
 }
 
 /** בניית אינדקס ההעברות מהסימונים. */
-export function movesIndex(marks: readonly SessionMark[]): MovesIndex {
+export function movesIndex(marks: readonly SessionMark[], shifts?: ShiftPlan): MovesIndex {
   const byCourse = new Map<string, MovedIn[]>();
   for (const m of marks) {
     if (m.status !== 'moved' || !m.movedTo) continue;
     const list = byCourse.get(m.courseId) ?? [];
     list.push({ date: m.movedTo, from: m.date });
     byCourse.set(m.courseId, list);
+  }
+  // הזזות מחופשות במצב "הזזה" — כמו העברה ידנית.
+  for (const [courseId, moved] of shifts?.movedIn ?? []) {
+    byCourse.set(courseId, [...(byCourse.get(courseId) ?? []), ...moved]);
   }
   return (courseId) => byCourse.get(courseId) ?? [];
 }
@@ -207,30 +234,77 @@ export function currentMoves(): MovesIndex {
   return currentMovesIdx;
 }
 
+type ReportLite = {
+  workplaceId: string;
+  date: string;
+  start: string;
+  end: string;
+  note?: string;
+  courseId?: string;
+  extraKind?: string;
+};
+
+/**
+ * האם דיווח מכסה מפגש של קורס (באותו מקום ותאריך) — אותו כלל כמו `covers`
+ * ב־lib/courses: לפי `courseId`, ובדיווח ישן — לפי שם הקורס או חפיפה בשעות.
+ * מפגש נוסף לא מכסה את המפגש הקבוע.
+ */
+function reportCovers(c: { id: string; name: string; start: string; end: string }, r: ReportLite): boolean {
+  if (r.extraKind) return false;
+  if (r.courseId) return r.courseId === c.id;
+  if (r.note === c.name) return true;
+  const cs = parseTime(c.start) ?? 0;
+  const ce = parseTime(c.end) ?? 0;
+  const rs = parseTime(r.start) ?? 0;
+  const re = parseTime(r.end) ?? 0;
+  return rs < ce && re > cs;
+}
+
 // המפתחות נקראים ישירות מהאחסון (ולא דרך lib/courses / lib/reports) כדי שלא
 // ייווצר מעגל ייבוא — lib/courses קורא ל־loadCancelIndex.
 const COURSES_KEY = 'reporting-hours/courses/v1';
 const REPORTS_KEY = 'reporting-hours/reports/v1';
 
-async function loadVacationContext(): Promise<VacationContext> {
+async function loadVacationContext(
+  marks: readonly SessionMark[],
+  settings: HolidaySettings,
+): Promise<VacationContext> {
   const [vacations, courses, reports] = await Promise.all([
     readVacations(false),
-    readJSON<{ id: string; workplaceId: string }[]>(COURSES_KEY, []),
-    readJSON<{ courseId?: string; date: string }[]>(REPORTS_KEY, []),
+    readJSON<(ShiftCourse & { name: string; start: string; end: string })[]>(COURSES_KEY, []),
+    readJSON<ReportLite[]>(REPORTS_KEY, []),
   ]);
+  const byId = new Map(courses.map((c) => [c.id, c]));
   const wp = new Map(courses.map((c) => [c.id, c.workplaceId]));
-  const reported = new Set(reports.filter((r) => r.courseId).map((r) => keyOf(r.courseId as string, r.date)));
-  return { vacations, workplaceOf: (id) => wp.get(id), reported };
+  // דיווחים לפי מקום עבודה + תאריך — לבדיקת "כבר דווח" באותו כלל כמו covers ב־lib/courses.
+  const reportsAt = new Map<string, ReportLite[]>();
+  for (const r of reports) {
+    const k = `${r.workplaceId}@${r.date}`;
+    reportsAt.set(k, [...(reportsAt.get(k) ?? []), r]);
+  }
+  const reported = (courseId: string, date: string) => {
+    const c = byId.get(courseId);
+    if (!c) return false;
+    return (reportsAt.get(`${c.workplaceId}@${date}`) ?? []).some((r) => reportCovers(c, r));
+  };
+  const marked = new Set(marks.map((m) => keyOf(m.courseId, m.date)));
+  const manualMoves = movesIndex(marks);
+  const shifts = planShifts({
+    courses,
+    vacations,
+    isHoliday: (date) => autoCancelReason(date, settings) != null,
+    marked: (courseId, date) => marked.has(keyOf(courseId, date)),
+    reported,
+    movedIn: (courseId) => manualMoves(courseId).map((m) => m.date),
+  });
+  return { vacations, workplaceOf: (id) => wp.get(id), reported, shifts };
 }
 
 export async function loadCancelIndex(): Promise<CancelIndex> {
-  const [marks, holidays, vac] = await Promise.all([
-    loadSessionMarks(),
-    loadHolidaySettings(),
-    loadVacationContext(),
-  ]);
+  const [marks, holidays] = await Promise.all([loadSessionMarks(), loadHolidaySettings()]);
+  const vac = await loadVacationContext(marks, holidays);
   current = cancelIndex(marks, holidays, vac);
-  currentMovesIdx = movesIndex(marks);
+  currentMovesIdx = movesIndex(marks, vac.shifts);
   // רק אחרי שהאינדקס נבנה — כך מסך שמאזין לחופשות מחשב מחדש מול האינדקס החדש.
   setVacationsCache([...vac.vacations]);
   return current;
