@@ -101,6 +101,7 @@ function Chrome() {
               <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
               <Stack.Screen name="archive" options={{ title: t('nav.archive') }} />
               <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
+              <Stack.Screen name="holidays" options={{ title: t('nav.holidays') }} />
               <Stack.Screen name="data" options={{ title: t('nav.data') }} />
             </Stack>
           </View>

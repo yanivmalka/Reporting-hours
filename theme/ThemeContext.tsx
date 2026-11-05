@@ -100,8 +100,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     if (loaded) writeJSON(STORAGE_KEY, { paletteId, mode });
   }, [loaded, paletteId, mode]);
 
-  const resolvedScheme: 'light' | 'dark' =
-    mode === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : mode;
+  // תמיד בהיר: בורר בהיר/כהה/אוטומטי הוסר מהתפריט.
+  const resolvedScheme = 'light' as 'light' | 'dark';
+  void systemScheme;
 
   const value = useMemo<ThemeContextValue>(() => {
     const palette = getPalette(paletteId);

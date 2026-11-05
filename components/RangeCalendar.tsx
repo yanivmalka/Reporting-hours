@@ -8,6 +8,7 @@
  */
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { DayDot, DayDotsLegend, useDayStatus } from './DayDot';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
@@ -105,6 +106,7 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
           <Text style={styles.todayLink}>חזרה לחודש הנוכחי</Text>
         </Pressable>
       ) : null}
+      <DayDotsLegend />
     </View>
   );
 }
@@ -126,6 +128,7 @@ function MonthGrid({
   onTap: (day: string) => void;
 }) {
   const styles = useStyles(makeStyles);
+  const statusOf = useDayStatus();
   const heb = useShowHebrewDates();
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y, m - 1, 1).getDay();
@@ -165,12 +168,12 @@ function MonthGrid({
                   cell === today && !inRange && styles.dayToday,
                 ]}
               >
-                <Text style={[styles.dayText, isEdge && styles.dayTextEdge, count === 0 && styles.dayTextEmpty]}>
+                <Text style={[styles.dayText, count === 0 && styles.dayTextEmpty, isEdge && styles.dayTextEdge]}>
                   {Number(cell.slice(8))}
                 </Text>
                 {heb ? <Text style={[styles.dayHeb, isEdge && styles.dayTextEdge]}>{hebrewDay(cell)}</Text> : null}
               </View>
-              <Text style={[styles.count, count === 0 && styles.countHidden]}>{count || '·'}</Text>
+              <DayDot status={statusOf(cell)} />
             </Pressable>
           );
         })}

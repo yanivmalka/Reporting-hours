@@ -32,9 +32,6 @@ import {
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
-import { REST_DAY_KIND_LABELS, type RestDayKind } from '../lib/holidays';
-import { useHolidaySettings } from '../lib/sessions';
-import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { PAY_BASIS_LABELS, usePayBasis, type PayBasis } from '../lib/payBasis';
 import { useTheme } from '../theme/ThemeContext';
@@ -42,19 +39,6 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 
-/** סוגי הימים המיוחדים בהגדרות, עם פירוט. */
-const HOLIDAY_OPTIONS: { kind: RestDayKind; detail: string }[] = [
-  {
-    kind: 'yomTov',
-    detail: 'ראש השנה, יום הכיפורים, סוכות, שמחת תורה, פסח, שביעי של פסח, שבועות, יום העצמאות.',
-  },
-  {
-    kind: 'eve',
-    detail: 'ערב ראש השנה, ערב יום הכיפורים, ערב סוכות, הושענא רבה, ערב פסח, ערב שביעי של פסח, ערב שבועות.',
-  },
-  { kind: 'cholHamoed', detail: 'חול המועד סוכות וחול המועד פסח.' },
-  { kind: 'tishaBav', detail: 'ט׳ באב (נדחה ליום ראשון כשחל בשבת).' },
-];
 
 export default function SettingsScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -67,8 +51,6 @@ export default function SettingsScreen() {
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [statuses, setStatuses] = useState<StatusMap>({});
   const [mode, setMode] = useRedeemMode();
-  const [holidays, setHoliday] = useHolidaySettings();
-  const showHeb = useShowHebrewDates();
   const confirm = useConfirm();
 
   useFocusEffect(
@@ -163,66 +145,6 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>לו״ז — ביטול אוטומטי של מפגשים</Text>
-        <Text style={styles.note}>
-          מפגשי קורסים שחלים בימים המסומנים כאן מסומנים בלו״ז כ"בוטל אוטומטית": הם לא נכללים
-          בפוטנציאל ולא מופיעים כדיווח חסר. חל גם על קורסים קיימים, ומפגש בודד אפשר להחזיר מהלו״ז.
-        </Text>
-        <View style={styles.checkGroup}>
-          {HOLIDAY_OPTIONS.map(({ kind, detail }, i) => {
-            const on = holidays[kind];
-            return (
-              <Pressable
-                key={kind}
-                onPress={() => {
-                  setHoliday(kind, !on);
-                  showToast(on ? `${REST_DAY_KIND_LABELS[kind]} — ללא ביטול אוטומטי` : `מפגשים ב${REST_DAY_KIND_LABELS[kind]} סומנו כבוטלו`);
-                }}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: on }}
-                style={({ pressed }) => [styles.checkRow, i > 0 && styles.checkRowDivider, pressed && { opacity: 0.85 }]}
-              >
-                <Icon
-                  name={on ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                  size={26}
-                  color={on ? colors.brand : colors.textMuted}
-                />
-                <View style={styles.checkTexts}>
-                  <Text style={styles.checkTitle}>{REST_DAY_KIND_LABELS[kind]}</Text>
-                  <Text style={styles.note}>{detail}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>תאריכונים</Text>
-        <View style={styles.checkGroup}>
-          <Pressable
-            onPress={() => {
-              void setShowHebrewDates(!showHeb);
-              showToast(showHeb ? 'התאריך העברי הוסתר בתאריכונים' : 'התאריך העברי מוצג בתאריכונים');
-            }}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: showHeb }}
-            style={({ pressed }) => [styles.checkRow, pressed && { opacity: 0.85 }]}
-          >
-            <Icon
-              name={showHeb ? 'checkbox-marked' : 'checkbox-blank-outline'}
-              size={26}
-              color={showHeb ? colors.brand : colors.textMuted}
-            />
-            <View style={styles.checkTexts}>
-              <Text style={styles.checkTitle}>הצגת תאריך עברי</Text>
-              <Text style={styles.note}>בכל בחירת תאריך: ליד התאריך שנבחר, בכותרת החודש ובכל יום בתאריכון</Text>
-            </View>
-          </Pressable>
-        </View>
-      </View>
-
       <View style={styles.intro}>
         <Text style={styles.title}>דקות מצטברות</Text>
         <Text style={styles.subtitle}>

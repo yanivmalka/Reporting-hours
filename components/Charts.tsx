@@ -5,6 +5,8 @@
  */
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { EnterChevron } from './Chevrons';
+import { useTheme } from '../theme/ThemeContext';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { radius, spacing } from '../theme/colors';
@@ -27,15 +29,11 @@ export function StatTile({
   /** לחיצה — מעבר לפירוט */
   onPress?: () => void;
 }) {
+  const { colors } = useTheme();
   const styles = useStyles(makeStyles);
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => [styles.tile, accent && styles.tileAccent, pressed && styles.pressed]}
-      accessibilityRole={onPress ? 'button' : undefined}
-    >
-      <Text style={[styles.tileLabel, accent && styles.onAccent]} numberOfLines={1}>
+  const body = (
+    <>
+      <Text style={[styles.tileLabel, accent && styles.onAccent, onPress && styles.tileLabelWithArrow]} numberOfLines={1}>
         {label}
       </Text>
       <Text style={[styles.tileValue, accent && styles.onAccent]} numberOfLines={1} adjustsFontSizeToFit>
@@ -46,6 +44,21 @@ export function StatTile({
           {sub}
         </Text>
       ) : null}
+    </>
+  );
+  // אריח לא לחיץ — View רגיל, בלי אפקט לחיצה.
+  if (!onPress) return <View style={[styles.tile, accent && styles.tileAccent]}>{body}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.tile, accent && styles.tileAccent, pressed && styles.pressed]}
+      accessibilityRole="button"
+    >
+      {body}
+      {/* אריח לחיץ — חץ קטן ‹ בפינה השמאלית העליונה */}
+      <View style={styles.tileArrow}>
+        <EnterChevron size={16} color={accent ? colors.textOnBrand : undefined} />
+      </View>
     </Pressable>
   );
 }
@@ -222,6 +235,8 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       backgroundColor: c.brand,
       borderColor: c.brand,
     },
+    tileArrow: { position: 'absolute', top: 8, end: 8 },
+    tileLabelWithArrow: { paddingEnd: 18 },
     tileLabel: {
       fontSize: 12,
       fontWeight: '600',

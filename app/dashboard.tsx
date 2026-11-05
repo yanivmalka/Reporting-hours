@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
@@ -11,12 +11,14 @@ import { useSwipe } from '../components/useSwipe';
 import { WorkplaceTile } from '../components/WorkplaceTile';
 import { SessionDotsByMonth, SessionDotsLegend, sessionDots } from '../components/SessionDots';
 import { Icon } from '../components/Icon';
+import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { accumulatedTotal, loadAccumulated, redeemableHours, type AccumulatedEntry } from '../lib/accumulated';
 import {
   currentPeriods,
+  dateRange,
   monthName,
   monthlyTrend,
   roundingStats,
@@ -81,6 +83,8 @@ export default function DashboardScreen() {
     statuses: StatusMap;
   } | null>(null);
   const [which, setWhich] = useState<PeriodChoice>('current');
+  // גיליון תחתון — פירוט "סכום עד כה" לפי מקום עבודה
+  const [sumSheet, setSumSheet] = useState(false);
   // ── צפי תשלומים ──
   /** רזולוציית הגרף — ברירת מחדל: החודש הנוכחי, עמודה לכל מקום עבודה */
   const [res, setRes] = useState<ChartResolution>('month');
@@ -522,7 +526,7 @@ export default function DashboardScreen() {
         </>
       ) : (
         <>
-      <Text style={styles.sectionTitle}>החודש הנוכחי לפי תקופת שכר</Text>
+      <Text style={styles.sectionTitle}>סיכום לפי תקופת שכר</Text>
 
       <SegmentedControl<PeriodChoice>
         options={[
@@ -532,28 +536,27 @@ export default function DashboardScreen() {
         value={which}
         onChange={setWhich}
       />
+      <Text style={styles.periodSub}>לכל מקום עבודה לפי יום התשלום שלו</Text>
 
       <TileGrid>
         <StatTile
-          onPress={() => openReports({ when: which })}
+          onPress={() => setSumSheet(true)}
           accent
           label={which === 'current' ? 'סכום עד כה' : 'סכום החודש'}
           value={money(totals.pay)}
           sub={`כולל ${data.workplaces.filter((w) => w.paymentType === 'monthly').length} משכורות חודשיות קבועות`}
         />
         <StatTile
-          onPress={() => openReports({ when: which })}
           label="שעות אקדמיות"
           value={hoursText(academicHours(totals.netMinutes))}
           sub={`${hoursText(regularHours(totals.netMinutes))} שעות רגילות`}
         />
         <StatTile
-          onPress={() => openReports({ when: which })}
           label="ימי עבודה"
           value={String(view.uniqueDays)}
           sub={`${totals.reports} דיווחים · ${hoursText(regularHours(totals.breakMinutes))} שע׳ הפסקות`}
         />
-        <StatTile onPress={() => openReports({ when: which })} label="נסיעות" value={money(totals.travel)} sub="תחבורה ציבורית בלבד" />
+        <StatTile label="נסיעות" value={money(totals.travel)} sub="תחבורה ציבורית בלבד" />
         <StatTile
           onPress={() => router.push('/settings')}
           label="דקות מצטברות"
@@ -561,7 +564,6 @@ export default function DashboardScreen() {
           sub={`בכל הסמינרים · ${data.redeemable} שע׳ זמינות לפדיון · ${accumulated.redeemedHours} נפדו`}
         />
         <StatTile
-          onPress={() => openReports({ when: which })}
           label="ממוצע ליום עבודה"
           value={view.uniqueDays ? money(totals.pay / view.uniqueDays) : '—'}
           sub={
@@ -623,6 +625,47 @@ export default function DashboardScreen() {
         </>
       )}
       </Animated.View>
+      <Modal transparent animationType="slide" visible={sumSheet} onRequestClose={() => setSumSheet(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setSumSheet(false)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sectionTitle}>
+              {which === 'current' ? 'סכום עד כה' : 'סכום החודש'} · {money(view.totals.pay)}
+            </Text>
+            <Text style={styles.periodSub}>פירוט לפי מקום עבודה, כל אחד לפי תקופת השכר שלו</Text>
+            <ScrollView style={{ flexGrow: 0 }}>
+            {view.periods
+              .filter((p) => p.totals.pay > 0 || p.totals.reports > 0)
+              .sort((a, b) => b.totals.pay - a.totals.pay)
+              .map((p) => (
+                <Pressable
+                  key={p.workplace.id}
+                  onPress={() => {
+                    setSumSheet(false);
+                    router.push({ pathname: '/workplace', params: { id: p.workplace.id } });
+                  }}
+                  style={({ pressed }) => [
+                    styles.sheetRow,
+                    { borderStartColor: workplaceColor(colors, p.workplace) },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sheetName}>{p.workplace.name}</Text>
+                    <Text style={styles.periodSub}>
+                      {dateRange(p.period.start, p.period.end)} · {p.totals.reports} דיווחים
+                      {p.totals.travel > 0 ? ` · נסיעות ${money(p.totals.travel)}` : ''}
+                    </Text>
+                  </View>
+                  <Text style={styles.sheetAmount}>{money(p.totals.pay)}</Text>
+                  <EnterChevron />
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Button label="סגירה" variant="secondary" onPress={() => setSumSheet(false)} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -645,6 +688,26 @@ const makeStyles = (colors: AppColors) =>
     periodHead: { gap: 2, marginTop: spacing.xs },
     periodTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     periodSub: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
+    sheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: spacing.lg,
+      gap: spacing.sm,
+      maxHeight: '80%',
+    },
+    sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border },
+    sheetRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: 10,
+      paddingStart: spacing.sm,
+      borderStartWidth: 4,
+    },
+    sheetName: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
+    sheetAmount: { fontSize: 16, fontWeight: '800', color: colors.text },
     link: { fontSize: 14, fontWeight: '700', color: colors.brand },
     pager: {
       flexDirection: 'row',

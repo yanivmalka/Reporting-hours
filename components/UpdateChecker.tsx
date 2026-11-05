@@ -17,7 +17,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { Animated, Modal, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { useI18n } from '../lib/i18n';
 import {
@@ -33,6 +33,7 @@ import {
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { Button } from './Button';
+import { useFade } from './useFlash';
 
 type Phase =
   | { kind: 'idle' }
@@ -169,25 +170,32 @@ function UpdateDialog({
   );
 }
 
-/** אזור "גרסה ועדכונים" לתפריט הצד. */
+/**
+ * אזור "גרסה ועדכונים" לתפריט הצד: שורה קבועה "✓ יש לך את הגרסה העדכנית
+ * ביותר". בבדיקה — סמל טעינה ו"בודק…" בכפתור; בסיום הסמל נעלם והשורה
+ * מהבהבת לרגע, או מתחלפת ל"גרסה X זמינה" עם כפתור "עדכון".
+ */
 export function UpdateSection() {
   const { t } = useI18n();
   const styles = useStyles(makeStyles);
   const { offer } = useContext(UpdateContext);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [available, setAvailable] = useState<UpdateInfo | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [checks, setChecks] = useState(0);
+  const flash = useFade(checks, 500);
 
   async function handleCheck() {
     setBusy(true);
-    setStatus(null);
+    setFailed(false);
     try {
       const info = await checkForUpdate();
-      if (info.available) offer(info);
-      else setStatus(t('update.upToDate'));
+      setAvailable(info.available ? info : null);
     } catch {
-      setStatus(t('update.failed'));
+      setFailed(true);
     } finally {
       setBusy(false);
+      setChecks((n) => n + 1);
     }
   }
 
@@ -198,16 +206,32 @@ export function UpdateSection() {
         {t('update.current', { version: currentVersion(), build: currentBuild() })}
       </Text>
       {updatesSupported ? (
-        <Button
-          label={busy ? t('update.checking') : t('update.check')}
-          variant="secondary"
-          onPress={handleCheck}
-          loading={busy}
-        />
+        <>
+          <Animated.View style={[styles.statusRow, flash]}>
+            {available ? (
+              <>
+                <Text style={[styles.text, styles.statusAvailable]}>גרסה {available.latestVersion} זמינה</Text>
+                <View style={styles.statusAction}>
+                  <Button label="עדכון" onPress={() => offer(available)} />
+                </View>
+              </>
+            ) : failed ? (
+              <Text style={styles.text}>{t('update.failed')}</Text>
+            ) : (
+              <Text style={[styles.text, styles.statusOk]}>✓ יש לך את הגרסה העדכנית ביותר</Text>
+            )}
+          </Animated.View>
+          <Button
+            label={t('update.check')}
+            loadingLabel="בודק…"
+            variant="secondary"
+            onPress={handleCheck}
+            loading={busy}
+          />
+        </>
       ) : (
         <Text style={styles.text}>{t('update.webNote')}</Text>
       )}
-      {status ? <Text style={styles.text}>{status}</Text> : null}
     </View>
   );
 }
@@ -229,6 +253,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       color: c.text,
       textAlign: layout.textStart,
     },
+    statusRow: { flexDirection: layout.rowStart, alignItems: 'center', gap: spacing.sm, minHeight: 24 },
+    statusOk: { color: c.success, fontWeight: '700' },
+    statusAvailable: { flex: 1, color: c.brand, fontWeight: '700' },
+    statusAction: { minWidth: 96 },
     backdrop: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.45)',

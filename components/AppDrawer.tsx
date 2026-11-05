@@ -33,7 +33,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '../lib/i18n';
 import type { Lang } from '../lib/strings';
 import { useTheme } from '../theme/ThemeContext';
-import type { ThemeMode } from '../theme/palettes';
+import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { SegmentedControl } from './SegmentedControl';
@@ -143,7 +143,10 @@ const PAY_LINKS: NavLink[] = [
 ];
 
 /** ארכיון ואשפה — מסך אחד עם בורר. */
-const ARCHIVE_LINKS: NavLink[] = [{ href: '/archive', key: 'nav.archive', icon: 'archive-outline' }];
+const ARCHIVE_LINKS: NavLink[] = [
+  { href: '/holidays', key: 'nav.holidays', icon: 'calendar-check-outline' },
+  { href: '/archive', key: 'nav.archive', icon: 'archive-outline' },
+];
 
 /** מסכי הגדרה — בתוך "הגדרות ותצוגה" המתקפל. */
 const SETTINGS_LINKS: NavLink[] = [
@@ -386,11 +389,12 @@ export function SideNav() {
 /** תוכן התפריט — משותף למגירה ולתפריט הקבוע. */
 function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
   const { t, lang, setLang, langLabels } = useI18n();
-  const { mode, setMode, paletteId, setPaletteId, palettes, colors } = useTheme();
+  const { paletteId, setPaletteId, palettes, colors } = useTheme();
   const drawerStyles = useStyles(makeStyles);
   const router = useRouter();
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const showHeb = useShowHebrewDates();
 
   function go(href: Href) {
     onNavigate?.();
@@ -399,11 +403,6 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
     else router.push(href);
   }
 
-  const modeOptions: { value: ThemeMode; label: string }[] = [
-    { value: 'light', label: t('drawer.mode.light') },
-    { value: 'dark', label: t('drawer.mode.dark') },
-    { value: 'system', label: t('drawer.mode.system') },
-  ];
   const langOptions: { value: Lang; label: string }[] = [
     { value: 'he', label: langLabels.he },
     { value: 'en', label: langLabels.en },
@@ -455,12 +454,7 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
           {SETTINGS_LINKS.map(navItem)}
 
           <View style={drawerStyles.section}>
-            <SectionLabel icon="theme-light-dark" text={t('drawer.appearance')} />
-            <SegmentedControl options={modeOptions} value={mode} onChange={setMode} />
-          </View>
-
-          <View style={drawerStyles.section}>
-            <SectionLabel icon="palette-outline" text={t('drawer.palette')} />
+            <SectionLabel icon="palette-outline" text={t('drawer.appearance')} />
             <View style={drawerStyles.swatchRow}>
               {palettes.map((palette) => {
                 const selected = palette.id === paletteId;
@@ -482,6 +476,19 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
                 );
               })}
             </View>
+            <Pressable
+              onPress={() => void setShowHebrewDates(!showHeb)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: showHeb }}
+              style={({ pressed }) => [drawerStyles.checkRow, pressed && drawerStyles.navItemPressed]}
+            >
+              <Icon
+                name={showHeb ? 'checkbox-marked' : 'checkbox-blank-outline'}
+                size={24}
+                color={showHeb ? colors.brand : colors.textMuted}
+              />
+              <Text style={drawerStyles.navItemText}>הצגת תאריך עברי</Text>
+            </Pressable>
           </View>
 
           <View style={drawerStyles.section}>
@@ -566,6 +573,7 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     navItemCurrent: {
       backgroundColor: c.brandLight,
     },
+    checkRow: { flexDirection: layout.rowStart, alignItems: 'center', gap: spacing.sm, paddingVertical: 6 },
     navItemPressed: {
       backgroundColor: c.brandLight,
     },

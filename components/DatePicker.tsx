@@ -7,6 +7,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
+import { DayDot, DayDotsLegend, useDayStatus } from './DayDot';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { hebrewDate, hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
@@ -204,6 +205,8 @@ function CalendarModal({
   const initial = parse(value) ?? new Date();
   const [cursor, setCursor] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
   const today = iso(new Date());
+  const statusOf = useDayStatus();
+  void worked;
 
   const cells = useMemo(() => {
     const first = cursor.getDay();
@@ -280,7 +283,7 @@ function CalendarModal({
                       </Text>
                     ) : null}
                   </View>
-                  <View style={[styles.dot, worked.has(cell) && styles.dotOn]} />
+                  <DayDot status={statusOf(cell)} />
                 </Pressable>
               );
             })}
@@ -290,11 +293,11 @@ function CalendarModal({
             <Pressable onPress={() => onPick(today)}>
               <Text style={styles.link}>היום</Text>
             </Pressable>
-            <Text style={styles.legend}>● יום שכבר דווח</Text>
             <Pressable onPress={onClose}>
               <Text style={styles.link}>סגירה</Text>
             </Pressable>
           </View>
+          <DayDotsLegend />
         </Pressable>
       </Pressable>
     </Modal>

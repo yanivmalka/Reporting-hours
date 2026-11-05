@@ -29,7 +29,7 @@ export type ColorScheme = {
   dangerSoft: string;
 };
 
-export type PaletteId = 'teal' | 'indigo' | 'ocean' | 'forest' | 'sunset' | 'graphite';
+export type PaletteId = 'teal' | 'indigo' | 'ocean' | 'forest' | 'graphite';
 
 /** מצב התצוגה שהמשתמש בחר; 'system' נגזר מהגדרת מערכת ההפעלה. */
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -163,30 +163,6 @@ export const PALETTES: readonly Palette[] = [
       brandLight: '#0E2E22',
       ...darkNeutrals('#0A1310', '#121D19', '#23332C'),
       textOnBrand: '#022C22',
-      ...STATUS_DARK,
-    },
-  },
-  {
-    id: 'sunset',
-    labelHe: 'ענבר',
-    labelEn: 'Amber',
-    light: {
-      brand: '#C2410C',
-      brandDark: '#9A3412',
-      brandLight: '#FDEBDD',
-      ...NEUTRAL_LIGHT,
-      background: '#F8F7F5',
-      border: '#E7E3DE',
-      text: '#1C1917',
-      textMuted: '#5F5852',
-      ...STATUS_LIGHT,
-    },
-    dark: {
-      brand: '#FB923C',
-      brandDark: '#FDBA74',
-      brandLight: '#35200F',
-      ...darkNeutrals('#13100D', '#1D1814', '#342A22'),
-      textOnBrand: '#431407',
       ...STATUS_DARK,
     },
   },
