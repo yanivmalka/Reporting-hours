@@ -1,6 +1,7 @@
-import { ActivityIndicator, StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
+import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -8,18 +9,25 @@ import { radius, spacing, type AppColors } from '../theme/colors';
 type ButtonProps = {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'dangerLink';
   disabled?: boolean;
   loading?: boolean;
+  /** אייקון לפני התווית (למשל פח ב"מחיקת הדיווח") */
+  icon?: string;
 };
 
-/** כפתור פעולה אחיד. `primary` מלא בצבע המותג, `secondary` מתאר, `danger` למחיקה. */
+/**
+ * כפתור פעולה אחיד. `primary` מלא בצבע המותג, `secondary` מתאר.
+ * פעולות הרסניות — אדום רק בטקסט או ברקע בהיר, לא כמסגרת ולא כמילוי בוהק:
+ * `danger` — רקע ורוד בהיר וטקסט אדום כהה; `dangerLink` — טקסט אדום כהה בלבד.
+ */
 export function Button({
   label,
   onPress,
   variant = 'primary',
   disabled,
   loading,
+  icon,
 }: ButtonProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -40,7 +48,22 @@ export function Button({
           color={variant === 'primary' ? colors.textOnBrand : colors.brand}
         />
       ) : (
-        <Text style={[styles.label, styles[`${variant}Label`]]}>{label}</Text>
+        <View style={styles.content}>
+          {icon ? (
+            <Icon
+              name={icon}
+              size={20}
+              color={
+                variant === 'primary'
+                  ? colors.textOnBrand
+                  : variant === 'secondary'
+                    ? colors.text
+                    : colors.dangerText
+              }
+            />
+          ) : null}
+          <Text style={[styles.label, styles[`${variant}Label`]]}>{label}</Text>
+        </View>
       )}
     </Pressable>
   );
@@ -80,11 +103,19 @@ const makeStyles = (colors: AppColors) =>
     secondaryLabel: {
       color: colors.text,
     },
+    content: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     danger: {
-      backgroundColor: colors.surface,
-      borderColor: colors.danger,
+      backgroundColor: colors.dangerSoft,
+      borderColor: colors.dangerSoft,
     },
     dangerLabel: {
-      color: colors.danger,
+      color: colors.dangerText,
+    },
+    dangerLink: {
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
+    },
+    dangerLinkLabel: {
+      color: colors.dangerText,
     },
   });

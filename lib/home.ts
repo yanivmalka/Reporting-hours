@@ -120,6 +120,8 @@ export function agenda(
       const canceled = sessionCancel(course, date, cancel) ?? undefined;
       // מפגש שבוטל אך בכל זאת דווח — מוצג כמדווח.
       const covering = courseReport(course, date, reports)?.id;
+      // מפגש שנמחק מהתכנון מוסתר מהלו״ז (מופיע רק בדף הקורס, ומשם מחזירים).
+      if (canceled?.kind === 'removed' && !covering) continue;
       if (canceled && !covering) {
         status = 'canceled';
       } else if (offset <= 0) {
@@ -143,6 +145,57 @@ export function agenda(
     }
     return { key, offset, label, date, dayLabel: longDayLabel(d), items };
   });
+}
+
+/** המפגשים שטרם דווחו בתאריך (בלי מבוטלים), במקומות העבודה הפעילים, לפי שעה. */
+export function unreportedOn(
+  courses: readonly Course[],
+  workplaces: readonly Workplace[],
+  reports: readonly WorkReport[],
+  date: string,
+): Course[] {
+  const ids = new Set(activeWorkplaces(workplaces).map((w) => w.id));
+  return coursesOn(courses, date)
+    .filter((c) => ids.has(c.workplaceId) && !courseReported(c, date, reports))
+    .sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** כמה ימים אחורה לחפש דיווח חסר ל"היום הרלוונטי הבא". */
+const NEXT_LOOKBACK_DAYS = 60;
+
+export type NextRelevant = {
+  date: string;
+  /** today — יש היום מפגש שטרם דווח · missing — דיווח חסר מהעבר · none — אין, נפתח על היום */
+  kind: 'today' | 'missing' | 'none';
+  /** המפגש הראשון שטרם דווח באותו יום */
+  course?: Course;
+  /** כמה מפגשים טרם דווחו באותו יום */
+  count: number;
+};
+
+/**
+ * היום הרלוונטי הבא לדיווח: קודם היום אם יש בו מפגש שטרם דווח; אחרת הדיווח
+ * החסר הקרוב אחורה; אם אין — היום.
+ */
+export function nextRelevantDay(
+  courses: readonly Course[],
+  workplaces: readonly Workplace[],
+  reports: readonly WorkReport[],
+  now: Date = new Date(),
+  before?: string,
+): NextRelevant {
+  const today = isoDate(now);
+  if (!before || before > today) {
+    const list = unreportedOn(courses, workplaces, reports, today);
+    if (list.length) return { date: today, kind: 'today', course: list[0], count: list.length };
+  }
+  for (let i = 1; i <= NEXT_LOOKBACK_DAYS; i++) {
+    const date = isoDate(addDays(now, -i));
+    if (before && date >= before) continue;
+    const list = unreportedOn(courses, workplaces, reports, date);
+    if (list.length) return { date, kind: 'missing', course: list[0], count: list.length };
+  }
+  return { date: today, kind: 'none', count: 0 };
 }
 
 /**

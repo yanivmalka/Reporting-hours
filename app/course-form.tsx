@@ -13,7 +13,7 @@ import { Screen } from '../components/Screen';
 import { TextField } from '../components/TextField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
 import { SessionDots, SessionDotsByMonth, SessionDotsLegend, dotDescription, sessionDots, type SessionDot } from '../components/SessionDots';
-import { removeCanceledFromPotential } from '../lib/sessions';
+import { removeCanceledFromPotential, removeFromPlan, returnToPlan } from '../lib/sessions';
 import {
   WEEKDAY_NAMES,
   courseScheduleLabel,
@@ -341,6 +341,18 @@ export default function CourseFormScreen() {
         ) : (
           <Text style={styles.dateLabel}>לחיצה על עיגול מציגה את פרטי המפגש</Text>
         )}
+        {picked && id && picked.state === 'removed' ? (
+          <Button label="החזרה לתכנון" variant="secondary" onPress={() => planAction(picked, false)} />
+        ) : picked && id && !picked.reportId && (picked.state === 'open' || picked.state === 'canceled') ? (
+          <Pressable
+            onPress={() => planAction(picked, true)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.removeLink, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={styles.removeLinkText}>מחיקת המפגש מהתכנון</Text>
+            <Text style={styles.dateLabel}>המפגש לא ייספר בפוטנציאל ובצפי</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.legend}>
           <SessionDotsLegend />
         </View>
@@ -359,6 +371,30 @@ export default function CourseFormScreen() {
     }
     setExtraError(null);
     set('extraDates', [...form.extraDates, extraDate].sort());
+  }
+
+  /** מחיקת מפגש מהתכנון / החזרה לתכנון — מהעיגול שנבחר. */
+  function planAction(dot: SessionDot, remove: boolean) {
+    if (!id) return;
+    const reason = dot.cancel?.reason;
+    const done = (msg: string) => {
+      setMarksTick((t) => t + 1);
+      setPicked(null);
+      showToast(msg);
+    };
+    if (!remove) {
+      void returnToPlan(id, dot.date, reason).then(() => done('המפגש הוחזר לתכנון'));
+      return;
+    }
+    confirm({
+      title: 'למחוק את המפגש מהתכנון?',
+      message: 'המפגש לא ייספר בפוטנציאל ובצפי, ולא יופיע בלו״ז. אפשר להחזיר אותו מכאן.',
+      confirmLabel: 'מחיקת המפגש מהתכנון',
+      onConfirm: async () => {
+        await removeFromPlan(id, dot.date, reason);
+        done('המפגש נמחק מהתכנון');
+      },
+    });
   }
 
   function updatePotential() {
@@ -552,6 +588,8 @@ export default function CourseFormScreen() {
         {extraError ? <Text style={styles.error}>{extraError}</Text> : null}
       </FormField>
 
+      {sessionsCard}
+
       {id && canceledDots.length > 0 ? (
         <View style={styles.viewCard}>
           <Text style={styles.cardTitle}>מפגשים שבוטלו ונשארו בפוטנציאל</Text>
@@ -681,6 +719,8 @@ const makeStyles = (colors: AppColors) =>
       backgroundColor: colors.background,
     },
     pickedText: { flex: 1, fontSize: 13, color: colors.text, textAlign: TEXT_RIGHT },
+    removeLink: { gap: 2, paddingVertical: 4 },
+    removeLinkText: { fontSize: 14, fontWeight: '700', color: colors.dangerText, textAlign: TEXT_RIGHT },
     pickedLink: { fontSize: 13, fontWeight: '700', color: colors.brand },
     legend: { paddingVertical: spacing.sm },
     error: { fontSize: 13, color: colors.danger, textAlign: TEXT_RIGHT },
