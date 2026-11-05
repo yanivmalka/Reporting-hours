@@ -18,6 +18,7 @@ import { loadCourses } from '../lib/courses';
 import { dateRange, deadlineRelative, shortDate } from '../lib/dashboard';
 import {
   buildPayrollReport,
+  canceledByReason,
   expectedPayment,
   grossAmount,
   netAmount,
@@ -287,6 +288,31 @@ export default function PayrollReportScreen() {
         </View>
       ) : null}
 
+      {report.canceled.length > 0 ? (
+        <View style={styles.card}>
+          <View style={styles.groupHead}>
+            <Text style={styles.groupName}>מפגשים שבוטלו</Text>
+            <Text style={styles.groupHours}>{report.canceled.length}</Text>
+          </View>
+          {report.canceled.map((c) => (
+            <View key={`${c.course}@${c.date}`} style={styles.totalRow}>
+              <Text style={[styles.cc, { flex: 1 }]}>
+                <DateText iso={c.date} hebrew={false} /> · {c.course} · {c.reason || 'ללא סיבה'}
+              </Text>
+              {c.amount > 0 ? <Text style={styles.totalValue}>{formatShekels(Math.round(c.amount))}</Text> : null}
+            </View>
+          ))}
+          <View style={styles.cancelSummary}>
+            {canceledByReason(report).map((r) => (
+              <Text key={r.reason} style={styles.cc}>
+                {r.reason}: {r.count}
+                {r.amount > 0 ? ` · ${formatShekels(Math.round(r.amount))} (נכלל בשכר)` : ' · ללא תשלום'}
+              </Text>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.totals}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>סה״כ שעות</Text>
@@ -458,6 +484,12 @@ const makeStyles = (colors: AppColors) =>
       gap: spacing.xs,
     },
     totalRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+    cancelSummary: {
+      gap: 2,
+      paddingTop: spacing.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
     totalLabel: { fontSize: 14, fontWeight: '800', color: colors.brandDark, textAlign: TEXT_RIGHT },
     totalValue: { flexShrink: 1, fontSize: 14, fontWeight: '700', color: colors.brandDark },
   });
