@@ -7,7 +7,7 @@
  * שמתחת מתעדכנת מיד (onWeekChange נקרא בתחילת המעבר).
  * לחיצה על יום בוחרת אותו / משלימה טווח — בדיוק כמו בלוח החודשי.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { hebrewDay } from '../lib/hebrewDate';
 import { useShowHebrewDates } from '../lib/hebrewDatePref';
@@ -54,9 +54,11 @@ type Props = {
   onDayPress?: (day: string) => void;
   /** לחיצה על שם החודש — למשל חזרה לתאריכון החודשי */
   onTitlePress?: () => void;
+  /** פעולה נוספת בראש הפס (למשל כפתור סינון) — ליד "היום" */
+  extra?: ReactNode;
 };
 
-export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts, onDayPress, onTitlePress }: Props) {
+export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts, onDayPress, onTitlePress, extra }: Props) {
   const styles = useStyles(makeStyles);
   const statusOf = useDayStatus();
   const { colors } = useTheme();
@@ -155,6 +157,7 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
           <Icon name="calendar-today" size={16} color={showsToday ? colors.textMuted : colors.brand} />
           <Text style={[styles.todayText, showsToday && styles.todayTextOff]}>היום</Text>
         </Pressable>
+        {extra}
       </View>
       <View style={styles.viewport} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
         {/*

@@ -13,6 +13,7 @@ import { Pressable } from './Pressable';
 import { hebrewDate, hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useShowHebrewDates } from '../lib/hebrewDatePref';
 import { useI18n } from '../lib/i18n';
+import { MonthSlide } from './MonthSlide';
 import { useSwipe } from './useSwipe';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
@@ -208,14 +209,17 @@ function CalendarModal({
   const statusOf = useDayStatus();
   void worked;
 
-  const cells = useMemo(() => {
-    const first = cursor.getDay();
-    const days = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+  const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+  /** תאי החודש ("YYYY-MM") — לשני החודשים שמוצגים בזמן מעבר */
+  const cellsOf = (mk: string) => {
+    const [y, m] = mk.split('-').map(Number);
+    const first = new Date(y, m - 1, 1).getDay();
+    const days = new Date(y, m, 0).getDate();
     const list: (string | null)[] = Array.from({ length: first }, () => null);
-    for (let d = 1; d <= days; d++) list.push(iso(new Date(cursor.getFullYear(), cursor.getMonth(), d)));
+    for (let d = 1; d <= days; d++) list.push(iso(new Date(y, m - 1, d)));
     while (list.length % 7) list.push(null);
     return list;
-  }, [cursor]);
+  };
 
   const move = (delta: number) =>
     setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1));
@@ -255,39 +259,44 @@ function CalendarModal({
             ))}
           </View>
 
-          <View style={styles.grid}>
-            {cells.map((cell, i) => {
-              if (!cell) return <View key={`e${i}`} style={styles.cell} />;
-              const selected = cell === value;
-              const isToday = cell === today;
-              return (
-                <Pressable
-                  key={cell}
-                  style={styles.cell}
-                  onPress={() => onPick(cell)}
-                  accessibilityLabel={heb ? longDate(cell) : gregorianLong(cell)}
-                >
-                  <View
-                    style={[
-                      styles.day,
-                      isToday && styles.dayToday,
-                      selected && styles.daySelected,
-                    ]}
-                  >
-                    <Text style={[styles.dayText, selected && styles.dayTextSelected]}>
-                      {Number(cell.slice(8))}
-                    </Text>
-                    {heb ? (
-                      <Text style={[styles.dayHeb, selected && styles.dayTextSelected]}>
-                        {hebrewDay(cell)}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <DayDot status={statusOf(cell)} />
-                </Pressable>
-              );
-            })}
-          </View>
+          <MonthSlide
+            pageKey={monthKey}
+            render={(mk) => (
+              <View style={styles.grid}>
+                {cellsOf(mk).map((cell, i) => {
+                  if (!cell) return <View key={`e${i}`} style={styles.cell} />;
+                  const selected = cell === value;
+                  const isToday = cell === today;
+                  return (
+                    <Pressable
+                      key={cell}
+                      style={styles.cell}
+                      onPress={() => onPick(cell)}
+                      accessibilityLabel={heb ? longDate(cell) : gregorianLong(cell)}
+                    >
+                      <View
+                        style={[
+                          styles.day,
+                          isToday && styles.dayToday,
+                          selected && styles.daySelected,
+                        ]}
+                      >
+                        <Text style={[styles.dayText, selected && styles.dayTextSelected]}>
+                          {Number(cell.slice(8))}
+                        </Text>
+                        {heb ? (
+                          <Text style={[styles.dayHeb, selected && styles.dayTextSelected]}>
+                            {hebrewDay(cell)}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <DayDot status={statusOf(cell)} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          />
 
           <View style={styles.footer}>
             <Pressable onPress={() => onPick(today)}>

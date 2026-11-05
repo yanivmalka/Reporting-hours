@@ -28,7 +28,7 @@ import { usePayBasis } from '../lib/payBasis';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels, travelCostForDay } from '../lib/travel';
 import { isLocked, loadPayrollStatus, statusKey, type PayrollStatus } from '../lib/payroll';
-import { loadWorkplaces, type Workplace } from '../lib/workplaces';
+import { isArchived, loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -278,7 +278,18 @@ export default function ReportsScreen() {
     return workplace ? reportPay(report, workplace, basis) : undefined;
   };
 
-  const usedWorkplaces = workplaces.filter((w) => reports.some((r) => r.workplaceId === w.id));
+  // כל מקומות העבודה הפעילים, וגם מקום בארכיון שיש לו דיווחים או קורסים —
+  // לא רק מקומות שכבר דווחו בהם (בתכנון מופיעים גם מקומות בלי דיווח).
+  const filterWorkplaces = workplaces.filter(
+    (w) =>
+      !isArchived(w) ||
+      reports.some((r) => r.workplaceId === w.id) ||
+      courses.some((c) => c.workplaceId === w.id),
+  );
+  const wpOptions = [
+    { value: null, label: 'הכול' },
+    ...filterWorkplaces.map((w) => ({ value: w.id, label: w.name, color: workplaceColor(colors, w) })),
+  ];
   const totals = totalsFor(
     wpFilter ? workplaces.filter((w) => w.id === wpFilter) : workplaces,
     filtered,
@@ -348,6 +359,16 @@ export default function ReportsScreen() {
           onDayPress={dayPress}
           counts={counts}
           onTitlePress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          extra={
+            <SelectField<string | null>
+              compact
+              title="סינון לפי מקום עבודה"
+              value={wpFilter}
+              active={wpFilter != null}
+              onChange={setWpFilter}
+              options={wpOptions}
+            />
+          }
         />
       </View>
     ) : null;
@@ -379,10 +400,7 @@ export default function ReportsScreen() {
           value={wpFilter}
           active={wpFilter != null}
           onChange={setWpFilter}
-          options={[
-            { value: null, label: 'הכול' },
-            ...usedWorkplaces.map((w) => ({ value: w.id, label: w.name, color: workplaceColor(colors, w) })),
-          ]}
+          options={wpOptions}
         />
       </View>
 

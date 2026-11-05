@@ -6,6 +6,8 @@ import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { useState } from 'react';
+import { Icon } from './Icon';
+import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -28,6 +30,8 @@ type SelectFieldProps<T extends string | null> = {
   title?: string;
   /** הדגשה כשנבחר ערך שאינו ברירת המחדל (למשל סינון פעיל) */
   active?: boolean;
+  /** כפתור אייקון קטן (סינון) במקום שדה מלא — למשל בפס השבוע המוצמד */
+  compact?: boolean;
 };
 
 export function SelectField<T extends string | null>({
@@ -37,25 +41,38 @@ export function SelectField<T extends string | null>({
   onChange,
   title,
   active,
+  compact,
 }: SelectFieldProps<T>) {
+  const { colors } = useTheme();
   const styles = useStyles(makeStyles);
   const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value);
 
   return (
     <>
-      <Pressable
-        onPress={() => setOpen(true)}
-        style={[styles.field, active && styles.fieldActive]}
-        accessibilityRole="button"
-        accessibilityLabel={`${label ?? ''} ${current?.label ?? ''}`}
-      >
-        <Text style={[styles.text, active && styles.textActive]} numberOfLines={1}>
-          {label ? <Text style={styles.label}>{label} </Text> : null}
-          {current?.label ?? '—'}
-        </Text>
-        <Text style={[styles.chevron, active && styles.textActive]}>▾</Text>
-      </Pressable>
+      {compact ? (
+        <Pressable
+          onPress={() => setOpen(true)}
+          style={[styles.iconBtn, active && styles.fieldActive]}
+          accessibilityRole="button"
+          accessibilityLabel={`${title ?? label ?? ''} ${current?.label ?? ''}`}
+        >
+          <Icon name={active ? 'filter' : 'filter-outline'} size={18} color={active ? colors.brand : colors.textMuted} />
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={() => setOpen(true)}
+          style={[styles.field, active && styles.fieldActive]}
+          accessibilityRole="button"
+          accessibilityLabel={`${label ?? ''} ${current?.label ?? ''}`}
+        >
+          <Text style={[styles.text, active && styles.textActive]} numberOfLines={1}>
+            {label ? <Text style={styles.label}>{label} </Text> : null}
+            {current?.label ?? '—'}
+          </Text>
+          <Text style={[styles.chevron, active && styles.textActive]}>▾</Text>
+        </Pressable>
+      )}
 
       <Modal transparent animationType="fade" visible={open} onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
@@ -108,6 +125,15 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       borderWidth: 1,
       borderColor: c.border,
       borderRadius: radius.md,
+    },
+    iconBtn: {
+      width: 36,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: radius.lg,
     },
     fieldActive: {
       borderColor: c.brand,
