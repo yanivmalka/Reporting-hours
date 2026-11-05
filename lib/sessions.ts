@@ -17,6 +17,9 @@
  *                  ("הועבר מ…"), והפוטנציאל עובר איתו;
  *   - 'held'     — התקיים למרות חג.
  * ביטול אוטומטי בחג לא נכלל בפוטנציאל מלכתחילה (המפגש לא תוכנן).
+ * חופשה מלוח החופשות (lib/vacations.ts, מצב "ביטול") — כמו חג: לא בפוטנציאל
+ * ולא בצפי, מחושבת בכל טעינה ולא חלה על מפגש שכבר דווח, על מפגש נוסף או
+ * מועבר, ועל מפגש שסומן "התקיים".
  *
  * כל מפגש שלא מתקיים (בוטל, הוסר, הועבר, חג) לא נחשב "דיווח חסר" ולא מקפיץ
  * תזכורות. בלו״ז הוא מוצג כ"בוטל" עם הסיבה.
@@ -24,6 +27,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { restDays, type RestDayKind } from './holidays';
 import { readJSON, writeJSON } from './storage';
+import {
+  readVacations,
+  setVacationsCache,
+  vacationOn,
+  vacationReason,
+  VACATIONS_KEY,
+  type Vacation,
+} from './vacations';
 
 export type SessionMark = {
   courseId: string;
@@ -47,11 +58,14 @@ export type Cancellation = {
   auto: boolean;
   /**
    * סוג: 'canceled' — בוטל ונשאר בפוטנציאל · 'removed' — הוסר מהפוטנציאל ·
-   * 'auto' — חג (לא בפוטנציאל) · 'moved' — הועבר לתאריך אחר.
+   * 'auto' — חג (לא בפוטנציאל) · 'vacation' — חופשה מלוח החופשות (לא בפוטנציאל) ·
+   * 'moved' — הועבר לתאריך אחר.
    */
-  kind: 'canceled' | 'removed' | 'auto' | 'moved';
+  kind: 'canceled' | 'removed' | 'auto' | 'vacation' | 'moved';
   /** ב־'moved' — התאריך החדש */
   movedTo?: string;
+  /** ב־'vacation' — מזהה החופשה */
+  vacationId?: string;
 };
 
 /**
@@ -130,8 +144,20 @@ export function autoCancelReason(date: string, settings: HolidaySettings): strin
   return restDays(date).find((r) => settings[r.kind])?.name ?? null;
 }
 
-/** בניית אינדקס ביטולים מהסימונים ומההגדרה. */
-export function cancelIndex(marks: readonly SessionMark[], settings: HolidaySettings): CancelIndex {
+/** מה שצריך כדי להחיל חופשות באינדקס: החופשות, מקום העבודה של כל קורס, ומה דווח. */
+export type VacationContext = {
+  vacations: readonly Vacation[];
+  workplaceOf: (courseId: string) => string | undefined;
+  /** מפתחות "קורס@תאריך" של מפגשים שדווחו — חופשה לא חלה עליהם */
+  reported: ReadonlySet<string>;
+};
+
+/** בניית אינדקס ביטולים מהסימונים, מההגדרה ומלוח החופשות. */
+export function cancelIndex(
+  marks: readonly SessionMark[],
+  settings: HolidaySettings,
+  vac?: VacationContext,
+): CancelIndex {
   const byKey = new Map(marks.map((m) => [keyOf(m.courseId, m.date), m]));
   return (courseId, date, explicit) => {
     const mark = byKey.get(keyOf(courseId, date));
@@ -143,6 +169,10 @@ export function cancelIndex(marks: readonly SessionMark[], settings: HolidaySett
       return { reason: `הועבר ל־${shortDate(mark.movedTo)}`, auto: false, kind: 'moved', movedTo: mark.movedTo };
     }
     if (mark?.status === 'held' || explicit) return null;
+    if (vac && !vac.reported.has(keyOf(courseId, date))) {
+      const v = vacationOn(vac.vacations, courseId, vac.workplaceOf(courseId), date);
+      if (v) return { reason: vacationReason(v), auto: true, kind: 'vacation', vacationId: v.id };
+    }
     const holiday = autoCancelReason(date, settings);
     return holiday ? { reason: holiday, auto: true, kind: 'auto' } : null;
   };
@@ -177,11 +207,39 @@ export function currentMoves(): MovesIndex {
   return currentMovesIdx;
 }
 
+// המפתחות נקראים ישירות מהאחסון (ולא דרך lib/courses / lib/reports) כדי שלא
+// ייווצר מעגל ייבוא — lib/courses קורא ל־loadCancelIndex.
+const COURSES_KEY = 'reporting-hours/courses/v1';
+const REPORTS_KEY = 'reporting-hours/reports/v1';
+
+async function loadVacationContext(): Promise<VacationContext> {
+  const [vacations, courses, reports] = await Promise.all([
+    readVacations(false),
+    readJSON<{ id: string; workplaceId: string }[]>(COURSES_KEY, []),
+    readJSON<{ courseId?: string; date: string }[]>(REPORTS_KEY, []),
+  ]);
+  const wp = new Map(courses.map((c) => [c.id, c.workplaceId]));
+  const reported = new Set(reports.filter((r) => r.courseId).map((r) => keyOf(r.courseId as string, r.date)));
+  return { vacations, workplaceOf: (id) => wp.get(id), reported };
+}
+
 export async function loadCancelIndex(): Promise<CancelIndex> {
-  const [marks, holidays] = await Promise.all([loadSessionMarks(), loadHolidaySettings()]);
-  current = cancelIndex(marks, holidays);
+  const [marks, holidays, vac] = await Promise.all([
+    loadSessionMarks(),
+    loadHolidaySettings(),
+    loadVacationContext(),
+  ]);
+  current = cancelIndex(marks, holidays, vac);
   currentMovesIdx = movesIndex(marks);
+  // רק אחרי שהאינדקס נבנה — כך מסך שמאזין לחופשות מחשב מחדש מול האינדקס החדש.
+  setVacationsCache([...vac.vacations]);
   return current;
+}
+
+/** שמירת לוח החופשות, ובנייה מחדש של אינדקס הביטולים. */
+export async function saveVacations(list: Vacation[]): Promise<void> {
+  await writeJSON(VACATIONS_KEY, list);
+  await loadCancelIndex();
 }
 
 /**

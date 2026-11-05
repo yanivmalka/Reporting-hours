@@ -5,6 +5,7 @@
  * הדיווחים (ומפגשים שעוד לא דווחו).
  */
 import { useCallback, useState } from 'react';
+import { VacationsCard } from '../components/Vacations';
 import { Redirect, Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
@@ -259,6 +260,8 @@ export default function WorkplaceDetailScreen() {
             : null}
         </>
       ) : null}
+
+      <VacationsCard target={{ kind: 'workplace', id: w.id }} />
 
       <Text style={styles.section}>דוחות שכר ודיווחים אחרונים</Text>
       {forecasts.map((f) => {
