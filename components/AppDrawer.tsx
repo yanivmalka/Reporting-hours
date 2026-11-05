@@ -34,6 +34,9 @@ import { useI18n } from '../lib/i18n';
 import type { Lang } from '../lib/strings';
 import { useTheme } from '../theme/ThemeContext';
 import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
+import { setTrackingStart, useTrackingStart } from '../lib/trackingStart';
+import { todayISO } from '../lib/time';
+import { DateField } from './DatePicker';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { SegmentedControl } from './SegmentedControl';
@@ -395,6 +398,7 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const showHeb = useShowHebrewDates();
+  const trackingStart = useTrackingStart();
   const [langNotice, setLangNotice] = useState(false);
 
   function chooseLang(next: Lang) {
@@ -494,6 +498,28 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
               />
               <Text style={drawerStyles.navItemText}>הצגת תאריך עברי</Text>
             </Pressable>
+          </View>
+
+          <View style={drawerStyles.section}>
+            <SectionLabel icon="calendar-start" text="תחילת עבודה עם המערכת" />
+            {trackingStart ? (
+              <>
+                <DateField value={trackingStart} onChange={(d) => void setTrackingStart(d)} />
+                <Text style={drawerStyles.langNotice}>
+                  מפגש לפני התאריך שלא דווח לא ייחשב דיווח חסר. מפגש שדווח נכלל כרגיל.
+                </Text>
+                <Pressable onPress={() => void setTrackingStart(null)} hitSlop={6}>
+                  <Text style={drawerStyles.linkText}>ביטול התאריך</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={drawerStyles.langNotice}>לא נקבע — כל המפגשים שעברו נבדקים לדיווח.</Text>
+                <Pressable onPress={() => void setTrackingStart(todayISO())} hitSlop={6}>
+                  <Text style={drawerStyles.linkText}>קביעת תאריך</Text>
+                </Pressable>
+              </>
+            )}
           </View>
 
           <View style={drawerStyles.section}>
@@ -601,6 +627,7 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       paddingTop: spacing.xs,
       paddingHorizontal: spacing.sm,
     },
+    linkText: { fontSize: 14, fontWeight: '700', color: c.brand, textAlign: layout.textStart },
     langNotice: {
       fontSize: 13,
       color: c.textMuted,

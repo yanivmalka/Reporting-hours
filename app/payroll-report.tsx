@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 import { Pressable } from '../components/Pressable';
 import { PaymentDialog } from '../components/PaymentDialog';
 import { TextField } from '../components/TextField';
-import { usePayBasis } from '../lib/payBasis';
+import { basisFor, usePayBasis } from '../lib/payBasis';
 import { loadProfile, type Profile } from '../lib/profile';
 import { taxPercentOf, workplaceAt } from '../lib/workplaces';
 import { EnterChevron } from '../components/Chevrons';
@@ -188,7 +188,7 @@ export default function PayrollReportScreen() {
     report.paymentType === 'monthly'
       ? `משכורת חודשית ${report.rates.map((r) => formatShekels(r)).join(' / ')}`
       : `${report.rates.map((r) => formatShekels(r)).join(' / ')} לשעה${
-          basis === 'academic' ? ' אקדמית' : ''
+          basisFor(workplace, basis) === 'academic' ? ' אקדמית' : ''
         }`;
 
   return (

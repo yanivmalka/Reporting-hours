@@ -37,6 +37,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { beforeTracking } from '../lib/trackingStart';
 
 type Form = {
   name: string;
@@ -224,7 +225,7 @@ export default function CourseFormScreen() {
       const today = todayISO();
       const pastMissing = (c: Course) =>
         occurrences(c, c.from, today < c.to ? today : c.to).filter(
-          (d) => d < today && !courseReported(c, d, allReports),
+          (d) => d < today && !beforeTracking(d) && !courseReported(c, d, allReports),
         );
       const before = new Set(pastMissing(loaded));
       const newlyMissing = pastMissing(next).filter((d) => !before.has(d));
@@ -439,12 +440,27 @@ export default function CourseFormScreen() {
         <Stack.Screen options={{ title: 'קורס' }} />
         <Text style={styles.viewTitle}>{form.name}</Text>
         <View style={styles.viewCard}>
-          {rows.map(([label, value], i) => (
-            <View key={label} style={[styles.viewRow, i === rows.length - 1 && styles.viewRowLast]}>
-              <Text style={styles.dateLabel}>{label}</Text>
-              <Text style={styles.viewValue}>{value}</Text>
-            </View>
-          ))}
+          {rows.map(([label, value], i) =>
+            i === 0 && workplaceId ? (
+              <Pressable
+                key={label}
+                onPress={() => router.push({ pathname: '/workplace', params: { id: workplaceId } })}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.viewRow, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={styles.dateLabel}>{label}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
+                  <Text style={styles.viewValue}>{value}</Text>
+                  <EnterChevron />
+                </View>
+              </Pressable>
+            ) : (
+              <View key={label} style={[styles.viewRow, i === rows.length - 1 && styles.viewRowLast]}>
+                <Text style={styles.dateLabel}>{label}</Text>
+                <Text style={styles.viewValue}>{value}</Text>
+              </View>
+            ),
+          )}
         </View>
         {sessionsCard}
         {id && workplaceId ? <VacationsCard target={{ kind: 'course', id, workplaceId }} onChanged={refreshMarks} /> : null}

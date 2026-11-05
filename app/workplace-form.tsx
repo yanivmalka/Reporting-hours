@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Animated, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { FoldChevron } from '../components/Chevrons';
+import { Checkbox } from '../components/Checkbox';
+import { usePayBasis } from '../lib/payBasis';
 import { SelectField } from '../components/SelectField';
 import { CANCEL_PAY_LABELS, useCancelReasons, type CancelPayKind } from '../lib/cancelReasons';
 import { formatShekels } from '../lib/travel';
@@ -90,6 +92,8 @@ type FormState = {
   taxiNightTime: string;
   /** משבצת הצבע בפלטת מקומות העבודה */
   colorIndex: number;
+  /** תשלום לפי שעה אקדמית (45 דק׳); null — לא נקבע במקום (ההגדרה הכללית) */
+  academic: boolean | null;
 };
 
 type Errors = Partial<Record<keyof FormState, string>> & { contactErrors?: Record<string, string> };
@@ -177,6 +181,7 @@ function draftToForm(d: ReturnType<typeof emptyDraft>): FormState {
     taxiHours: String(reminder.kind === 'hoursBefore' ? reminder.hours : 2),
     taxiNightTime: reminder.kind === 'nightBefore' ? reminder.time : '21:00',
     colorIndex: d.colorIndex ?? 0,
+    academic: d.payBasis == null ? null : d.payBasis === 'academic',
   };
 }
 
@@ -204,6 +209,7 @@ function parseNum(value: string): number {
 }
 
 export default function WorkplaceFormScreen() {
+  const { basis } = usePayBasis();
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -427,6 +433,7 @@ export default function WorkplaceFormScreen() {
       id,
       name: form.name.trim(),
       colorIndex: form.colorIndex,
+      payBasis: form.academic == null ? undefined : form.academic ? 'academic' : 'regular',
       address: form.address.trim() || undefined,
       contacts: form.contacts.map((c) => ({
         id: c.id,
@@ -535,7 +542,9 @@ export default function WorkplaceFormScreen() {
       case 'pay': {
         const rate = parseNum(form.rate);
         return [
-          form.paymentType === 'monthly' ? `חודשי ${formatShekels(rate || 0)}` : `${formatShekels(rate || 0)} לשעה`,
+          form.paymentType === 'monthly'
+            ? `חודשי ${formatShekels(rate || 0)}`
+            : `${formatShekels(rate || 0)} לשעה ${(form.academic ?? basis === 'academic') ? 'אקדמית' : 'רגילה'}`,
           Number(form.taxPercent) ? `מס ${form.taxPercent}%` : null,
           `שוטף + ${form.paymentTermsDays}`,
           `יום אחרון ${Number(form.payday) >= 31 ? 'סוף החודש' : form.payday}`,
@@ -719,6 +728,19 @@ export default function WorkplaceFormScreen() {
                 invalid={Boolean(errors.rate)}
               />
             </FormField>
+
+            {form.paymentType === 'hourly' ? (
+              <Checkbox
+                checked={form.academic ?? basis === 'academic'}
+                onChange={(v) => set('academic', v)}
+                label="תשלום לפי שעה אקדמית (45 דק׳)"
+                hint={
+                  (form.academic ?? basis === 'academic')
+                    ? 'התעריף מוכפל בשעות אקדמיות. דקות שאינן משלימות שעה נכנסות למונה הדקות המצטברות של המקום.'
+                    : 'התעריף מוכפל בשעות רגילות (60 דק׳). כל זמן העבודה נטו נכנס לחישוב.'
+                }
+              />
+            ) : null}
 
             <FormField
               label="אחוז מס (ניכוי במקור)"

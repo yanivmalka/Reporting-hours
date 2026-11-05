@@ -16,6 +16,7 @@ import { currentCancel, NO_CANCEL, type Cancellation, type CancelIndex } from '.
 import { recommendations } from './recommend';
 import { parseTime } from './time';
 import { activeWorkplaces, isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
+import { beforeTracking } from './trackingStart';
 
 // ───────────────────────── ברכה ─────────────────────────
 
@@ -155,6 +156,8 @@ export function unreportedOn(
   date: string,
 ): Course[] {
   const ids = new Set(activeWorkplaces(workplaces).map((w) => w.id));
+  // לפני תחילת העבודה עם המערכת — אין דיווחים חסרים.
+  if (beforeTracking(date)) return [];
   return coursesOn(courses, date)
     .filter((c) => ids.has(c.workplaceId) && !courseReported(c, date, reports))
     .sort((a, b) => a.start.localeCompare(b.start));
@@ -299,6 +302,7 @@ function missingAlerts(
   const missing: { course: Course; date: string }[] = [];
   for (let i = MISSING_LOOKBACK_DAYS; i >= 1; i--) {
     const date = isoDate(addDays(now, -i));
+    if (beforeTracking(date)) continue;
     for (const course of coursesOn(courses, date)) {
       if (ids.has(course.workplaceId) && !courseReported(course, date, reports)) missing.push({ course, date });
     }

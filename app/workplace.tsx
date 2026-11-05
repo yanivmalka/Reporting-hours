@@ -19,15 +19,26 @@ import { academicOf, loadReports, type WorkReport } from '../lib/reports';
 import {
   courseReported,
   courseScheduleLabel,
+  courseStatus,
+  COURSE_STATUS_LABELS,
+  lastSessionDate,
+  reportsOfCourse,
+  type CourseStatus,
   loadCourses,
   occurrences,
   timeRange,
   type Course,
 } from '../lib/courses';
-import { dateRange, isoDate, monthName, shortDate } from '../lib/dashboard';
-import { plannedFor, recentForecasts, STATUS_LABEL, type PeriodForecast } from '../lib/forecast';
+import { isoDate, monthName, shortDate } from '../lib/dashboard';
+import { hebrewRange } from '../lib/hebrewDate';
+import { unbreakable } from '../components/DateText';
+import { EnterChevron } from '../components/Chevrons';
+import { FoldSection } from '../components/FoldSection';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { useShowHebrewDates } from '../lib/hebrewDatePref';
+import { expectedFor, plannedFor, recentForecasts, STATUS_LABEL, type PeriodForecast } from '../lib/forecast';
 import { reportPay } from '../lib/pay';
-import { usePayBasis } from '../lib/payBasis';
+import { basisFor, usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { parseTime } from '../lib/time';
 import {
@@ -45,6 +56,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
+import { beforeTracking } from '../lib/trackingStart';
 
 const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
@@ -60,9 +72,10 @@ export default function WorkplaceDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [data, setData] = useState<Loaded | null | undefined>(undefined);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [showEnded, setShowEnded] = useState(false);
+  const [courseTab, setCourseTab] = useState<CourseStatus | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const { showToast } = useToast();
+  const showHeb = useShowHebrewDates();
 
   useFocusEffect(
     useCallback(() => {
@@ -107,7 +120,7 @@ export default function WorkplaceDetailScreen() {
   const now = new Date();
   const today = isoDate(now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const forecasts = recentForecasts(w, 4, reports, courses, statuses, basis, now).filter(
+  const forecasts = recentForecasts(w, 12, reports, courses, statuses, basis, now).filter(
     (f, i) => i === 0 || f.reported > 0 || f.planned > 0,
   );
   const current = forecasts[0];
@@ -127,16 +140,22 @@ export default function WorkplaceDetailScreen() {
       .flatMap((c) =>
         occurrences(c, f.period.start, f.period.end < today ? f.period.end : today)
           .filter((d) => d < today || (parseTime(c.end) ?? 0) <= nowMin)
-          .filter((d) => !courseReported(c, d, reports))
+          .filter((d) => !beforeTracking(d) && !courseReported(c, d, reports))
           .map((date) => ({ course: c, date })),
       )
       .sort((a, b) => b.date.localeCompare(a.date));
 
-  const activeCourses = courses
-    .filter((c) => c.to >= today)
-    .sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start));
-  // ארכיון קורסים: קורסים שתקופתם הסתיימה — מהאחרון שהסתיים.
-  const endedCourses = courses.filter((c) => c.to < today).sort((a, b) => b.to.localeCompare(a.to));
+  // קורסים לפי מצב (פעיל · מתוכנן · הסתיים), כל קבוצה לפי תאריך ההתחלה — מהישן לחדש.
+  const byStart = [...courses].sort(
+    (a, b) => a.from.localeCompare(b.from) || a.weekday - b.weekday || a.start.localeCompare(b.start),
+  );
+  const coursesOf = (st: CourseStatus) => byStart.filter((c) => courseStatus(c, today) === st);
+  const groups: Record<CourseStatus, Course[]> = {
+    active: coursesOf('active'),
+    planned: coursesOf('planned'),
+    ended: coursesOf('ended'),
+  };
+  const tab: CourseStatus = courseTab ?? (groups.active.length || (!groups.planned.length && !groups.ended.length) ? 'active' : groups.planned.length ? 'planned' : 'ended');
   const archived = isArchived(w);
 
   async function toggleArchive() {
@@ -145,129 +164,18 @@ export default function WorkplaceDetailScreen() {
     setReloadTick((n) => n + 1);
   }
 
-  // רק התקופה הנוכחית פתוחה כברירת מחדל; השאר מקופלות.
+  // כל התקופות מקופלות כברירת מחדל.
   const isOpen = (key: string, current: boolean) => open[key] ?? current;
 
-  return (
-    <Screen>
-      <Stack.Screen options={{ title: w.name }} />
-      {archived ? (
-        <View style={styles.archivedBanner}>
-          <Icon name="archive-outline" size={20} color={colors.textMuted} />
-          <Text style={styles.archivedText}>
-            מקום העבודה בארכיון — לא מוצג בלו״ז, בתזכורות ובבחירה לדיווח חדש. הדיווחים והתשלומים נשמרים.
-          </Text>
-        </View>
-      ) : null}
+  // תמיד מוצגים החודש הנוכחי והקודם, וגם כל חודש שעוד לא שולם; השאר — ב"דיווחים קודמים".
+  const isUnpaid = (f: PeriodForecast) => !f.paidAt && f.reported > 0 && f.status !== 'open';
+  const recentPeriods = forecasts.filter((f, i) => i < 2 || isUnpaid(f));
+  const olderPeriods = forecasts.filter((f, i) => !(i < 2 || isUnpaid(f)));
 
-      <View style={[styles.hero, { borderStartWidth: 8, borderStartColor: workplaceColor(colors, w) }]}>
-        <Text style={styles.heroLabel}>{next === current ? 'התקופה הנוכחית' : 'התשלום הבא'}</Text>
-        <View style={styles.heroAmountRow}>
-          <Text style={styles.heroAmount}>{money(next.reported)}</Text>
-          {tax > 0 ? <Text style={styles.heroSub}>ברוטו · {money(netOf(next))} נטו</Text> : null}
-        </View>
-        <Text style={styles.heroLine}>
-          עבור {monthName(next.period.start.slice(0, 7))} · צפי {shortDate(next.expected)} ({paymentTermsLabel(w)})
-        </Text>
-        <View style={styles.heroTiles}>
-          <View style={styles.heroTile}>
-            <Text style={styles.heroTileLabel}>החודש — דווח</Text>
-            <Text style={styles.heroTileValue}>{money(current.reported)}</Text>
-          </View>
-          <View style={styles.heroTile}>
-            <Text style={styles.heroTileLabel}>החודש — לפי תכנון</Text>
-            <Text style={styles.heroTileValue}>{money(current.planned)}</Text>
-          </View>
-        </View>
-      </View>
-
-      <Text style={styles.section}>כללי</Text>
-      <View style={styles.card}>
-        <InfoRow
-          label="מחיר שעה"
-          value={
-            w.paymentType === 'monthly'
-              ? `${money(w.rate)} לחודש`
-              : `${money(w.rate)} לשעה ${basis === 'academic' ? 'אקדמית' : 'רגילה'}`
-          }
-        />
-        <InfoRow label="סוג תשלום" value={w.paymentType === 'monthly' ? 'חודשי' : 'שעתי'} />
-        <InfoRow label="אחוז מס" value={`${tax}%`} />
-        <InfoRow label="תנאי תשלום" value={paymentTermsLabel(w)} />
-        <InfoRow label="יום אחרון לדיווח שכר" value={deadlineLabel(w)} />
-        <InfoRow label="תקופת שכר" value={w.payday === 1 ? '1 עד סוף החודש' : `מה־${w.payday} בחודש עד ה־${w.payday - 1} בחודש הבא`} />
-        <InfoRow label="אופן הגעה" value={ARRIVAL_MODE_LABELS[w.arrivalMode]} last={!w.address} />
-        {w.address ? <InfoRow label="כתובת" value={w.address} last /> : null}
-      </View>
-
-      <View style={styles.sectionRow}>
-        <Text style={styles.section}>קורסים פעילים</Text>
-        <Text style={styles.muted}>{activeCourses.length}</Text>
-      </View>
-      {activeCourses.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.muted}>אין קורסים פעילים. מוסיפים קורסים בעריכת מקום העבודה.</Text>
-        </View>
-      ) : (
-        activeCourses.map((c) => {
-          const count = occurrences(c, current.period.start, current.period.end).length;
-          const amount = plannedFor(w, [c], current.period, basis);
-          return (
-            <Pressable
-              key={c.id}
-              onPress={() => router.push({ pathname: '/course-form', params: { id: c.id, view: '1' } })}
-              style={({ pressed }) => [styles.card, styles.courseCard, pressed && styles.pressed]}
-            >
-              <Text style={styles.courseName}>{c.name}</Text>
-              <Text style={styles.muted}>
-                {courseScheduleLabel(c)} · {dateRange(c.from, c.to, true)}
-              </Text>
-              <Text style={styles.small}>
-                החודש: {count} מפגשים · {money(amount)} לפי תכנון
-              </Text>
-            </Pressable>
-          );
-        })
-      )}
-
-      {endedCourses.length ? (
-        <>
-          <Pressable
-            onPress={() => setShowEnded((v) => !v)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showEnded }}
-            style={({ pressed }) => [styles.sectionRow, pressed && styles.pressed]}
-          >
-            <Text style={styles.section}>ארכיון קורסים שהסתיימו</Text>
-            <View style={styles.archiveCount}>
-              <Text style={styles.muted}>{endedCourses.length}</Text>
-              <Icon name={showEnded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
-            </View>
-          </Pressable>
-          {showEnded
-            ? endedCourses.map((c) => (
-                <Pressable
-                  key={c.id}
-                  onPress={() => router.push({ pathname: '/course-form', params: { id: c.id, view: '1' } })}
-                  style={({ pressed }) => [styles.card, styles.courseCard, styles.endedCard, pressed && styles.pressed]}
-                >
-                  <Text style={styles.courseName}>{c.name}</Text>
-                  <Text style={styles.muted}>
-                    {courseScheduleLabel(c)} · {dateRange(c.from, c.to, true)}
-                  </Text>
-                </Pressable>
-              ))
-            : null}
-        </>
-      ) : null}
-
-      <VacationsCard target={{ kind: 'workplace', id: w.id }} />
-
-      <Text style={styles.section}>דוחות שכר ודיווחים אחרונים</Text>
-      {forecasts.map((f) => {
+  const renderPeriod = (f: PeriodForecast) => {
         const key = f.period.start;
         const missing = missingIn(f);
-        const expanded = isOpen(key, f.status === 'open');
+        const expanded = isOpen(key, false);
         const reportStep: StepState =
           f.status === 'open' || missing.length > 0 ? 'now' : f.status === 'planned' ? 'todo' : 'done';
         const sendStep: StepState = f.sentAt ? 'done' : f.status === 'closed' ? 'now' : 'todo';
@@ -369,7 +277,145 @@ export default function WorkplaceDetailScreen() {
             ) : null}
           </View>
         );
-      })}
+  };
+
+  return (
+    <Screen>
+      <Stack.Screen options={{ title: w.name }} />
+      {archived ? (
+        <View style={styles.archivedBanner}>
+          <Icon name="archive-outline" size={20} color={colors.textMuted} />
+          <Text style={styles.archivedText}>
+            מקום העבודה בארכיון — לא מוצג בלו״ז, בתזכורות ובבחירה לדיווח חדש. הדיווחים והתשלומים נשמרים.
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={[styles.hero, { borderStartWidth: 8, borderStartColor: workplaceColor(colors, w) }]}>
+        <Text style={styles.heroLabel}>{next === current ? 'התקופה הנוכחית' : 'התשלום הבא'}</Text>
+        <View style={styles.heroAmountRow}>
+          <Text style={styles.heroAmount}>{money(next.reported)}</Text>
+          {tax > 0 ? <Text style={styles.heroSub}>ברוטו · {money(netOf(next))} נטו</Text> : null}
+        </View>
+        <Text style={styles.heroLine}>
+          עבור {monthName(next.period.start.slice(0, 7))} · צפי {shortDate(next.expected)} ({paymentTermsLabel(w)})
+        </Text>
+        <View style={styles.heroTiles}>
+          <View style={styles.heroTile}>
+            <Text style={styles.heroTileLabel}>החודש — דווח</Text>
+            <Text style={styles.heroTileValue}>{money(current.reported)}</Text>
+          </View>
+          <View style={styles.heroTile}>
+            <Text style={styles.heroTileLabel}>החודש — לפי תכנון</Text>
+            <Text style={styles.heroTileValue}>{money(current.planned)}</Text>
+          </View>
+        </View>
+      </View>
+
+      <FoldSection
+        title="תנאי שכר"
+        summary={`${w.paymentType === 'monthly' ? `${money(w.rate)} לחודש` : `${money(w.rate)} לשעה ${basisFor(w, basis) === 'academic' ? 'אקדמית' : 'רגילה'}`} · ${paymentTermsLabel(w)}`}
+      >
+        <View style={styles.card}>
+          <InfoRow
+            label="מחיר שעה"
+            value={
+              w.paymentType === 'monthly'
+                ? `${money(w.rate)} לחודש`
+                : `${money(w.rate)} לשעה ${basisFor(w, basis) === 'academic' ? 'אקדמית' : 'רגילה'}`
+            }
+          />
+          <InfoRow label="סוג תשלום" value={w.paymentType === 'monthly' ? 'חודשי' : 'שעתי'} />
+          <InfoRow label="אחוז מס" value={`${tax}%`} />
+          <InfoRow label="תנאי תשלום" value={paymentTermsLabel(w)} />
+          <InfoRow label="יום אחרון לדיווח שכר" value={deadlineLabel(w)} />
+          <InfoRow label="תקופת שכר" value={w.payday === 1 ? '1 עד סוף החודש' : `מה־${w.payday} בחודש עד ה־${w.payday - 1} בחודש הבא`} />
+          <InfoRow label="אופן הגעה" value={ARRIVAL_MODE_LABELS[w.arrivalMode]} last={!w.address} />
+          {w.address ? <InfoRow label="כתובת" value={w.address} last /> : null}
+        </View>
+      </FoldSection>
+
+      <Text style={styles.section}>קורסים</Text>
+      <SegmentedControl<CourseStatus>
+        options={(['active', 'planned', 'ended'] as CourseStatus[]).map((k) => ({
+          value: k,
+          label: `${COURSE_STATUS_LABELS[k]} (${groups[k].length})`,
+        }))}
+        value={tab}
+        onChange={setCourseTab}
+      />
+      {groups[tab].length === 0 ? (
+        <View style={[styles.card, styles.courseCard]}>
+          <Text style={styles.muted}>
+            {tab === 'active'
+              ? 'אין קורסים פעילים. מוסיפים קורסים בעריכת מקום העבודה.'
+              : tab === 'planned'
+                ? 'אין קורסים מתוכננים.'
+                : 'אין קורסים שהסתיימו.'}
+          </Text>
+        </View>
+      ) : (
+        groups[tab].map((c) => {
+          let line: string;
+          if (tab === 'active') {
+            const count = occurrences(c, current.period.start, current.period.end).length;
+            line = `החודש: ${count} מפגשים · ${money(plannedFor(w, [c], current.period, basis))} לפי תכנון`;
+          } else {
+            const whole = { start: c.from, end: lastSessionDate(c) };
+            const count = occurrences(c, whole.start, whole.end).length;
+            const expected = expectedFor(w, [c], whole, basis);
+            if (tab === 'planned') {
+              line = `צפי: ${count} מפגשים · ${money(expected)}`;
+            } else {
+              const mine = reportsOfCourse(c, reports);
+              const actual = mine.reduce((n, r) => n + (reportPay(r, w, basis) ?? 0), 0);
+              line = `צפי ${money(expected)} (${count} מפגשים) · בפועל ${money(actual)} (${mine.length} דיווחים)`;
+            }
+          }
+          const [fy, fm, fd] = c.from.split('-');
+          const [ty, tm, td] = c.to.split('-');
+          return (
+            <Pressable
+              key={c.id}
+              onPress={() => router.push({ pathname: '/course-form', params: { id: c.id, view: '1' } })}
+              style={({ pressed }) => [
+                styles.card,
+                styles.courseCard,
+                styles.courseRow,
+                tab === 'ended' && styles.endedCard,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.courseTexts}>
+                <Text style={styles.courseName}>{c.name}</Text>
+                <Text style={styles.muted}>
+                  {courseScheduleLabel(c)} · {unbreakable(`\u2066${fd}/${fm}/${fy}–${td}/${tm}/${ty}\u2069`)}
+                  {showHeb ? ` ${unbreakable(`(${hebrewRange(c.from, c.to)})`)}` : ''}
+                </Text>
+                <Text style={styles.small}>{line}</Text>
+              </View>
+              <EnterChevron />
+            </Pressable>
+          );
+        })
+      )}
+
+      <FoldSection title="חופשות">
+        <VacationsCard target={{ kind: 'workplace', id: w.id }} bare />
+      </FoldSection>
+
+      <FoldSection
+        plain
+        title="דוחות שכר ודיווחים אחרונים"
+        summary={unpaid.length ? `${unpaid.length} ממתינים לתשלום` : undefined}
+      >
+        {recentPeriods.map(renderPeriod)}
+        {olderPeriods.length ? (
+          <FoldSection title="דיווחים קודמים" meta={String(olderPeriods.length)}>
+            {olderPeriods.map(renderPeriod)}
+          </FoldSection>
+        ) : null}
+      </FoldSection>
 
       <View style={styles.actions}>
         {lastClosed ? (
@@ -457,6 +503,8 @@ const makeStyles = (colors: AppColors) =>
     archivedText: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
     archiveCount: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     endedCard: { opacity: 0.75 },
+    courseRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    courseTexts: { flex: 1, gap: 2 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     pressed: { opacity: 0.8 },
     muted: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },

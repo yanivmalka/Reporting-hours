@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { DayDot, DayDotsLegend, useDayStatus } from './DayDot';
+import type { DayStatus } from '../lib/dayStatus';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
@@ -46,6 +47,8 @@ type Props = {
   counts: Record<string, number>;
   /** כשמוגדר — לחיצה על יום קוראת לו במקום לבחור טווח (מצב "מעבר ליום"). */
   onDayPress?: (day: string) => void;
+  /** מצב היום לנקודות — כשהמסך מסנן (למשל לפי מקום עבודה); אחרת הכול */
+  statusOf?: (date: string) => DayStatus | null;
 };
 
 /**
@@ -66,7 +69,7 @@ const TWO_MONTHS_MIN_WIDTH = 600;
 /** רוחב מרבי לחודש אחד — כדי שהתאים לא יימתחו במסך רחב. */
 const MONTH_MAX_WIDTH = 340;
 
-export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts, onDayPress }: Props) {
+export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts, onDayPress, statusOf }: Props) {
   const styles = useStyles(makeStyles);
   const { isRTL } = useI18n();
   const [width, setWidth] = useState(0);
@@ -103,6 +106,7 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
                 counts={counts}
                 today={today}
                 onTap={tap}
+                statusOf={statusOf}
               />
             ))}
           </View>
@@ -125,6 +129,7 @@ function MonthGrid({
   counts,
   today,
   onTap,
+  statusOf: statusOverride,
 }: {
   month: string;
   /** החודש שהרשימה מציגה (כשמוצגים שניים) */
@@ -133,9 +138,11 @@ function MonthGrid({
   counts: Record<string, number>;
   today: string;
   onTap: (day: string) => void;
+  statusOf?: (date: string) => DayStatus | null;
 }) {
   const styles = useStyles(makeStyles);
-  const statusOf = useDayStatus();
+  const ownStatus = useDayStatus();
+  const statusOf = statusOverride ?? ownStatus;
   const heb = useShowHebrewDates();
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y, m - 1, 1).getDay();

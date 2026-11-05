@@ -17,7 +17,7 @@ import { parseTime } from './time';
 import { hebrewDate, hebrewRange } from './hebrewDate';
 import { workplaceAt, taxPercentOf, type Workplace } from './workplaces';
 import { workplacePay } from './pay';
-import type { PayBasis } from './payBasis';
+import { basisFor, type PayBasis } from './payBasis';
 import { expectedPaymentDate } from './dashboard';
 import { paymentTermsOf } from './workplaces';
 import { signatureLines, type Profile } from './profile';
@@ -220,6 +220,7 @@ export function buildPayrollReport(
   /** דקות שנפדו מהמונה לתוך הדוח (מצב הדוח, `redeemedMinutes`) */
   redeemedMinutes = 0,
 ): PayrollReport {
+  basis = basisFor(workplace, basis);
   const mine = reports
     .filter((r) => r.workplaceId === workplace.id && r.date >= period.start && r.date <= period.end)
     .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));

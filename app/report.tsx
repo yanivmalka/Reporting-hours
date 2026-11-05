@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { EnterChevron } from '../components/Chevrons';
 import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { ActivityIndicator, Animated, Keyboard, Modal, PanResponder, ScrollView, StyleSheet, View } from 'react-native';
@@ -19,7 +20,7 @@ import { nextRelevantDay, unreportedOn } from '../lib/home';
 import { toAcademic } from '../lib/academic';
 import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../lib/accumulated';
 import { formatHours, payableHours, reportPay } from '../lib/pay';
-import { usePayBasis } from '../lib/payBasis';
+import { basisFor, usePayBasis } from '../lib/payBasis';
 import {
   addReport,
   deleteReport,
@@ -384,7 +385,8 @@ export default function ReportScreen() {
       0,
       (parseTime(end) as number) - (parseTime(start) as number) - sumBreaks(breaks),
     );
-    const leftover = toAcademic(net).leftoverMinutes;
+    const leftover =
+      basisFor(workplaces?.find((w) => w.id === workplaceId), basis) === 'academic' ? toAcademic(net).leftoverMinutes : 0;
     const carried = leftoverChoice === 'carry' ? leftover : 0;
 
     setSaving(true);
@@ -492,7 +494,9 @@ export default function ReportScreen() {
   const rangeMin = startMin != null && endMin != null && endMin > startMin ? endMin - startMin : null;
   const netPreview = rangeMin == null ? null : Math.max(0, rangeMin - sumBreaks(breaks));
   const academicPreview = netPreview == null ? null : toAcademic(netPreview);
-  const leftoverPreview = academicPreview?.leftoverMinutes ?? 0;
+  // דקות עודפות נצברות רק במקום שמשלם לפי שעה אקדמית.
+  const wBasis = basisFor(workplaces?.find((w) => w.id === workplaceId), basis);
+  const leftoverPreview = wBasis === 'academic' ? academicPreview?.leftoverMinutes ?? 0 : 0;
   const academicHoursNow =
     academicPreview == null
       ? 0
@@ -510,7 +514,7 @@ export default function ReportScreen() {
     carriedMinutes: leftoverChoice === 'carry' ? leftoverPreview : 0,
   };
   const pay = workplace && netPreview != null ? reportPay(draft, workplace, basis) : null;
-  const hoursForPay = netPreview != null ? payableHours(draft, basis) : 0;
+  const hoursForPay = netPreview != null ? payableHours(draft, basisFor(workplace, basis)) : 0;
   // נסיעות: רק בתחבורה ציבורית, ורק אם עוד אין דיווח לאותו מקום באותו יום.
   // בעריכה — הדיווח עצמו לא נחשב "דיווח אחר" באותו יום.
   const travelCounted =
@@ -713,7 +717,18 @@ export default function ReportScreen() {
   const wAt = workplace ? workplaceAt(workplace, date) : null;
   const context =
     (step === 'times' || step === 'summary') && wAt ? (
-      <View style={[styles.context, { borderStartWidth: 5, borderStartColor: colorOf(workplace) }]}>
+      <Pressable
+        onPress={() => workplace && router.push({ pathname: '/workplace', params: { id: workplace.id } })}
+        accessibilityRole="button"
+        accessibilityLabel={`מעבר לדף ${wAt.name}`}
+        style={({ pressed }) => [
+          styles.context,
+          styles.contextRow,
+          { borderStartWidth: 5, borderStartColor: colorOf(workplace) },
+          pressed && { opacity: 0.85 },
+        ]}
+      >
+        <View style={styles.contextTexts}>
         <Text style={styles.contextMain}>{wAt.name}</Text>
         {selectedCourse ? (
           <Text style={styles.contextCourse}>
@@ -724,7 +739,7 @@ export default function ReportScreen() {
         <Text style={styles.contextSub}>
           {wAt.paymentType === 'monthly'
             ? `משכורת חודשית ${formatShekels(wAt.rate)}`
-            : `${formatShekels(wAt.rate)} לשעה ${basis === 'academic' ? 'אקדמית' : ''}`}
+            : `${formatShekels(wAt.rate)} לשעה ${basisFor(workplace, basis) === 'academic' ? 'אקדמית' : ''}`}
           {' · '}
           {hasTravelCost(wAt)
             ? `נסיעות: תחבורה ציבורית ${formatShekels(wAt.travelCostPerDirection)} × ${wAt.tripsPerDay} ליום`
@@ -735,7 +750,9 @@ export default function ReportScreen() {
           {taxPercentOf(wAt) > 0 ? ` · מס ${taxPercentOf(wAt)}%` : ''}
           {wAt.employeeNumber ? ` · מספר עובד ${wAt.employeeNumber}` : ''}
         </Text>
-      </View>
+        </View>
+        <EnterChevron />
+      </Pressable>
     ) : null;
 
   return (
@@ -1097,7 +1114,7 @@ export default function ReportScreen() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLine}>
                   שכר · {formatHours(Math.round(hoursForPay * 100) / 100)}{' '}
-                  {basis === 'academic' ? 'שע׳ אקד׳' : 'שע׳'} × {formatShekels(wAt.rate)}
+                  {basisFor(workplace, basis) === 'academic' ? 'שע׳ אקד׳' : 'שע׳'} × {formatShekels(wAt.rate)}
                 </Text>
                 <Text style={styles.summaryValue}>{pay == null ? '—' : formatShekels(pay)}</Text>
               </View>
@@ -1377,6 +1394,8 @@ const makeStyles = (colors: AppColors) =>
     color: colors.text,
     textAlign: TEXT_RIGHT,
   },
+  contextRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  contextTexts: { flex: 1, gap: 2 },
   context: {
     backgroundColor: colors.brandLight,
     borderRadius: radius.md,

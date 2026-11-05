@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { EnterChevron } from '../components/Chevrons';
 import { StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
@@ -20,6 +21,7 @@ import { radius, spacing, type AppColors } from '../theme/colors';
  */
 export default function TaxScreen() {
   const styles = useThemedStyles(makeStyles);
+  const router = useRouter();
   const { isRTL } = useI18n();
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [list, setList] = useState<Workplace[]>([]);
@@ -44,7 +46,14 @@ export default function TaxScreen() {
     const sent = w.taxCoordination?.[year];
     return (
       <View style={[styles.row, !sent && styles.rowMissing]}>
-        <Text style={styles.name}>{w.name}</Text>
+        <Pressable
+          onPress={() => router.push({ pathname: '/workplace', params: { id: w.id } })}
+          accessibilityRole="button"
+          style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4 }, pressed && { opacity: 0.7 }]}
+        >
+          <Text style={[styles.name, { flex: 1 }]}>{w.name}</Text>
+          <EnterChevron />
+        </Pressable>
         <Text style={[styles.meta, sent ? styles.ok : styles.warn]}>
           {sent ? <>✓ נכלל בתיאום — נשלח <DateText iso={sent} /></> : `לא נכלל בתיאום ${year}`}
         </Text>

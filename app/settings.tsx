@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { EnterChevron } from '../components/Chevrons';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
@@ -7,7 +8,6 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { Icon } from '../components/Icon';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
-import { SegmentedControl } from '../components/SegmentedControl';
 import { useToast } from '../components/Toast';
 import { ProgressBar } from '../components/Charts';
 import {
@@ -25,15 +25,15 @@ import {
   planRedeem,
   redeemIntoPayroll,
   redeemTarget,
-  REDEEM_MODE_LABELS,
   useRedeemMode,
-  type RedeemMode,
 } from '../lib/redeem';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
-import { PAY_BASIS_LABELS, usePayBasis, type PayBasis } from '../lib/payBasis';
+import { basisFor, usePayBasis } from '../lib/payBasis';
+import { Checkbox } from '../components/Checkbox';
+import { FoldSection } from '../components/FoldSection';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -42,9 +42,10 @@ import { TEXT_RIGHT } from '../theme/align';
 
 export default function SettingsScreen() {
   const styles = useThemedStyles(makeStyles);
+  const router = useRouter();
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const { basis, setBasis } = usePayBasis();
+  const { basis } = usePayBasis();
   const [state, setState] = useState<AccumulatedState | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -75,7 +76,7 @@ export default function SettingsScreen() {
 
   /** תכנית הפדיון של מקום עבודה: לאיזה דוח, וכמה דקות — לפי האופן שנבחר. */
   function planFor(workplace: Workplace | undefined, counter: number) {
-    if (!workplace || workplace.paymentType !== 'hourly' || basis !== 'academic') return null;
+    if (!workplace || workplace.paymentType !== 'hourly' || basisFor(workplace, basis) !== 'academic') return null;
     const target = redeemTarget(workplace, reports, statuses);
     if (!target) return null;
     return { target, plan: planRedeem(counter, target.inReport, mode) };
@@ -131,7 +132,7 @@ export default function SettingsScreen() {
   }
 
   const total = accumulatedTotal(state);
-  const exampleMinutes = mode === 'complete' ? 27 : 45;
+  const anyAcademic = workplaces.some((w) => w.paymentType === 'hourly' && basisFor(w, basis) === 'academic');
   // כל מקומות העבודה הפעילים, וגם מונים של מקומות שנמחקו — מהגדול לקטן.
   const ids = [
     ...new Set([...workplaces.map((w) => w.id), ...Object.keys(state.byWorkplace)]),
@@ -153,32 +154,15 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>בסיס חישוב השכר השעתי</Text>
-        <SegmentedControl<PayBasis>
-          options={[
-            { value: 'academic', label: PAY_BASIS_LABELS.academic },
-            { value: 'regular', label: PAY_BASIS_LABELS.regular },
-          ]}
-          value={basis}
-          onChange={setBasis}
-        />
-        <Text style={styles.note}>
-          {basis === 'academic'
-            ? 'התעריף השעתי מוכפל בשעות אקדמיות (45 דק׳). דקות שאינן משלימות שעה אקדמית נכנסות למונה של הסמינר.'
-            : 'התעריף השעתי מוכפל בשעות רגילות (60 דק׳). כל זמן העבודה נטו נכנס לחישוב ללא עיגול.'}
-        </Text>
-      </View>
-
       <View style={styles.card}>
         <Text style={styles.cardLabel}>סה״כ בכל הסמינרים</Text>
         <Text style={styles.bigNumber}>{total.minutes}</Text>
         <Text style={styles.unit}>
           דקות · {formatHours(Math.round(redeemedAcademicHours(total) * 100) / 100)} שע׳ אקדמיות נפדו עד כה
         </Text>
-        {basis !== 'academic' ? (
+        {!anyAcademic ? (
           <Text style={styles.cardHint}>
-            בבסיס "שעות רגילות" כל זמן העבודה נטו כבר משולם — אין מה לפדות.
+            אין מקום עבודה שמשלם לפי שעה אקדמית — כל זמן העבודה נטו כבר משולם, ואין מה לפדות.
           </Text>
         ) : readyIds.length > 1 ? (
           <Button
@@ -196,32 +180,24 @@ export default function SettingsScreen() {
         ) : null}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>אופן הפדיון</Text>
-        <SegmentedControl<RedeemMode>
-          options={[
-            { value: 'complete', label: `${REDEEM_MODE_LABELS.complete} (מומלץ)` },
-            { value: 'whole', label: REDEEM_MODE_LABELS.whole },
-          ]}
-          value={mode}
-          onChange={setMode}
+      <FoldSection
+        title="הגדרות"
+        summary={`${mode === 'complete' ? 'השלמה לשעה שלמה' : 'שעות שלמות בלבד'} · בסיס השכר — בהגדרות כל מקום עבודה`}
+      >
+        <Checkbox
+          checked={mode === 'complete'}
+          onChange={(on) => setMode(on ? 'complete' : 'whole')}
+          label="השלמה לשעה שלמה (מומלץ)"
+          hint={
+            mode === 'complete'
+              ? 'מהמונה נלקחות קודם הדקות שחסרות לדוח השכר כדי להגיע לשעה אקדמית שלמה, ורק אחר כך שעות שלמות נוספות.'
+              : `נפדות רק שעות שלמות (${ACADEMIC_HOUR_MINUTES} דק׳ כל אחת). שבר שכבר יש בדוח נשאר בו.`
+          }
         />
-        <View style={styles.explain}>
-          <Text style={styles.note}>
-            {mode === 'complete'
-              ? 'מהמונה נלקחות קודם בדיוק הדקות שחסרות לדוח השכר כדי להגיע לשעה אקדמית שלמה, ורק אחר כך שעות שלמות נוספות. כך בדוח אין שבר עשרוני.'
-              : `נפדות רק שעות שלמות (${ACADEMIC_HOUR_MINUTES} דק׳ כל אחת), בלי קשר לסך הדוח. שבר שכבר יש בדוח נשאר בו.`}
-          </Text>
-          <Text style={styles.example}>
-            {`דוגמה: בדוח 22 שע׳ ו־18 דק׳ (22.4), במונה 70 דק׳ ← נפדות ${exampleMinutes} דק׳; הדוח: ${
-              mode === 'complete' ? '23 שע׳ בדיוק' : '23.4 שע׳'
-            }; נשארות במונה ${70 - exampleMinutes} דק׳.`}
-          </Text>
-          <Text style={styles.note}>
-            הפדיון נכנס לדוח השכר הבא שיישלח (או לדוח של החודש הנוכחי) ומשולם בתעריף של הסמינר.
-          </Text>
-        </View>
-      </View>
+        <Text style={styles.note}>
+          תשלום לפי שעה אקדמית או רגילה נקבע בעריכת כל מקום עבודה, בקבוצה "שכר ותשלום".
+        </Text>
+      </FoldSection>
 
       <Text style={styles.sectionLabel}>פירוט לפי סמינר</Text>
       <View style={styles.list}>
@@ -247,9 +223,22 @@ export default function SettingsScreen() {
           return (
             <View key={id} style={styles.row}>
               <View style={styles.rowHead}>
-                <Text style={styles.rowLabel} numberOfLines={2}>
-                  {workplace?.name ?? nameOf(id)}
-                </Text>
+                {workplace ? (
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/workplace', params: { id } })}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.nameLink, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={styles.rowLabel} numberOfLines={2}>
+                      {workplace.name}
+                    </Text>
+                    <EnterChevron size={16} />
+                  </Pressable>
+                ) : (
+                  <Text style={styles.rowLabel} numberOfLines={2}>
+                    {nameOf(id)}
+                  </Text>
+                )}
                 <Text style={styles.rowValue}>{entry.minutes} דק׳</Text>
               </View>
               <ProgressBar fraction={(entry.minutes % ACADEMIC_HOUR_MINUTES) / ACADEMIC_HOUR_MINUTES} thin />
@@ -289,6 +278,7 @@ export default function SettingsScreen() {
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    nameLink: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
     checkGroup: {
       borderRadius: radius.md,
       backgroundColor: colors.surface,
