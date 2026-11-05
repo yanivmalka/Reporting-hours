@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Animated, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { FoldChevron } from '../components/Chevrons';
 import { SelectField } from '../components/SelectField';
 import { CANCEL_PAY_LABELS, useCancelReasons, type CancelPayKind } from '../lib/cancelReasons';
@@ -207,6 +207,13 @@ export default function WorkplaceFormScreen() {
   const params = useLocalSearchParams<{ id?: string; focus?: string }>();
   const id = typeof params.id === 'string' && params.id ? params.id : undefined;
   const isEdit = Boolean(id);
+  // ב־web הדף מרונדר מראש בלי פרמטרים, כך שהשרת לא יודע אם זו עריכה או מקום
+  // חדש. לכן הרינדור הראשון בדפדפן הוא תמיד מצב טעינה, כמו בשרת, ורק אחריו
+  // הטופס — אחרת פתיחה ישירה של ?id= גורמת לאי־התאמה (#418). דגל מקומי ולא
+  // useHydrated: מסכי הניווט עוברים hydration אחרי הקליפה, שכבר הדליקה את
+  // הדגל הגלובלי. באנדרואיד אין רינדור מראש — מוצג מיד.
+  const [hydrated, setHydrated] = useState(Platform.OS !== 'web');
+  useEffect(() => setHydrated(true), []);
 
   const [form, setForm] = useState<FormState | null>(
     isEdit ? null : draftToForm(emptyDraft()),
@@ -552,9 +559,9 @@ export default function WorkplaceFormScreen() {
     outputRange: [`${colors.brandLight}00`, colors.brandLight],
   });
 
-  const title = isEdit ? 'עריכת מקום עבודה' : 'מקום עבודה חדש';
+  const title = !hydrated ? 'מקום עבודה' : isEdit ? 'עריכת מקום עבודה' : 'מקום עבודה חדש';
 
-  if (!form) {
+  if (!form || !hydrated) {
     return (
       <Screen scroll={false}>
         <Stack.Screen options={{ title }} />
