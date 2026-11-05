@@ -5,6 +5,7 @@
  * לחיצה על יום בוחרת אותו / משלימה טווח — בדיוק כמו בלוח החודשי.
  */
 import { StyleSheet, View } from 'react-native';
+import { DayDot, useDayStatus } from './DayDot';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
@@ -47,6 +48,7 @@ type Props = {
 
 export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts }: Props) {
   const styles = useStyles(makeStyles);
+  const statusOf = useDayStatus();
   const { colors } = useTheme();
   const { isRTL } = useI18n();
   const swipe = useSwipe(
@@ -116,11 +118,11 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
                   day === today && !inRange && styles.dayToday,
                 ]}
               >
-                <Text style={[styles.dayText, isEdge && styles.dayTextEdge, count === 0 && styles.dayTextEmpty]}>
+                <Text style={[styles.dayText, count === 0 && styles.dayTextEmpty, isEdge && styles.dayTextEdge]}>
                   {Number(day.slice(8))}
                 </Text>
               </View>
-              <Text style={[styles.count, count === 0 && styles.countHidden]}>{count || '·'}</Text>
+              <DayDot status={statusOf(day)} />
             </Pressable>
           );
         })}

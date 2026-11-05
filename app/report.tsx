@@ -550,7 +550,7 @@ export default function ReportScreen() {
   }
   // הדיווח החסר הקרוב (מהיום אחורה) — לקישור "הדיווח החסר הבא".
   const nextMissingAll = nextRelevantDay(courses, workplaces, existing);
-  const nextMissing = nextMissingAll.kind === 'none' ? null : nextMissingAll;
+  const nextMissing = nextMissingAll.kind === 'missing' ? nextMissingAll : null;
   // קורסים שכבר דווחו באותו יום (אותו מקום עבודה ואותו נושא) — מסומנים ✓.
   // קורס "דווח" — יש באותו יום דיווח לאותו מקום שחופף בשעות לקורס (או שנושאו שם הקורס).
   const reportedCourse = (c: Course) => courseReported(c, date, existing, editing?.id);

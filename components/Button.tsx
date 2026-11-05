@@ -14,6 +14,8 @@ type ButtonProps = {
   loading?: boolean;
   /** אייקון לפני התווית (למשל פח ב"מחיקת הדיווח") */
   icon?: string;
+  /** בזמן טעינה: סמל טעינה ולצדו התווית הזו (למשל "בודק…"), במקום סמל בלבד */
+  loadingLabel?: string;
 };
 
 /**
@@ -28,6 +30,7 @@ export function Button({
   disabled,
   loading,
   icon,
+  loadingLabel,
 }: ButtonProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -43,7 +46,12 @@ export function Button({
         isDisabled && styles.disabled,
       ]}
     >
-      {loading ? (
+      {loading && loadingLabel ? (
+        <View style={styles.content}>
+          <ActivityIndicator size="small" color={variant === 'primary' ? colors.textOnBrand : colors.brand} />
+          <Text style={[styles.label, styles[`${variant}Label`]]}>{loadingLabel}</Text>
+        </View>
+      ) : loading ? (
         <ActivityIndicator
           color={variant === 'primary' ? colors.textOnBrand : colors.brand}
         />

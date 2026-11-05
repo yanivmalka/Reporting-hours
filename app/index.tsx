@@ -354,7 +354,7 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
 /**
  * הנקודה מתחת ליום בשורת הימים — מצב הדיווח של אותו יום:
  * כתום — יש מפגש שממתין לדיווח; ירוק — כל המפגשים דווחו;
- * כחול (צבע המערכת) — מפגשים שעוד לפניך (עתידי, עכשיו, בהמשך היום);
+ * כהה — מפגשים שעוד לפניך (עתידי, עכשיו, בהמשך היום) — כמו בכל התאריכונים;
  * טבעת אפורה — כל המפגשים בוטלו. בלי מפגשים — בלי נקודה.
  */
 function dayDot(
@@ -366,7 +366,7 @@ function dayDot(
   if (live.length === 0) return { ring: colors.textMuted, label: 'כל המפגשים בוטלו' };
   if (live.some((it) => it.status === 'pending')) return { fill: colors.warning, label: 'יש מפגשים לדיווח' };
   if (live.every((it) => it.status === 'reported')) return { fill: colors.success, label: 'הכול דווח' };
-  return { fill: colors.brand, label: 'מפגשים מתוכננים' };
+  return { fill: colors.text, label: 'מפגשים מתוכננים' };
 }
 
 /**
