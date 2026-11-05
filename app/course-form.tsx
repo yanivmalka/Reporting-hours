@@ -8,10 +8,11 @@ import { Button } from '../components/Button';
 import { useConfirm } from '../components/ConfirmDialog';
 import { DateField } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
+import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
 import { TextField } from '../components/TextField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
-import { SessionDots, SessionDotsLegend, dotDescription, sessionDots, type SessionDot } from '../components/SessionDots';
+import { SessionDots, SessionDotsByMonth, SessionDotsLegend, dotDescription, sessionDots, type SessionDot } from '../components/SessionDots';
 import { removeCanceledFromPotential } from '../lib/sessions';
 import {
   WEEKDAY_NAMES,
@@ -300,10 +301,6 @@ export default function CourseFormScreen() {
   const firstExtra = form.extraDates.reduce((m, d) => (d < m ? d : m), form.from);
   const dots = id ? sessionDots(asCourse, firstExtra, `${Number(lastExtra.slice(0, 4)) + 1}${lastExtra.slice(4)}`, allReports) : [];
   void marksTick;
-  const byMonth = dots.reduce<Record<string, SessionDot[]>>((acc, d) => {
-    (acc[d.date.slice(0, 7)] ??= []).push(d);
-    return acc;
-  }, {});
   const canceledDots = dots.filter((d) => d.state === 'canceled');
   const counts = {
     reported: dots.filter((d) => d.state === 'reported').length,
@@ -325,14 +322,7 @@ export default function CourseFormScreen() {
             .filter(Boolean)
             .join(' · ')}
         </Text>
-        {Object.entries(byMonth).map(([key, list]) => (
-          <View key={key} style={styles.monthRow}>
-            <Text style={styles.monthName}>{MONTH_NAMES[Number(key.slice(5, 7)) - 1]}</Text>
-            <View style={styles.monthDots}>
-              <SessionDots dots={list} selected={picked?.date} onPress={(d) => setPicked(d)} />
-            </View>
-          </View>
-        ))}
+        <SessionDotsByMonth dots={dots} selected={picked?.date} onPress={(d) => setPicked(d)} />
         {picked ? (
           <Pressable
             disabled={!picked.reportId}
@@ -341,7 +331,12 @@ export default function CourseFormScreen() {
             style={styles.pickedRow}
           >
             <Text style={styles.pickedText}>{dotDescription(picked)}</Text>
-            {picked.reportId ? <Text style={styles.pickedLink}>לדיווח ‹</Text> : null}
+            {picked.reportId ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.pickedLink}>לדיווח</Text>
+                <EnterChevron size={18} color={colors.brand} />
+              </View>
+            ) : null}
           </Pressable>
         ) : (
           <Text style={styles.dateLabel}>לחיצה על עיגול מציגה את פרטי המפגש</Text>

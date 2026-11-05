@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { DateText } from './DateText';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { useConfirm } from './ConfirmDialog';
@@ -10,7 +11,6 @@ import {
   trashDaysLeft,
   type Workplace,
 } from '../lib/workplaces';
-import { formatDateWithHebrew } from '../lib/time';
 import { deleteWorkplaceForever, deletionSummary, restoreWorkplaceWithData } from '../lib/trash';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -93,7 +93,7 @@ export function TrashList() {
               <View key={item.id} style={styles.card}>
                 <Text style={styles.name}>{item.name}</Text>
                 <Text style={styles.meta}>
-                  נמחק ב־{formatDateWithHebrew(deletedDateISO(item.deletedAt as number), false)}
+                  נמחק ב־<DateText iso={deletedDateISO(item.deletedAt as number)} />
                   {' · '}
                   {daysLeft > 0
                     ? `נותרו ${daysLeft} ימים לשחזור`

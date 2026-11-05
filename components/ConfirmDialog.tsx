@@ -127,11 +127,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       color: c.textMuted,
       textAlign: layout.textStart,
     },
+    // כפתורים זה מתחת לזה, ברוחב מלא; הפעולה הראשית (האחרונה בקוד) למעלה.
     actions: {
-      flexDirection: layout.rowStart,
+      flexDirection: 'column-reverse',
       gap: spacing.sm,
     },
-    action: {
-      flex: 1,
-    },
+    action: {},
   });

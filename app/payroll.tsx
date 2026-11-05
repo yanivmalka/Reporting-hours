@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
-import { dateRange } from '../lib/dashboard';
+import { dateRange, deadlineRelative } from '../lib/dashboard';
 import {
   loadPayrollStatus,
   payrollItems,
@@ -13,13 +14,13 @@ import {
   type PayrollItem,
 } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
-import { formatDateWithHebrew } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { FoldChevron } from '../components/Chevrons';
 
 /** מסך דוחות שכר: ממתינים לשליחה, החודש הנוכחי (בהכנה), ודוחות שנשלחו. */
 export default function PayrollScreen() {
@@ -99,9 +100,9 @@ export default function PayrollScreen() {
         {periodTitle(item.period)} · {dateRange(item.period.start, item.period.end)} · {item.reports}{' '}
         דיווחים
         {kind === 'sent' && item.status.sentAt
-          ? ` · נשלח ${formatDateWithHebrew(new Date(item.status.sentAt).toISOString().slice(0, 10), false)}`
+          ? <> · נשלח <DateText iso={new Date(item.status.sentAt).toISOString().slice(0, 10)} /></>
           : ''}
-        {kind === 'current' ? ` · נסגר בעוד ${item.period.daysToPayday} ימים` : ''}
+        {kind === 'current' ? ` · יום אחרון לדיווח: ${deadlineRelative(item.period.end).text}` : ''}
       </Text>
       {kind === 'pending' && !item.workplace.payrollEmail ? (
         <Text style={styles.warn}>לא הוגדר מייל לשכר למקום זה</Text>
@@ -184,7 +185,7 @@ function SectionHeader({
   return (
     <Pressable onPress={onToggle} style={styles.sectionHead} accessibilityRole="button">
       <Text style={styles.section}>{title}</Text>
-      <Text style={styles.sectionChevron}>{open ? '▾' : '◂'}</Text>
+      <FoldChevron open={open} />
     </Pressable>
   );
 }

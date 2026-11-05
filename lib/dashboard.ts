@@ -85,6 +85,23 @@ export function currentPayPeriod(payday: number, today: Date = new Date()): PayP
   };
 }
 
+/** ימים מהיום עד תאריך (0 = היום, שלילי = עבר). */
+export function daysUntil(iso: string, today: Date = new Date()): number {
+  const [y, m, d] = iso.split('-').map(Number);
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((new Date(y, m - 1, d).getTime() - t.getTime()) / DAY_MS);
+}
+
+/**
+ * ניסוח יחסי ליום האחרון לדיווח שכר (סוף התקופה), תמיד ביחס להיום:
+ * "היום" · "מחר" · "עוד N ימים" · אחרי שעבר — "עבר לפני N ימים" (`late`).
+ */
+export function deadlineRelative(end: string, today: Date = new Date()): { text: string; late: boolean; days: number } {
+  const days = daysUntil(end, today);
+  if (days < 0) return { text: days === -1 ? 'עבר אתמול' : `עבר לפני ${-days} ימים`, late: true, days };
+  return { text: days === 0 ? 'היום' : days === 1 ? 'מחר' : `עוד ${days} ימים`, late: false, days };
+}
+
 const inRange = (r: WorkReport, start: string, end: string) => r.date >= start && r.date <= end;
 
 // ───────────────────────── סכומים ─────────────────────────

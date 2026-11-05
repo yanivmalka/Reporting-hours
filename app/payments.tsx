@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { PaymentDialog } from '../components/PaymentDialog';
@@ -21,7 +22,7 @@ import {
   type PayrollReport,
 } from '../lib/payroll';
 import { loadReports, type WorkReport } from '../lib/reports';
-import { formatDateWithHebrew, todayISO } from '../lib/time';
+import { todayISO } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, paymentTermsLabel, taxPercentOf, workplaceAt } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
@@ -29,6 +30,7 @@ import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { FoldChevron } from '../components/Chevrons';
 
 type Row = { item: PayrollItem; report: PayrollReport; expected: string };
 
@@ -138,8 +140,8 @@ export default function PaymentsScreen() {
         <Text style={styles.meta}>
           {periodTitle(item.period)} · {paymentTermsLabel(item.workplace)}
           {kind === 'paid'
-            ? ` · שולם ${formatDateWithHebrew(item.status.paidAt as string, false)}`
-            : ` · צפוי ${formatDateWithHebrew(expected, false)}`}
+            ? <> · שולם <DateText iso={item.status.paidAt as string} /></>
+            : <> · צפוי <DateText iso={expected} /></>}
         </Text>
         <Text style={styles.meta}>
           ברוטו {formatShekels(grossAmount(report))}
@@ -184,7 +186,7 @@ export default function PaymentsScreen() {
               )}`
             : ''}
         </Text>
-        <Text style={styles.chevron}>{open[k] ? '▾' : '◂'}</Text>
+        <FoldChevron open={!!open[k]} />
       </Pressable>
       {open[k] ? (
         list.length === 0 ? (

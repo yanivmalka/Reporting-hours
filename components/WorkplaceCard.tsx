@@ -9,6 +9,7 @@ import { radius, spacing, type AppColors } from '../theme/colors';
 import { ProgressBar } from './Charts';
 import { TEXT_RIGHT } from '../theme/align';
 import { useWorkplaceColor } from '../theme/workplaceColors';
+import { EnterChevron } from './Chevrons';
 
 type WorkplaceCardProps = {
   workplace: Workplace;
@@ -65,7 +66,7 @@ export function WorkplaceCard({ workplace, stats, onPress }: WorkplaceCardProps)
           {sub} · {dateRange(period.start, period.end)}
         </Text>
       </View>
-      <Text style={styles.chevron}>‹</Text>
+      <EnterChevron size={24} />
     </Pressable>
   );
 }

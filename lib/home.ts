@@ -8,7 +8,7 @@
 import type { Href } from 'expo-router';
 import { accumulatedTotal, redeemableHours, entryOf, type AccumulatedState } from './accumulated';
 import { courseReport, courseReported, coursesOn, sessionCancel, timeRange, type Course } from './courses';
-import { currentPayPeriod, currentPeriods, isoDate } from './dashboard';
+import { currentPayPeriod, currentPeriods, daysUntil, isoDate } from './dashboard';
 import type { PayBasis } from './payBasis';
 import { isLocked, overduePayments, payrollItems, pendingPayroll, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
@@ -299,7 +299,7 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
   // היום האחרון לדיווח שכר מתקרב (עד 3 ימים) — דוח שלא יישלח עד סופו ישולם רק בחודש הבא.
   for (const w of workplaces) {
     const p = currentPayPeriod(w.payday, now);
-    const left = p.daysToPayday - 1; // ימים עד סוף התקופה (0 = היום)
+    const left = daysUntil(p.end, now); // ימים עד סוף התקופה (0 = היום)
     if (left > 3) continue;
     if (isLocked(input.payroll[statusKey(w.id, p.start)])) continue;
     const any =

@@ -4,6 +4,7 @@ import { Pressable } from './Pressable';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { EnterChevron } from './Chevrons';
 
 type NavCardProps = {
   title: string;
@@ -29,7 +30,7 @@ export function NavCard({ title, subtitle, onPress, disabled }: NavCardProps) {
         <Text style={styles.title}>{title}</Text>
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
-      <Text style={styles.chevron}>‹</Text>
+      <EnterChevron size={24} />
     </Pressable>
   );
 }
