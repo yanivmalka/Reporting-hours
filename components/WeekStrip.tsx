@@ -1,10 +1,16 @@
 /**
- * פס שבוע מכווץ — מוצג מוצמד לראש "הדיווחים שלי" כשגוללים מעבר ללוח
- * השנה החודשי. מציג את שם החודש ואת ימי השבוע (עם מספר הדיווחים בכל יום),
- * מעבר בין שבועות בחיצים או בהחלקה, וכפתור "היום" שחוזר לשבוע הנוכחי.
+ * פס שבוע מכווץ — מוצג מוצמד לראש "יומן" כשגוללים מעבר ללוח השנה החודשי.
+ * מציג את שם החודש ואת ימי השבוע (שם היום, התאריך העברי ונקודת המצב),
+ * מעבר בין שבועות בחיצים או בהחלקה (אופקית בלבד: ימינה = השבוע הבא), וכפתור
+ * "היום". המעבר: פס ימים רציף (קודם · נוכחי · הבא) שזז אופקית כיחידה אחת,
+ * 700ms ease-in-out, ברוחב מלא ובלי עיקום — ב־web מעבר CSS בלבד. הרשימה
+ * שמתחת מתעדכנת מיד (onWeekChange נקרא בתחילת המעבר).
  * לחיצה על יום בוחרת אותו / משלימה טווח — בדיוק כמו בלוח החודשי.
  */
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
+import { hebrewDay } from '../lib/hebrewDate';
+import { useShowHebrewDates } from '../lib/hebrewDatePref';
 import { DayDot, useDayStatus } from './DayDot';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
@@ -51,11 +57,49 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
   const statusOf = useDayStatus();
   const { colors } = useTheme();
   const { isRTL } = useI18n();
+  const heb = useShowHebrewDates();
+  // השבוע שמוצג בפס בפועל — מתעדכן לשבוע החדש רק בסוף המעבר.
+  const [shown, setShown] = useState(weekStart);
+  const [width, setWidth] = useState(0);
+  const anim = useRef(new Animated.Value(0)).current; // ‎-1 = הקודם · 0 = נוכחי · 1 = הבא
+  const [webShift, setWebShift] = useState<{ to: -1 | 0 | 1; animate: boolean }>({ to: 0, animate: false });
+  const moving = useRef(false);
+
+  // שינוי שבוע מבחוץ (בחירה בלוח החודשי, "היום") — בלי מעבר.
+  useEffect(() => {
+    if (!moving.current) setShown(weekStart);
+  }, [weekStart]);
+
+  function go(delta: 1 | -1) {
+    if (moving.current) return;
+    const target = shiftWeek(shown, delta);
+    moving.current = true;
+    onWeekChange(target); // הרשימה מתעדכנת מיד
+    const done = () => {
+      setShown(target);
+      moving.current = false;
+      if (Platform.OS === 'web') setWebShift({ to: 0, animate: false });
+      else anim.setValue(0);
+    };
+    if (!width) return done();
+    if (Platform.OS === 'web') {
+      setWebShift({ to: delta, animate: true });
+      setTimeout(done, SLIDE_MS);
+    } else {
+      Animated.timing(anim, {
+        toValue: delta,
+        duration: SLIDE_MS,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }).start(done);
+    }
+  }
+
   const swipe = useSwipe(
-    () => onWeekChange(shiftWeek(weekStart, 1)),
-    () => onWeekChange(shiftWeek(weekStart, -1)),
+    () => go(1),
+    () => go(-1),
   );
-  const [y, m, d] = weekStart.split('-').map(Number);
+  const [y, m, d] = shown.split('-').map(Number);
   const days = Array.from({ length: 7 }, (_, i) => iso(y, m - 1, d + i));
   const now = new Date();
   const today = iso(now.getFullYear(), now.getMonth(), now.getDate());
@@ -70,7 +114,7 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
     <View style={styles.wrap} {...swipe}>
       <View style={styles.head}>
         <Pressable
-          onPress={() => onWeekChange(shiftWeek(weekStart, -1))}
+          onPress={() => go(-1)}
           style={styles.nav}
           accessibilityRole="button"
           accessibilityLabel="שבוע קודם"
@@ -79,7 +123,7 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
         </Pressable>
         <Text style={styles.title}>{title}</Text>
         <Pressable
-          onPress={() => onWeekChange(shiftWeek(weekStart, 1))}
+          onPress={() => go(1)}
           style={styles.nav}
           accessibilityRole="button"
           accessibilityLabel="שבוע הבא"
@@ -97,39 +141,83 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
           <Text style={[styles.todayText, showsToday && styles.todayTextOff]}>היום</Text>
         </Pressable>
       </View>
-      <View style={styles.row}>
-        {days.map((day, i) => {
-          const inRange = range != null && day >= range.from && day <= range.to;
-          const isEdge = range != null && (day === range.from || day === range.to);
-          const count = counts[day] ?? 0;
-          return (
-            <Pressable
-              key={day}
-              style={styles.cell}
-              onPress={() => onRangeChange(nextRange(range, day))}
-              accessibilityLabel={day}
-            >
-              <Text style={styles.weekday}>{WEEKDAYS[i]}</Text>
-              <View
-                style={[
-                  styles.day,
-                  inRange && styles.dayInRange,
-                  isEdge && styles.dayEdge,
-                  day === today && !inRange && styles.dayToday,
-                ]}
-              >
-                <Text style={[styles.dayText, count === 0 && styles.dayTextEmpty, isEdge && styles.dayTextEdge]}>
-                  {Number(day.slice(8))}
-                </Text>
+      <View style={styles.viewport} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        {/*
+          הפס: [קודם · נוכחי · הבא] בכיוון RTL — הקודם מימין והבא משמאל. הפס
+          הרחב מיושר לימין, ולכן הזזה ב־W מציגה את השבוע האמצעי; מעבר לבא =
+          הזזה נוספת ימינה, לקודם = חזרה שמאלה.
+        */}
+        <Animated.View
+          style={[
+            styles.track,
+            { width: width * 3 || undefined },
+            Platform.OS === 'web'
+              ? ({
+                  transform: [{ translateX: width + webShift.to * width }],
+                  transitionProperty: webShift.animate ? 'transform' : 'none',
+                  transitionDuration: `${SLIDE_MS}ms`,
+                  transitionTimingFunction: 'ease-in-out',
+                } as object)
+              : {
+                  transform: [
+                    {
+                      translateX: anim.interpolate({
+                        inputRange: [-1, 0, 1],
+                        outputRange: [0, width, 2 * width],
+                      }),
+                    },
+                  ],
+                },
+          ]}
+        >
+          {[-1, 0, 1].map((delta) => {
+            const ws = shiftWeek(shown, delta);
+            const [wy, wm, wd] = ws.split('-').map(Number);
+            const week = Array.from({ length: 7 }, (_, i) => iso(wy, wm - 1, wd + i));
+            return (
+              <View key={ws} style={[styles.row, { width: width || undefined }]}>
+                {week.map((day, i) => {
+                  const inRange = range != null && day >= range.from && day <= range.to;
+                  const isEdge = range != null && (day === range.from || day === range.to);
+                  const count = counts[day] ?? 0;
+                  return (
+                    <Pressable
+                      key={day}
+                      style={styles.cell}
+                      onPress={() => onRangeChange(nextRange(range, day))}
+                      accessibilityLabel={day}
+                    >
+                      <Text style={styles.weekday}>{WEEKDAYS[i]}</Text>
+                      <View
+                        style={[
+                          styles.day,
+                          inRange && styles.dayInRange,
+                          isEdge && styles.dayEdge,
+                          day === today && !inRange && styles.dayToday,
+                        ]}
+                      >
+                        <Text style={[styles.dayText, count === 0 && styles.dayTextEmpty, isEdge && styles.dayTextEdge]}>
+                          {Number(day.slice(8))}
+                        </Text>
+                        {heb ? (
+                          <Text style={[styles.dayHeb, isEdge && styles.dayTextEdge]}>{hebrewDay(day)}</Text>
+                        ) : null}
+                      </View>
+                      <DayDot status={statusOf(day)} />
+                    </Pressable>
+                  );
+                })}
               </View>
-              <DayDot status={statusOf(day)} />
-            </Pressable>
-          );
-        })}
+            );
+          })}
+        </Animated.View>
       </View>
     </View>
   );
 }
+
+/** משך מעבר שבוע בפס. */
+const SLIDE_MS = 700;
 
 const makeStyles = (c: ColorScheme) =>
   StyleSheet.create({
@@ -137,7 +225,6 @@ const makeStyles = (c: ColorScheme) =>
       backgroundColor: c.surface,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: c.border,
-      paddingHorizontal: spacing.sm,
       paddingBottom: spacing.xs,
       elevation: 4,
       shadowColor: '#000',
@@ -149,7 +236,10 @@ const makeStyles = (c: ColorScheme) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
     },
+    viewport: { width: '100%', overflow: 'hidden' },
+    track: { flexDirection: 'row' },
     nav: {
       width: 40,
       height: 40,
@@ -199,9 +289,9 @@ const makeStyles = (c: ColorScheme) =>
       color: c.textMuted,
     },
     day: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 38,
+      height: 40,
+      borderRadius: 19,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -211,6 +301,7 @@ const makeStyles = (c: ColorScheme) =>
     dayText: { fontSize: 15, fontWeight: '600', color: c.text },
     dayTextEdge: { color: c.textOnBrand, fontWeight: '800' },
     dayTextEmpty: { color: c.textMuted, fontWeight: '400' },
+    dayHeb: { fontSize: 9, color: c.textMuted, lineHeight: 11 },
     count: { fontSize: 10, fontWeight: '700', color: c.brand, height: 13 },
     countHidden: { color: 'transparent' },
   });

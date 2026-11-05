@@ -68,24 +68,25 @@
 | קובץ | מה יש בו |
 |---|---|
 | `_layout.tsx` | Stack, כותרות (☰ / חזרה מימין, ⋮ משמאל), Providers |
-| `index.tsx` | בית: ברכה, כפתור דיווח, לו״ז, התראות |
-| `report.tsx` | אשף דיווח חדש / עריכה, כולל מחיקה |
+| `index.tsx` | בית: ברכה; שורה עליונה — כפתור דיווח ("היום הרלוונטי הבא", `nextRelevantDay`) ואריח לוח בקרה; לו״ז עם קישור "ליומן"; התראות (כולל מוסתרות) |
+| `report.tsx` | אשף דיווח: כניסה ישירה (`?course&date` — מסך אחד "דיווח מפגש") או מלאה (פס שלבים); עריכה ומחיקה |
 | `report-view.tsx` | תצוגת דיווח (קריאה בלבד), עריכה, "השיעור לא התקיים" |
-| `reports.tsx` | הדיווחים שלי: לוח חודשי, סינון, רשימה |
-| `workplaces.tsx` / `workplace.tsx` / `workplace-form.tsx` | רשימת מקומות / פירוט מקום / עריכת מקום |
+| `reports.tsx` | "יומן": בורר תכנון (`components/PlanList.tsx`) · דיווחים (`?tab=reports`); תאריכון, שורה מוצמדת (`WeekStrip`) וסינון משותפים |
+| `workplaces.tsx` / `workplace.tsx` / `workplace-form.tsx` | רשימת מקומות / פירוט מקום / עריכת מקום — קבוצות מתקפלות; מקום חדש בוויזארד; `?focus=payroll` פותח את "דוחות שכר" ומדגיש |
 | `course-form.tsx` | קורס מחזורי |
 | `dashboard.tsx` | לוח בקרה (חישובים ב־`lib/dashboard.ts`, `lib/forecast.ts`) |
 | `payroll.tsx` / `payroll-report.tsx` | דוחות שכר / דוח בודד, מייל, סימון נשלח |
 | `payments.tsx`, `tax.tsx`, `profile.tsx` | תשלומים, מס, פרטים אישיים |
 | `archive.tsx`, `trash.tsx` | ארכיון ואשפה |
-| `settings.tsx`, `data.tsx` | הגדרות; ניהול נתונים וגיבוי |
+| `settings.tsx`, `data.tsx` | דקות מצטברות (מונה ובסיס חישוב שכר); ניהול נתונים וגיבוי |
+| `holidays.tsx` | חגים וחופשות: מתגי הביטול האוטומטי |
 
 ## חישובים (`lib/`)
 
 - זמן ושעות: `time.ts`, `academic.ts` (45 דק׳), `accumulated.ts`, `redeem.ts`.
 - כסף: `pay.ts`, `payBasis.tsx`, `travel.ts`, `payroll.ts`, `forecast.ts`.
 - לוח שנה: `hebrewDate.ts`, `holidays.ts`, `sessions.ts`.
-- מסכים: `home.ts`, `dashboard.ts`, `recommend.ts`.
+- מסכים: `home.ts` (כולל `nextRelevantDay`), `dashboard.ts` (כולל `deadlineRelative`), `recommend.ts`, `dayStatus.ts`.
 - תשתית: `storage.ts`, `sync.ts`, `firebase.ts`, `authPlatform(.web).ts`, `backup.ts`, `update.ts`, `rtl.ts`, `i18n.tsx`, `strings.ts`, `demo.ts`.
 
 ## רכיבים בולטים (`components/`)
@@ -93,5 +94,6 @@
 - דיאלוגים: `ConfirmDialog`, `SessionCancelDialog`, `PaymentDialog`.
 - ניווט וכותרות: `AppDrawer`, `Screen`, `ExitGuard`.
 - תשתית: `CloudSync` (סנכרון), `BackupScheduler` / `BackupSection`, `UpdateChecker`, `DemoSeeder`.
-- תצוגה: `Charts`, `ForecastChart`, `WorkplaceTile`, `ReportCard`, `RangeCalendar`, `WeekStrip`, `TrashList`.
+- תצוגה: `Charts`, `ForecastChart`, `WorkplaceTile`, `ReportCard`, `RangeCalendar`, `WeekStrip`, `TrashList`, `PlanList`.
+- משותפים: `DateText` (לועזי + עברי בלי שבירה), `Chevrons` (חץ כניסה ‹ וחץ קיפול ⌄/⌃), `DayDot` (נקודות מצב יום ומקרא, לפי `lib/dayStatus.ts`), `useFlash` / `useFade` (הבהוב / עמעום קצר).
 - קלט: `TimeInput`, `DatePicker`, `SelectField`, `TextField`. את `Text` ו־`TextInput` מייבאים תמיד מ־`components/Text`.

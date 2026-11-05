@@ -237,7 +237,7 @@ export default function PayrollReportScreen() {
         <Button
           label={workplace.payrollEmail ? 'עריכת כתובות' : 'הגדרת מייל לשכר'}
           variant="secondary"
-          onPress={() => router.push({ pathname: '/workplace-form', params: { id: workplace.id } })}
+          onPress={() => router.push({ pathname: '/workplace-form', params: { id: workplace.id, focus: 'payroll' } })}
         />
       </View>
 

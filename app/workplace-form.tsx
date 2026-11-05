@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, ScrollView, StyleSheet, View } from 'react-native';
+import { FoldChevron } from '../components/Chevrons';
 import { formatShekels } from '../lib/travel';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
@@ -84,6 +85,44 @@ type FormState = {
 
 type Errors = Partial<Record<keyof FormState, string>> & { contactErrors?: Record<string, string> };
 
+/**
+ * קבוצות הטופס, לפי הסדר: כללי · שכר ותשלום · (ביטולים) · קורסים · הגעה
+ * ונסיעות · דוחות שכר · ניהול. בעריכה — קבוצות מתקפלות עם שורת תקציר;
+ * ביצירה — וויזארד, צעד לכל קבוצה.
+ */
+type GroupKey = 'general' | 'pay' | 'courses' | 'arrival' | 'payroll' | 'manage';
+const GROUP_TITLES: Record<GroupKey, string> = {
+  general: 'כללי',
+  pay: 'שכר ותשלום',
+  courses: 'קורסים',
+  arrival: 'הגעה ונסיעות',
+  payroll: 'דוחות שכר',
+  manage: 'ניהול',
+};
+const EDIT_GROUPS: GroupKey[] = ['general', 'pay', 'courses', 'arrival', 'payroll', 'manage'];
+/** ביצירה: קורסים וניהול — רק אחרי שמירה. */
+const NEW_STEPS: GroupKey[] = ['general', 'pay', 'arrival', 'payroll'];
+/** לאיזו קבוצה שייכת כל שגיאה (לפתיחת הקבוצה / לחזרה לצעד). */
+const ERROR_GROUP: Partial<Record<string, GroupKey>> = {
+  name: 'general',
+  contactErrors: 'general',
+  rate: 'pay',
+  payday: 'pay',
+  paymentTermsDays: 'pay',
+  taxPercent: 'pay',
+  employeeNumber: 'pay',
+  address: 'arrival',
+  travelCostPerDirection: 'arrival',
+  tripsPerDay: 'arrival',
+  taxiPhone: 'arrival',
+  taxiHours: 'arrival',
+  taxiNightTime: 'arrival',
+  payrollEmail: 'payroll',
+  ccEmails: 'payroll',
+};
+const groupsWithErrors = (e: Errors): GroupKey[] =>
+  [...new Set(Object.entries(e).filter(([, v]) => Boolean(v)).map(([k]) => ERROR_GROUP[k] ?? 'general'))];
+
 /** אפשרויות "שוטף +" לבחירה (בלי הקלדה חופשית). */
 const TERMS_OPTIONS = [0, 15, 30, 45, 60, 90];
 
@@ -153,7 +192,7 @@ export default function WorkplaceFormScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; focus?: string }>();
   const id = typeof params.id === 'string' && params.id ? params.id : undefined;
   const isEdit = Boolean(id);
 
@@ -171,6 +210,17 @@ export default function WorkplaceFormScreen() {
   /** מה יימחק עם מקום העבודה, והאם מותר (דוח שנשלח / שולם — רק ארכיון) */
   const [deletion, setDeletion] = useState<WorkplaceDeletion | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  /** ביצירה: הצעד בוויזארד */
+  const [wizStep, setWizStep] = useState(0);
+  /** בעריכה: הקבוצות הפתוחות. "עריכת כתובות" מדוח השכר (?focus=payroll) — דוחות שכר פתוחה */
+  const [openGroups, setOpenGroups] = useState<GroupKey[]>(params.focus === 'payroll' ? ['payroll'] : []);
+  const toggleGroup = (k: GroupKey) =>
+    setOpenGroups((g) => (g.includes(k) ? g.filter((x) => x !== k) : [...g, k]));
+  const scrollRef = useRef<ScrollView>(null);
+  const groupY = useRef<Partial<Record<GroupKey, number>>>({});
+  // הדגשה רגעית של שדות "דוחות שכר" — רקע בהיר שדוהה תוך ~2 שניות.
+  const highlight = useRef(new Animated.Value(0)).current;
+  const focusDone = useRef(false);
 
   // הקורסים של מקום העבודה — נטען מחדש בחזרה מטופס הקורס.
   useFocusEffect(
@@ -212,6 +262,18 @@ export default function WorkplaceFormScreen() {
       active = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (params.focus !== 'payroll' || !form || focusDone.current) return;
+    focusDone.current = true;
+    const t = setTimeout(() => {
+      const y = groupY.current.payroll;
+      if (y != null) scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+      highlight.setValue(1);
+      Animated.timing(highlight, { toValue: 0, duration: 2000, useNativeDriver: false }).start();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [params.focus, form, highlight]);
 
   const set = useCallback(
     <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -329,7 +391,12 @@ export default function WorkplaceFormScreen() {
     if (!form) return;
     const found = validate(form);
     setErrors(found);
-    if (Object.values(found).some(Boolean)) return;
+    if (Object.values(found).some(Boolean)) {
+      const bad = groupsWithErrors(found);
+      if (isEdit) setOpenGroups((g) => [...new Set([...g, ...bad])]);
+      else setWizStep(Math.min(...bad.map((k) => Math.max(0, NEW_STEPS.indexOf(k)))));
+      return;
+    }
 
     setSaving(true);
     await upsertWorkplace({
@@ -415,6 +482,54 @@ export default function WorkplaceFormScreen() {
   }
 
 
+  /** וויזארד: מעבר לצעד הבא אחרי בדיקת השדות של הצעד הנוכחי. */
+  function wizNext() {
+    if (!form) return;
+    const found = validate(form);
+    const here = Object.fromEntries(
+      Object.entries(found).filter(([k, v]) => v && (ERROR_GROUP[k] ?? 'general') === NEW_STEPS[wizStep]),
+    ) as Errors;
+    setErrors(here);
+    if (Object.keys(here).length) return;
+    setWizStep((n) => Math.min(NEW_STEPS.length - 1, n + 1));
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }
+
+  /** שורת התקציר של קבוצה סגורה. */
+  function summaryOf(key: GroupKey): string {
+    if (!form) return '';
+    switch (key) {
+      case 'general':
+        return [form.name || 'ללא שם', form.contacts.length ? `${form.contacts.length} אנשי קשר` : null]
+          .filter(Boolean)
+          .join(' · ');
+      case 'pay': {
+        const rate = parseNum(form.rate);
+        return [
+          form.paymentType === 'monthly' ? `חודשי ${formatShekels(rate || 0)}` : `${formatShekels(rate || 0)} לשעה`,
+          Number(form.taxPercent) ? `מס ${form.taxPercent}%` : null,
+          `שוטף + ${form.paymentTermsDays}`,
+          `יום אחרון ${Number(form.payday) >= 31 ? 'סוף החודש' : form.payday}`,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+      }
+      case 'courses':
+        return courses.length === 0 ? 'אין קורסים' : courses.length === 1 ? 'קורס אחד' : `${courses.length} קורסים`;
+      case 'arrival':
+        return [ARRIVAL_MODE_LABELS[form.arrivalMode], form.address.trim() || null].filter(Boolean).join(' · ');
+      case 'payroll':
+        return form.payrollEmail.trim() || 'לא הוגדר מייל לשכר';
+      case 'manage':
+        return 'דוחות שכר קיימים, ארכיון ומחיקה';
+    }
+  }
+
+  const highlightBg = highlight.interpolate({
+    inputRange: [0, 1],
+    outputRange: [`${colors.brandLight}00`, colors.brandLight],
+  });
+
   const title = isEdit ? 'עריכת מקום עבודה' : 'מקום עבודה חדש';
 
   if (!form) {
@@ -442,464 +557,561 @@ export default function WorkplaceFormScreen() {
     });
 
   return (
-    <Screen keyboardFooter>
+    <Screen keyboardFooter scrollRef={scrollRef}>
       <Stack.Screen options={{ title }} />
 
-      <FormField label="שם מקום העבודה" error={errors.name}>
-        <TextField
-          value={form.name}
-          onChangeText={(t) => set('name', t)}
-          placeholder="מכללה / אוניברסיטה"
-          invalid={Boolean(errors.name)}
-        />
-      </FormField>
+      {/* ── קבוצות הטופס ── */}
+      {(() => {
+        const sections: Record<GroupKey, React.ReactNode> = {
+          general: (
+            <>
+            <FormField label="שם מקום העבודה" error={errors.name}>
+              <TextField
+                value={form.name}
+                onChangeText={(t) => set('name', t)}
+                placeholder="מכללה / אוניברסיטה"
+                invalid={Boolean(errors.name)}
+              />
+            </FormField>
 
-      <FormField label="צבע" hint="מסמן את מקום העבודה בלו״ז, בדיווחים ובלוח הבקרה. משתנה יחד עם צבע המערכת.">
-        <View style={styles.swatches} accessibilityRole="radiogroup">
-          {workplacePalette(colors).map((c, i) => {
-            const on = form.colorIndex === i;
-            return (
-              <Pressable
-                key={i}
-                onPress={() => set('colorIndex', i)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`צבע ${i + 1}`}
-                style={[styles.swatch, { backgroundColor: c }, on && { borderColor: colors.text }]}
-              >
-                {on ? <Text style={styles.swatchCheck}>✓</Text> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      </FormField>
-
-      <FormField label="כתובת" hint="מוצגת בתזכורת לנסיעה">
-        <TextField
-          value={form.address}
-          onChangeText={(t) => set('address', t)}
-          placeholder="רחוב, מספר, עיר"
-        />
-      </FormField>
-
-      <FormField label="אנשי קשר" hint="מזכירות, רכז/ת, מחלקת שכר — טלפון ו/או מייל">
-        <View style={styles.contacts}>
-          {form.contacts.map((c) => (
-            <View key={c.id} style={styles.contactCard}>
-              <View style={styles.phoneRow}>
-                <View style={{ flex: 1 }}>
-                  <TextField
-                    value={c.description}
-                    onChangeText={(t) => updateContact(c.id, { description: t })}
-                    placeholder="תיאור (למשל מזכירות)"
-                  />
-                </View>
-                <Pressable
-                  onPress={() => removeContact(c.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel="הסרת איש הקשר"
-                  style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
-                >
-                  <Text style={styles.removeText}>✕</Text>
-                </Pressable>
+            <FormField label="צבע" hint="מסמן את מקום העבודה בלו״ז, בדיווחים ובלוח הבקרה. משתנה יחד עם צבע המערכת.">
+              <View style={styles.swatches} accessibilityRole="radiogroup">
+                {workplacePalette(colors).map((c, i) => {
+                  const on = form.colorIndex === i;
+                  return (
+                    <Pressable
+                      key={i}
+                      onPress={() => set('colorIndex', i)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={`צבע ${i + 1}`}
+                      style={[styles.swatch, { backgroundColor: c }, on && { borderColor: colors.text }]}
+                    >
+                      {on ? <Text style={styles.swatchCheck}>✓</Text> : null}
+                    </Pressable>
+                  );
+                })}
               </View>
-              <TextField
-                value={c.name}
-                onChangeText={(t) => updateContact(c.id, { name: t })}
-                placeholder="שם (רשות)"
+            </FormField>
+
+            <FormField label="אנשי קשר" hint="מזכירות, רכז/ת, מחלקת שכר — טלפון ו/או מייל">
+              <View style={styles.contacts}>
+                {form.contacts.map((c) => (
+                  <View key={c.id} style={styles.contactCard}>
+                    <View style={styles.phoneRow}>
+                      <View style={{ flex: 1 }}>
+                        <TextField
+                          value={c.description}
+                          onChangeText={(t) => updateContact(c.id, { description: t })}
+                          placeholder="תיאור (למשל מזכירות)"
+                        />
+                      </View>
+                      <Pressable
+                        onPress={() => removeContact(c.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel="הסרת איש הקשר"
+                        style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
+                      >
+                        <Text style={styles.removeText}>✕</Text>
+                      </Pressable>
+                    </View>
+                    <TextField
+                      value={c.name}
+                      onChangeText={(t) => updateContact(c.id, { name: t })}
+                      placeholder="שם (רשות)"
+                    />
+                    <TextField
+                      value={c.phone}
+                      onChangeText={(t) => updateContact(c.id, { phone: t })}
+                      phone
+                      placeholder="טלפון"
+                    />
+                    <TextField
+                      value={c.email}
+                      onChangeText={(t) => updateContact(c.id, { email: t })}
+                      email
+                      placeholder="מייל"
+                    />
+                    {errors.contactErrors?.[c.id] ? (
+                      <Text style={styles.contactError}>{errors.contactErrors[c.id]}</Text>
+                    ) : null}
+                  </View>
+                ))}
+                <View style={styles.chipWrap}>
+                  <Pressable
+                    onPress={() => addContact()}
+                    style={({ pressed }) => [styles.termsChip, pressed && { opacity: 0.7 }]}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.termsChipText}>+ הוספה ידנית</Text>
+                  </Pressable>
+                  {contactsSupported ? (
+                    <Pressable
+                      onPress={importContact}
+                      style={({ pressed }) => [styles.termsChip, pressed && { opacity: 0.7 }]}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.termsChipText}>+ מאנשי הקשר</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            </FormField>
+            </>
+          ),
+          pay: (
+            <>
+            <FormField label="סוג תשלום">
+              <SegmentedControl
+                options={PAYMENT_OPTIONS}
+                value={form.paymentType}
+                onChange={(v) => set('paymentType', v)}
               />
-              <TextField
-                value={c.phone}
-                onChangeText={(t) => updateContact(c.id, { phone: t })}
-                phone
-                placeholder="טלפון"
-              />
-              <TextField
-                value={c.email}
-                onChangeText={(t) => updateContact(c.id, { email: t })}
-                email
-                placeholder="מייל"
-              />
-              {errors.contactErrors?.[c.id] ? (
-                <Text style={styles.contactError}>{errors.contactErrors[c.id]}</Text>
-              ) : null}
-            </View>
-          ))}
-          <View style={styles.chipWrap}>
-            <Pressable
-              onPress={() => addContact()}
-              style={({ pressed }) => [styles.termsChip, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
+            </FormField>
+
+            <FormField
+              label={form.paymentType === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)'}
+              error={errors.rate}
             >
-              <Text style={styles.termsChipText}>+ הוספה ידנית</Text>
-            </Pressable>
-            {contactsSupported ? (
-              <Pressable
-                onPress={importContact}
-                style={({ pressed }) => [styles.termsChip, pressed && { opacity: 0.7 }]}
-                accessibilityRole="button"
+              <TextField
+                value={form.rate}
+                onChangeText={(t) => set('rate', t)}
+                numeric
+                invalid={Boolean(errors.rate)}
+              />
+            </FormField>
+
+            <FormField
+              label="אחוז מס (ניכוי במקור)"
+              hint="לחישוב הסכום נטו במעקב התשלומים"
+              error={errors.taxPercent}
+            >
+              <TextField
+                value={form.taxPercent}
+                onChangeText={(t) => set('taxPercent', t)}
+                numeric
+                invalid={Boolean(errors.taxPercent)}
+              />
+            </FormField>
+
+            <FormField
+              label="תנאי תשלום"
+              hint="מספר הימים מסוף החודש ועד שהתשלום מתקבל בפועל (ברירת מחדל: שוטף + 30)"
+              error={errors.paymentTermsDays}
+            >
+              <ScrollView
+                horizontal
+                style={{ flexGrow: 0 }}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.termsRow}
               >
-                <Text style={styles.termsChipText}>+ מאנשי הקשר</Text>
-              </Pressable>
+                {TERMS_OPTIONS.map((n) => {
+                  const on = form.paymentTermsDays === String(n);
+                  return (
+                    <Pressable
+                      key={n}
+                      onPress={() => set('paymentTermsDays', String(n))}
+                      style={[styles.termsChip, on && styles.termsChipOn]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[styles.termsChipText, on && styles.termsChipTextOn]}>
+                        {n === 0 ? 'שוטף' : `שוטף + ${n}`}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </FormField>
+
+            <FormField
+              label="יום אחרון בחודש לדיווח שכר"
+              hint="חשוב: עד היום הזה (כולל) צריך לשלוח את דוח השכר — דוח שנשלח אחריו ישולם רק בחודש שאחרי. התקופה החודשית מסתיימת ביום הזה. 31 = סוף החודש."
+              error={errors.payday}
+            >
+              <TextField
+                value={form.payday}
+                onChangeText={(t) => set('payday', t)}
+                numeric
+                invalid={Boolean(errors.payday)}
+              />
+            </FormField>
+
+            <FormField label="מספר עובד" hint="רשות — יופיע בדוחות ובמיילים לשכר">
+              <TextField
+                value={form.employeeNumber}
+                onChangeText={(t) => set('employeeNumber', t)}
+                numeric
+              />
+            </FormField>
+
+            {termsDirty ? (
+              <FormField
+                label="השינוי בתנאים חל מתאריך"
+                hint="דיווחים לפני תאריך זה יחושבו לפי התנאים הקודמים"
+              >
+                <DateField value={effectiveFrom} onChange={setEffectiveFrom} />
+              </FormField>
             ) : null}
-          </View>
-        </View>
-      </FormField>
 
-      <FormField label="סוג תשלום">
-        <SegmentedControl
-          options={PAYMENT_OPTIONS}
-          value={form.paymentType}
-          onChange={(v) => set('paymentType', v)}
-        />
-      </FormField>
+            {original?.termsHistory?.length ? (
+              <FormField label="היסטוריית תנאים">
+                <View style={styles.courses}>
+                  {[...original.termsHistory].reverse().map((v) => (
+                    <Text key={v.until} style={styles.courseMeta}>
+                      עד {formatISODate(v.until)}:{' '}
+                      {v.paymentType === 'monthly' ? `חודשי ${formatShekels(v.rate)}` : `${formatShekels(v.rate)} לשעה`}
+                      {' · '}
+                      {ARRIVAL_MODE_LABELS[v.arrivalMode]}
+                      {v.arrivalMode === 'public_transport'
+                        ? ` ${formatShekels(v.travelCostPerDirection)} × ${v.tripsPerDay}`
+                        : ''}
+                      {v.taxPercent ? ` · מס ${v.taxPercent}%` : ''}
+                    </Text>
+                  ))}
+                </View>
+              </FormField>
+            ) : null}
+            </>
+          ),
+          arrival: (
+            <>
+            <FormField label="כתובת" hint="מוצגת בתזכורת לנסיעה">
+              <TextField
+                value={form.address}
+                onChangeText={(t) => set('address', t)}
+                placeholder="רחוב, מספר, עיר"
+              />
+            </FormField>
 
-      <FormField
-        label={form.paymentType === 'hourly' ? 'תעריף לשעה (₪)' : 'שכר חודשי (₪)'}
-        error={errors.rate}
-      >
-        <TextField
-          value={form.rate}
-          onChangeText={(t) => set('rate', t)}
-          numeric
-          invalid={Boolean(errors.rate)}
-        />
-      </FormField>
+            <FormField label="אופן הגעה">
+              <View style={styles.chipWrap}>
+                {ARRIVAL_OPTIONS.map((o) => {
+                  const on = form.arrivalMode === o.value;
+                  return (
+                    <Pressable
+                      key={o.value}
+                      onPress={() => set('arrivalMode', o.value)}
+                      style={[styles.termsChip, on && styles.termsChipOn]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[styles.termsChipText, on && styles.termsChipTextOn]}>{o.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </FormField>
 
-      <FormField
-        label="יום אחרון בחודש לדיווח שכר"
-        hint="חשוב: עד היום הזה (כולל) צריך לשלוח את דוח השכר — דוח שנשלח אחריו ישולם רק בחודש שאחרי. התקופה החודשית מסתיימת ביום הזה. 31 = סוף החודש."
-        error={errors.payday}
-      >
-        <TextField
-          value={form.payday}
-          onChangeText={(t) => set('payday', t)}
-          numeric
-          invalid={Boolean(errors.payday)}
-        />
-      </FormField>
+            {isTaxi(form.arrivalMode) ? (
+              <>
+                <FormField
+                  label="טלפון להזמנת מונית"
+                  hint={
+                    form.taxiContact
+                      ? `מאנשי הקשר: ${form.taxiContact}`
+                      : form.arrivalMode === 'taxi_voucher'
+                        ? 'תחנה / רכז ההסעות שמזמינים דרכו את הפתק'
+                        : 'תחנת מוניות או נהג קבוע'
+                  }
+                  error={errors.taxiPhone}
+                >
+                  <View style={styles.phoneRow}>
+                    <View style={{ flex: 1 }}>
+                      <TextField
+                        value={form.taxiPhone}
+                        onChangeText={(t) => {
+                          set('taxiPhone', t);
+                          set('taxiContact', '');
+                        }}
+                        phone
+                        placeholder="050-0000000"
+                        invalid={Boolean(errors.taxiPhone)}
+                      />
+                    </View>
+                    {contactsSupported ? (
+                      <Pressable
+                        onPress={chooseContact}
+                        style={({ pressed }) => [styles.termsChip, styles.contactBtn, pressed && { opacity: 0.7 }]}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.termsChipText}>מאנשי הקשר</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </FormField>
 
-      <FormField
-        label="תנאי תשלום"
-        hint="מספר הימים מסוף החודש ועד שהתשלום מתקבל בפועל (ברירת מחדל: שוטף + 30)"
-        error={errors.paymentTermsDays}
-      >
-        <ScrollView
-          horizontal
-          style={{ flexGrow: 0 }}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.termsRow}
-        >
-          {TERMS_OPTIONS.map((n) => {
-            const on = form.paymentTermsDays === String(n);
-            return (
-              <Pressable
-                key={n}
-                onPress={() => set('paymentTermsDays', String(n))}
-                style={[styles.termsChip, on && styles.termsChipOn]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-              >
-                <Text style={[styles.termsChipText, on && styles.termsChipTextOn]}>
-                  {n === 0 ? 'שוטף' : `שוטף + ${n}`}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </FormField>
+                <FormField label="תזכורת להזמנת מונית">
+                  <SegmentedControl
+                    options={TAXI_REMINDER_OPTIONS}
+                    value={form.taxiReminderKind}
+                    onChange={(v) => set('taxiReminderKind', v)}
+                  />
+                </FormField>
 
-      <FormField label="אופן הגעה">
-        <View style={styles.chipWrap}>
-          {ARRIVAL_OPTIONS.map((o) => {
-            const on = form.arrivalMode === o.value;
-            return (
-              <Pressable
-                key={o.value}
-                onPress={() => set('arrivalMode', o.value)}
-                style={[styles.termsChip, on && styles.termsChipOn]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-              >
-                <Text style={[styles.termsChipText, on && styles.termsChipTextOn]}>{o.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </FormField>
+                {form.taxiReminderKind === 'hoursBefore' ? (
+                  <FormField
+                    label="כמה שעות לפני היציאה"
+                    hint="שעת היציאה = תחילת הקורס הראשון באותו יום"
+                    error={errors.taxiHours}
+                  >
+                    <TextField
+                      value={form.taxiHours}
+                      onChangeText={(t) => set('taxiHours', t)}
+                      numeric
+                      invalid={Boolean(errors.taxiHours)}
+                    />
+                  </FormField>
+                ) : null}
 
-      {isTaxi(form.arrivalMode) ? (
-        <>
+                {form.taxiReminderKind === 'nightBefore' ? (
+                  <FormField
+                    label="באיזו שעה להזכיר בערב שלפני"
+                    error={errors.taxiNightTime}
+                  >
+                    <TimeInput
+                      value={form.taxiNightTime}
+                      onChange={(v) => set('taxiNightTime', v)}
+                      invalid={Boolean(errors.taxiNightTime)}
+                    />
+                  </FormField>
+                ) : null}
+              </>
+            ) : null}
+
+            {isPublicTransport ? (
+              <>
+                <FormField
+                  label="עלות נסיעה לכיוון (₪)"
+                  error={errors.travelCostPerDirection}
+                >
+                  <TextField
+                    value={form.travelCostPerDirection}
+                    onChangeText={(t) => set('travelCostPerDirection', t)}
+                    numeric
+                    invalid={Boolean(errors.travelCostPerDirection)}
+                  />
+                </FormField>
+
+                <FormField
+                  label="מספר נסיעות ליום"
+                  hint="ברירת מחדל 2 — הלוך ושוב"
+                  error={errors.tripsPerDay}
+                >
+                  <TextField
+                    value={form.tripsPerDay}
+                    onChangeText={(t) => set('tripsPerDay', t)}
+                    numeric
+                    invalid={Boolean(errors.tripsPerDay)}
+                  />
+                </FormField>
+              </>
+            ) : null}
+            </>
+          ),
+          payroll: (
+            <Animated.View style={[styles.highlight, { backgroundColor: highlightBg }]}>
+            <FormField
+              label="מייל לשכר"
+              hint="לכתובת זו נשלח דוח השעות החודשי (מסך דוחות שכר)"
+              error={errors.payrollEmail}
+            >
+              <TextField
+                value={form.payrollEmail}
+                onChangeText={(t) => set('payrollEmail', t)}
+                placeholder="payroll@college.ac.il"
+                email
+                invalid={Boolean(errors.payrollEmail)}
+              />
+            </FormField>
+
+            <FormField label="העתק (CC)" hint="אפשר כמה כתובות, מופרדות בפסיק" error={errors.ccEmails}>
+              <TextField
+                value={form.ccEmails}
+                onChangeText={(t) => set('ccEmails', t)}
+                placeholder="coordinator@college.ac.il, ..."
+                email
+                invalid={Boolean(errors.ccEmails)}
+              />
+            </FormField>
+            </Animated.View>
+          ),
+          courses: (
+            <>
           <FormField
-            label="טלפון להזמנת מונית"
-            hint={
-              form.taxiContact
-                ? `מאנשי הקשר: ${form.taxiContact}`
-                : form.arrivalMode === 'taxi_voucher'
-                  ? 'תחנה / רכז ההסעות שמזמינים דרכו את הפתק'
-                  : 'תחנת מוניות או נהג קבוע'
-            }
-            error={errors.taxiPhone}
+            label="קורסים קבועים"
+            hint="קורס מחזורי: יום בשבוע ושעות קבועות לתקופה. משמש למילוי מהיר של דיווח ולשעות המתוכננות לחודש."
           >
-            <View style={styles.phoneRow}>
-              <View style={{ flex: 1 }}>
-                <TextField
-                  value={form.taxiPhone}
-                  onChangeText={(t) => {
-                    set('taxiPhone', t);
-                    set('taxiContact', '');
-                  }}
-                  phone
-                  placeholder="050-0000000"
-                  invalid={Boolean(errors.taxiPhone)}
+            {isEdit ? (
+              <View style={styles.courses}>
+                {/* פעילים קודם; קורסים שהסתיימו (ארכיון) — בסוף ומעומעמים */}
+                {[...courses]
+                  .sort((x, y) => Number(x.to < todayISO()) - Number(y.to < todayISO()))
+                  .map((c) => {
+                    const ended = c.to < todayISO();
+                    return (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => router.push({ pathname: '/course-form', params: { id: c.id } })}
+                        style={({ pressed }) => [styles.course, ended && { opacity: 0.6 }, pressed && { opacity: 0.7 }]}
+                      >
+                        <Text style={styles.courseName}>
+                          {c.name}
+                          {ended ? ' · הסתיים (ארכיון)' : ''}
+                        </Text>
+                        <Text style={styles.courseMeta}>
+                          {courseScheduleLabel(c)} · {dateRange(c.from, c.to, true)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                <Button
+                  label="הוספת קורס"
+                  variant="secondary"
+                  onPress={() => router.push({ pathname: '/course-form', params: { workplaceId: id } })}
                 />
               </View>
-              {contactsSupported ? (
-                <Pressable
-                  onPress={chooseContact}
-                  style={({ pressed }) => [styles.termsChip, styles.contactBtn, pressed && { opacity: 0.7 }]}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.termsChipText}>מאנשי הקשר</Text>
-                </Pressable>
-              ) : null}
-            </View>
+            ) : (
+              <Text style={styles.courseMeta}>אפשר להוסיף קורסים אחרי שמירת מקום העבודה.</Text>
+            )}
           </FormField>
-
-          <FormField label="תזכורת להזמנת מונית">
-            <SegmentedControl
-              options={TAXI_REMINDER_OPTIONS}
-              value={form.taxiReminderKind}
-              onChange={(v) => set('taxiReminderKind', v)}
-            />
-          </FormField>
-
-          {form.taxiReminderKind === 'hoursBefore' ? (
-            <FormField
-              label="כמה שעות לפני היציאה"
-              hint="שעת היציאה = תחילת הקורס הראשון באותו יום"
-              error={errors.taxiHours}
-            >
-              <TextField
-                value={form.taxiHours}
-                onChangeText={(t) => set('taxiHours', t)}
-                numeric
-                invalid={Boolean(errors.taxiHours)}
-              />
-            </FormField>
-          ) : null}
-
-          {form.taxiReminderKind === 'nightBefore' ? (
-            <FormField
-              label="באיזו שעה להזכיר בערב שלפני"
-              error={errors.taxiNightTime}
-            >
-              <TimeInput
-                value={form.taxiNightTime}
-                onChange={(v) => set('taxiNightTime', v)}
-                invalid={Boolean(errors.taxiNightTime)}
-              />
-            </FormField>
-          ) : null}
-        </>
-      ) : null}
-
-      {isPublicTransport ? (
-        <>
-          <FormField
-            label="עלות נסיעה לכיוון (₪)"
-            error={errors.travelCostPerDirection}
-          >
-            <TextField
-              value={form.travelCostPerDirection}
-              onChangeText={(t) => set('travelCostPerDirection', t)}
-              numeric
-              invalid={Boolean(errors.travelCostPerDirection)}
-            />
-          </FormField>
-
-          <FormField
-            label="מספר נסיעות ליום"
-            hint="ברירת מחדל 2 — הלוך ושוב"
-            error={errors.tripsPerDay}
-          >
-            <TextField
-              value={form.tripsPerDay}
-              onChangeText={(t) => set('tripsPerDay', t)}
-              numeric
-              invalid={Boolean(errors.tripsPerDay)}
-            />
-          </FormField>
-        </>
-      ) : null}
-
-      <FormField
-        label="אחוז מס (ניכוי במקור)"
-        hint="לחישוב הסכום נטו במעקב התשלומים"
-        error={errors.taxPercent}
-      >
-        <TextField
-          value={form.taxPercent}
-          onChangeText={(t) => set('taxPercent', t)}
-          numeric
-          invalid={Boolean(errors.taxPercent)}
-        />
-      </FormField>
-
-      {termsDirty ? (
-        <FormField
-          label="השינוי בתנאים חל מתאריך"
-          hint="דיווחים לפני תאריך זה יחושבו לפי התנאים הקודמים"
-        >
-          <DateField value={effectiveFrom} onChange={setEffectiveFrom} />
-        </FormField>
-      ) : null}
-
-      {original?.termsHistory?.length ? (
-        <FormField label="היסטוריית תנאים">
-          <View style={styles.courses}>
-            {[...original.termsHistory].reverse().map((v) => (
-              <Text key={v.until} style={styles.courseMeta}>
-                עד {formatISODate(v.until)}:{' '}
-                {v.paymentType === 'monthly' ? `חודשי ${formatShekels(v.rate)}` : `${formatShekels(v.rate)} לשעה`}
-                {' · '}
-                {ARRIVAL_MODE_LABELS[v.arrivalMode]}
-                {v.arrivalMode === 'public_transport'
-                  ? ` ${formatShekels(v.travelCostPerDirection)} × ${v.tripsPerDay}`
-                  : ''}
-                {v.taxPercent ? ` · מס ${v.taxPercent}%` : ''}
-              </Text>
-            ))}
-          </View>
-        </FormField>
-      ) : null}
-
-      <FormField label="מספר עובד" hint="רשות — יופיע בדוחות ובמיילים לשכר">
-        <TextField
-          value={form.employeeNumber}
-          onChangeText={(t) => set('employeeNumber', t)}
-          numeric
-        />
-      </FormField>
-
-      <FormField
-        label="מייל לשכר"
-        hint="לכתובת זו נשלח דוח השעות החודשי (מסך דוחות שכר)"
-        error={errors.payrollEmail}
-      >
-        <TextField
-          value={form.payrollEmail}
-          onChangeText={(t) => set('payrollEmail', t)}
-          placeholder="payroll@college.ac.il"
-          email
-          invalid={Boolean(errors.payrollEmail)}
-        />
-      </FormField>
-
-      <FormField label="העתק (CC)" hint="אפשר כמה כתובות, מופרדות בפסיק" error={errors.ccEmails}>
-        <TextField
-          value={form.ccEmails}
-          onChangeText={(t) => set('ccEmails', t)}
-          placeholder="coordinator@college.ac.il, ..."
-          email
-          invalid={Boolean(errors.ccEmails)}
-        />
-      </FormField>
-
-      <FormField
-        label="קורסים קבועים"
-        hint="קורס מחזורי: יום בשבוע ושעות קבועות לתקופה. משמש למילוי מהיר של דיווח ולשעות המתוכננות לחודש."
-      >
-        {isEdit ? (
-          <View style={styles.courses}>
-            {/* פעילים קודם; קורסים שהסתיימו (ארכיון) — בסוף ומעומעמים */}
-            {[...courses]
-              .sort((x, y) => Number(x.to < todayISO()) - Number(y.to < todayISO()))
-              .map((c) => {
-                const ended = c.to < todayISO();
-                return (
-                  <Pressable
-                    key={c.id}
-                    onPress={() => router.push({ pathname: '/course-form', params: { id: c.id } })}
-                    style={({ pressed }) => [styles.course, ended && { opacity: 0.6 }, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={styles.courseName}>
-                      {c.name}
-                      {ended ? ' · הסתיים (ארכיון)' : ''}
-                    </Text>
-                    <Text style={styles.courseMeta}>
-                      {courseScheduleLabel(c)} · {dateRange(c.from, c.to, true)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            <Button
-              label="הוספת קורס"
-              variant="secondary"
-              onPress={() => router.push({ pathname: '/course-form', params: { workplaceId: id } })}
-            />
-          </View>
-        ) : (
-          <Text style={styles.courseMeta}>אפשר להוסיף קורסים אחרי שמירת מקום העבודה.</Text>
-        )}
-      </FormField>
-
-      <View style={styles.actions}>
-        <Button
-          label={isEdit ? 'שמירת שינויים' : 'הוספה'}
-          onPress={handleSave}
-          loading={saving}
-        />
-        {isEdit && deletion ? (
-          canDeleteWorkplace(deletion) ? (
-            <Button
-              label={deletion.reports > 0 ? 'מחיקת מקום העבודה עם כל הדיווחים' : 'העברת מקום העבודה לאשפה'}
-              variant="danger"
-              onPress={handleDelete}
-              disabled={saving}
-            />
-          ) : (
+            </>
+          ),
+          manage: (
             <>
-              <Button label="העברה לארכיון" variant="secondary" onPress={handleArchive} disabled={saving} />
-              <Text style={styles.deleteNote}>
-                אי אפשר למחוק: {deletion.lockedPayrolls === 1 ? 'דוח שכר אחד נשלח' : `${deletion.lockedPayrolls} דוחות שכר נשלחו`} או שולמו.
-                {original?.demo ? '' : ' כדי למחוק, מבטלים בכל דוח את התשלום ואת השליחה.'}
-              </Text>
-              {original?.demo ? (
+              {isEdit ? (
                 <Pressable
-                  onPress={() => router.push('/data')}
+                  onPress={() => router.push({ pathname: '/workplace', params: { id } })}
                   accessibilityRole="link"
                   style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
                 >
-                  <Text style={styles.linkRowText}>זה מקום הדגמה — אפשר להסיר אותו ב"איפוס נתוני הדגמה"</Text>
+                  <Text style={styles.linkRowText}>דוחות השכר של מקום העבודה</Text>
                   <EnterChevron />
                 </Pressable>
               ) : null}
-              {original
-                ? deletion.lockedPeriods.map((p) => {
-                    const [y, m, d] = p.start.split('-').map(Number);
-                    const period = currentPayPeriod(original.payday, new Date(y, m - 1, d));
-                    return (
-                      <Pressable
-                        key={p.start}
-                        onPress={() =>
-                          router.push({ pathname: '/payroll-report', params: { wp: original.id, start: p.start } })
-                        }
-                        accessibilityRole="link"
-                        style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
-                      >
-                        <Text style={styles.linkRowText}>
-                          דוח שכר {periodTitle(period)} · {p.paid ? 'שולם' : 'נשלח'}
-                        </Text>
-                        <EnterChevron />
-                      </Pressable>
-                    );
-                  })
-                : null}
+          <View style={styles.actions}>
+            {isEdit && deletion ? (
+              canDeleteWorkplace(deletion) ? (
+                <Button
+                  label={deletion.reports > 0 ? 'מחיקת מקום העבודה עם כל הדיווחים' : 'העברת מקום העבודה לאשפה'}
+                  variant="danger"
+                  onPress={handleDelete}
+                  disabled={saving}
+                />
+              ) : (
+                <>
+                  <Button label="העברה לארכיון" variant="secondary" onPress={handleArchive} disabled={saving} />
+                  <Text style={styles.deleteNote}>
+                    אי אפשר למחוק: {deletion.lockedPayrolls === 1 ? 'דוח שכר אחד נשלח' : `${deletion.lockedPayrolls} דוחות שכר נשלחו`} או שולמו.
+                    {original?.demo ? '' : ' כדי למחוק, מבטלים בכל דוח את התשלום ואת השליחה.'}
+                  </Text>
+                  {original?.demo ? (
+                    <Pressable
+                      onPress={() => router.push('/data')}
+                      accessibilityRole="link"
+                      style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
+                    >
+                      <Text style={styles.linkRowText}>זה מקום הדגמה — אפשר להסיר אותו ב"איפוס נתוני הדגמה"</Text>
+                      <EnterChevron />
+                    </Pressable>
+                  ) : null}
+                  {original
+                    ? deletion.lockedPeriods.map((p) => {
+                        const [y, m, d] = p.start.split('-').map(Number);
+                        const period = currentPayPeriod(original.payday, new Date(y, m - 1, d));
+                        return (
+                          <Pressable
+                            key={p.start}
+                            onPress={() =>
+                              router.push({ pathname: '/payroll-report', params: { wp: original.id, start: p.start } })
+                            }
+                            accessibilityRole="link"
+                            style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
+                          >
+                            <Text style={styles.linkRowText}>
+                              דוח שכר {periodTitle(period)} · {p.paid ? 'שולם' : 'נשלח'}
+                            </Text>
+                            <EnterChevron />
+                          </Pressable>
+                        );
+                      })
+                    : null}
+                </>
+              )
+            ) : null}
+          </View>
             </>
-          )
-        ) : null}
-      </View>
+          ),
+        };
+        if (!isEdit) {
+          // יצירה: וויזארד — צעד לכל קבוצה.
+          const key = NEW_STEPS[wizStep];
+          return (
+            <>
+              <View style={styles.stepper}>
+                {NEW_STEPS.map((k, i) => (
+                  <View key={k} style={styles.stepItem}>
+                    <View style={[styles.stepDot, i <= wizStep && styles.stepDotOn]}>
+                      <Text style={[styles.stepNum, i <= wizStep && styles.stepNumOn]}>{i < wizStep ? '✓' : i + 1}</Text>
+                    </View>
+                    <Text style={[styles.stepLabel, i === wizStep && styles.stepLabelOn]}>{GROUP_TITLES[k]}</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.groupTitleBig}>{GROUP_TITLES[key]}</Text>
+              {sections[key]}
+              <View style={styles.actions}>
+                {wizStep === NEW_STEPS.length - 1 ? (
+                  <Button label="הוספה" onPress={handleSave} loading={saving} />
+                ) : (
+                  <Button label="המשך" onPress={wizNext} />
+                )}
+                {wizStep === 0 ? (
+                  <Button label="ביטול" variant="secondary" onPress={() => router.back()} />
+                ) : (
+                  <Button label="חזרה" variant="secondary" onPress={() => setWizStep((n) => n - 1)} />
+                )}
+              </View>
+            </>
+          );
+        }
+        return (
+          <>
+            {EDIT_GROUPS.map((key) => {
+              const open = openGroups.includes(key);
+              return (
+                <View
+                  key={key}
+                  style={styles.group}
+                  onLayout={(e) => {
+                    groupY.current[key] = e.nativeEvent.layout.y;
+                  }}
+                >
+                  <Pressable
+                    onPress={() => toggleGroup(key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: open }}
+                    style={({ pressed }) => [styles.groupHead, pressed && { opacity: 0.7 }]}
+                  >
+                    <View style={styles.groupTexts}>
+                      <Text style={styles.groupTitle}>{GROUP_TITLES[key]}</Text>
+                      {open ? null : (
+                        <Text style={styles.groupSummary} numberOfLines={1}>
+                          {summaryOf(key)}
+                        </Text>
+                      )}
+                    </View>
+                    <FoldChevron open={open} />
+                  </Pressable>
+                  {open ? <View style={styles.groupBody}>{sections[key]}</View> : null}
+                </View>
+              );
+            })}
+            <Button label="שמירת שינויים" onPress={handleSave} loading={saving} />
+          </>
+        );
+      })()}
+
       {confirm.dialog}
     </Screen>
   );
@@ -1040,4 +1252,34 @@ const makeStyles = (colors: AppColors) =>
     marginTop: spacing.md,
     gap: spacing.sm,
   },
+  group: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
+  groupTexts: { flex: 1, minWidth: 0, gap: 2 },
+  groupTitle: { fontSize: 16, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
+  groupTitleBig: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
+  groupSummary: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
+  groupBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.md },
+  highlight: { gap: spacing.md, borderRadius: radius.md, margin: -6, padding: 6 },
+  stepper: { flexDirection: 'row', justifyContent: 'space-between' },
+  stepItem: { flex: 1, alignItems: 'center', gap: 4 },
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  stepDotOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  stepNum: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  stepNumOn: { color: colors.textOnBrand },
+  stepLabel: { fontSize: 11, color: colors.textMuted, textAlign: 'center' },
+  stepLabelOn: { color: colors.brand, fontWeight: '800' },
 });

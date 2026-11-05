@@ -10,6 +10,7 @@ import { Animated, Linking, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Icon } from '../components/Icon';
+import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
 import { useFade } from '../components/useFlash';
 import { useSessionCancel } from '../components/SessionCancelDialog';
@@ -231,6 +232,16 @@ export default function HomeScreen() {
 
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>הלו״ז שלי</Text>
+        <Pressable
+          onPress={() => router.push('/reports')}
+          accessibilityRole="link"
+          hitSlop={8}
+          style={({ pressed }) => [styles.journalLink, pressed && styles.pressed]}
+        >
+          <Icon name="calendar-month-outline" size={18} color={colors.brand} />
+          <Text style={styles.journalLinkText}>ליומן</Text>
+          <EnterChevron size={18} color={colors.brand} />
+        </Pressable>
       </View>
       <View style={styles.dayTabs} accessibilityRole="tablist">
         {days.map((d, i) => {
@@ -537,12 +548,14 @@ const makeStyles = (colors: AppColors) =>
 
     sectionHead: {
       flexDirection: 'row',
-      alignItems: 'baseline',
+      alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: spacing.sm,
     },
     sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     sectionMeta: { fontSize: 13, color: colors.textMuted },
+    journalLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    journalLinkText: { fontSize: 14, fontWeight: '700', color: colors.brand },
 
     dayTabs: { flexDirection: 'row', gap: 6 },
     dayTab: {

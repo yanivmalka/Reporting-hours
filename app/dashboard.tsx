@@ -136,7 +136,7 @@ export default function DashboardScreen() {
     setAnchor({ year: d.getFullYear(), month0: d.getMonth() });
   };
 
-  /** מעבר ל"הדיווחים שלי" עם סינון מוכן. */
+  /** מעבר ל"יומן" על "דיווחים", עם סינון מוכן. */
   // n — מזהה ייחודי לכל מעבר, כדי שהסינון יוחל גם כשנכנסים שוב עם אותם ערכים.
   const openReports = (filter: { wp?: string; when?: string; from?: string; to?: string }) =>
     router.push({
@@ -146,6 +146,7 @@ export default function DashboardScreen() {
         when: filter.when ?? '',
         from: filter.from ?? '',
         to: filter.to ?? '',
+        tab: 'reports',
         n: String(Date.now()),
       },
     });
