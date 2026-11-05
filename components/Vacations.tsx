@@ -15,6 +15,7 @@ import { Button } from './Button';
 import { TextField } from './TextField';
 import { DateField } from './DatePicker';
 import { SelectField, type SelectOption } from './SelectField';
+import { SegmentedControl } from './SegmentedControl';
 import { EnterChevron } from './Chevrons';
 import { Icon } from './Icon';
 import { useToast } from './Toast';
@@ -103,6 +104,7 @@ function VacationEditor({ request, onClose }: { request: EditorRequest; onClose:
   const [from, setFrom] = useState(existing?.from ?? todayISO());
   const [to, setTo] = useState(existing?.to ?? existing?.from ?? todayISO());
   const [scope, setScope] = useState<VacationScope>(existing?.scope ?? request.fixedScope ?? { kind: 'all' });
+  const [mode, setMode] = useState<Vacation['mode']>(existing?.mode ?? 'cancel');
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
   const invalid = to < from;
@@ -129,7 +131,7 @@ function VacationEditor({ request, onClose }: { request: EditorRequest; onClose:
         name: name.trim() || undefined,
         from,
         to,
-        mode: 'cancel',
+        mode,
         scope,
         // החלפת היקף מאפסת התעלמויות שכבר לא רלוונטיות.
         exclude: existing && scopeKey(existing.scope) === scopeKey(scope) ? existing.exclude : [],
@@ -161,7 +163,20 @@ function VacationEditor({ request, onClose }: { request: EditorRequest; onClose:
       <View style={styles.backdrop}>
         <View style={styles.dialog}>
           <Text style={styles.title}>{existing ? 'עריכת חופשה' : 'חופשה חדשה'}</Text>
-          <Text style={styles.message}>מפגשים בחופשה מתבטלים: הם לא נכללים בפוטנציאל ובצפי. מפגש שכבר דווח לא מושפע.</Text>
+          <SegmentedControl
+            options={[
+              { value: 'cancel', label: 'ביטול המפגשים' },
+              { value: 'shift', label: 'הזזה לסוף הקורס' },
+            ]}
+            value={mode}
+            onChange={setMode}
+          />
+          <Text style={styles.message}>
+            {mode === 'cancel'
+              ? 'מפגשים בחופשה מתבטלים: הם לא נכללים בפוטנציאל ובצפי.'
+              : 'מפגשים בחופשה עוברים לשבוע הפנוי הבא אחרי סוף הקורס, והקורס מתארך. ההזזה מסומנת "הועבר".'}{' '}
+            מפגש שכבר דווח לא מושפע.
+          </Text>
           <TextField value={name} onChangeText={setName} placeholder="שם (לא חובה), למשל חופשת חנוכה" />
           <View style={styles.dates}>
             <View style={styles.dateCol}>
@@ -232,6 +247,7 @@ export function VacationBoard() {
         </Text>
         <Text style={styles.rowSub}>
           {scopeLabel(v.scope, workplaces, courses)}
+          {v.mode === 'shift' ? ' · הזזה לסוף הקורס' : ''}
           {v.exclude.length ? ` · ${v.exclude.length === 1 ? 'מקום / קורס אחד מתעלם' : `${v.exclude.length} מתעלמים`}` : ''}
         </Text>
       </View>
@@ -331,6 +347,7 @@ export function VacationsCard({
                 </Text>
                 <Text style={styles.rowSub}>
                   {sourceLabel(v)}
+                  {v.mode === 'shift' ? ' · הזזה לסוף הקורס' : ''}
                   {ignoredAbove ? ' · מקום העבודה מתעלם' : ignoredHere ? ' · מתעלם' : ''}
                 </Text>
               </View>

@@ -1,5 +1,5 @@
 /**
- * לוח החופשות המרכזי (מפרט הצפי, שלב 1 — מצב "ביטול").
+ * לוח החופשות המרכזי (מפרט הצפי): מצב "ביטול" ומצב "הזזה לסוף הקורס".
  *
  * מודל שטוח, בלי עץ הורשה:
  *   - חופשה כללית (`scope.kind === 'all'`) חלה על כל המקומות והקורסים;
@@ -11,6 +11,11 @@
  * החופשה לא נשמרת על המפגשים — היא מחושבת בכל טעינה בתוך אינדקס הביטולים
  * (lib/sessions.ts), כמו החגים, ולכן חלה מיד גם על קורסים חדשים. מפגש בחופשה
  * לא נכלל בפוטנציאל ובצפי ולא נספר כדיווח חסר. מפגש שכבר דווח לא מושפע.
+ *
+ * מצב "הזזה" (`shift`): במקום להתבטל, המפגש עובר לשבוע הפנוי הבא אחרי סוף
+ * הקורס (הקורס מתארך), ומסומן "הועבר ל…" במקור ו"הועבר מ…" ביעד. החישוב לפי
+ * סדר המפגשים הרגילים, עם דילוג על חגים, על חופשות ועל תאריכים שכבר יש בהם
+ * מפגש של הקורס (`planShifts`). גם ההזזה מחושבת ולא נשמרת.
  *
  * המודול טהור מבחינת תלויות: הוא לא מייבא את lib/sessions או lib/courses
  * בזמן ריצה (רק טיפוסים), כדי שלא ייווצר מעגל. השמירה עוברת דרך
@@ -32,8 +37,8 @@ export type Vacation = {
   from: string;
   /** תאריך אחרון, כולל */
   to: string;
-  /** שלב 1: 'cancel' בלבד. 'shift' (הזזה לסוף הקורס) — בהמשך. */
-  mode: 'cancel';
+  /** 'cancel' — המפגשים מתבטלים · 'shift' — עוברים לסוף הקורס */
+  mode: 'cancel' | 'shift';
   scope: VacationScope;
   /** מזהי מקומות עבודה וקורסים שמתעלמים מהחופשה */
   exclude: string[];
@@ -70,7 +75,7 @@ export function vacationOn(
   date: string,
 ): Vacation | null {
   for (const v of list) {
-    if (v.mode !== 'cancel' || date < v.from || date > v.to) continue;
+    if (date < v.from || date > v.to) continue;
     if (!vacationSourceFor(v, courseId, workplaceId)) continue;
     if (vacationIgnored(v, courseId, workplaceId)) continue;
     return v;
@@ -122,7 +127,7 @@ export async function readVacations(updateCache = true): Promise<Vacation[]> {
   const list = Array.isArray(saved)
     ? saved.filter(isVacation).map((v) => ({
         ...v,
-        mode: 'cancel' as const,
+        mode: v.mode === 'shift' ? ('shift' as const) : ('cancel' as const),
         exclude: Array.isArray(v.exclude) ? v.exclude.filter((e) => typeof e === 'string') : [],
       }))
     : [];
@@ -170,4 +175,88 @@ export function vacationRangeLabel(v: Pick<Vacation, 'from' | 'to'>): string {
     return `${d}/${m}`;
   };
   return v.from === v.to ? short(v.from) : `⁦${short(v.from)}–${short(v.to)}⁩`;
+}
+
+// ───────────────────────── מצב "הזזה" ─────────────────────────
+
+/** מה שהמתכנן צריך לדעת על קורס (שדות מתוך Course). */
+export type ShiftCourse = {
+  id: string;
+  workplaceId: string;
+  weekday: number;
+  from: string;
+  to: string;
+  extraDates?: string[];
+};
+
+export type ShiftInput = {
+  courses: readonly ShiftCourse[];
+  vacations: readonly Vacation[];
+  /** האם התאריך מתבטל אוטומטית בחג לפי ההגדרות */
+  isHoliday: (date: string) => boolean;
+  /** מפתח "קורס@תאריך" → האם יש עליו סימון ידני (בוטל / הוסר / הועבר / התקיים) */
+  marked: (courseId: string, date: string) => boolean;
+  /** האם המפגש כבר דווח */
+  reported: (courseId: string, date: string) => boolean;
+  /** תאריכים שכבר הועברו ידנית אל הקורס */
+  movedIn: (courseId: string) => readonly string[];
+};
+
+/** תוצאת התכנון: לאן עבר כל מפגש, ולכל קורס — המפגשים שהגיעו אליו. */
+export type ShiftPlan = {
+  /** "קורס@תאריך" של המפגש המקורי → { התאריך החדש, החופשה } */
+  movedTo: Map<string, { date: string; vacationId: string }>;
+  /** לפי מזהה קורס — { date: התאריך החדש, from: המקורי } */
+  movedIn: Map<string, { date: string; from: string }[]>;
+};
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dateOf = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d, 12);
+};
+
+/** כל המועדים הקבועים של קורס בטווח התקופה שלו. */
+function regularDates(c: ShiftCourse): string[] {
+  const out: string[] = [];
+  const d = dateOf(c.from);
+  d.setDate(d.getDate() + ((c.weekday - d.getDay() + 7) % 7));
+  for (let i = 0; i < 600 && isoOf(d) <= c.to; i++, d.setDate(d.getDate() + 7)) out.push(isoOf(d));
+  return out;
+}
+
+/**
+ * מתכנן את ההזזות: לכל קורס, המפגשים הרגילים שחלים בחופשת "הזזה" (ולא דווחו
+ * ולא סומנו ידנית) עוברים, לפי הסדר, למועדים הקבועים הפנויים הבאים אחרי סוף
+ * הקורס — בדילוג על חגים, על כל חופשה שחלה על הקורס ועל תאריכים שכבר יש
+ * בהם מפגש נוסף או מועבר.
+ */
+export function planShifts(input: ShiftInput): ShiftPlan {
+  const movedTo = new Map<string, { date: string; vacationId: string }>();
+  const movedIn = new Map<string, { date: string; from: string }[]>();
+  if (!input.vacations.some((v) => v.mode === 'shift')) return { movedTo, movedIn };
+  for (const c of input.courses) {
+    const displaced: { date: string; vacationId: string }[] = [];
+    for (const date of regularDates(c)) {
+      if (input.marked(c.id, date) || input.reported(c.id, date) || input.isHoliday(date)) continue;
+      const v = vacationOn(input.vacations, c.id, c.workplaceId, date);
+      if (v?.mode === 'shift') displaced.push({ date, vacationId: v.id });
+    }
+    if (!displaced.length) continue;
+    const taken = new Set([...(c.extraDates ?? []), ...input.movedIn(c.id)]);
+    const d = dateOf(c.to);
+    d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() + ((c.weekday - d.getDay() + 7) % 7));
+    const list: { date: string; from: string }[] = [];
+    for (let guard = 0; displaced.length && guard < 520; guard++, d.setDate(d.getDate() + 7)) {
+      const date = isoOf(d);
+      if (taken.has(date) || input.isHoliday(date) || vacationOn(input.vacations, c.id, c.workplaceId, date)) continue;
+      const next = displaced.shift()!;
+      movedTo.set(`${c.id}@${next.date}`, { date, vacationId: next.vacationId });
+      list.push({ date, from: next.date });
+    }
+    if (list.length) movedIn.set(c.id, list);
+  }
+  return { movedTo, movedIn };
 }
