@@ -334,7 +334,7 @@ function AppDrawer() {
   return (
     <Modal visible transparent animationType="none" onRequestClose={close} statusBarTranslucent>
       {/* שורה: הילד הראשון מוצב בצד ההתחלה של השפה — ימין בעברית */}
-      <View style={styles.row}>
+      <View style={[styles.row, { direction: isRTL ? 'rtl' : 'ltr' }]}>
         <Animated.View style={[styles.backdrop, { opacity: progress }]}>
           <Pressable style={styles.fill} accessibilityLabel={t('drawer.closeMenu')} onPress={close} />
         </Animated.View>
@@ -395,6 +395,11 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const showHeb = useShowHebrewDates();
+  const [langNotice, setLangNotice] = useState(false);
+
+  function chooseLang(next: Lang) {
+    setLangNotice(!setLang(next));
+  }
 
   function go(href: Href) {
     onNavigate?.();
@@ -493,7 +498,10 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
 
           <View style={drawerStyles.section}>
             <SectionLabel icon="translate" text={t('drawer.language')} />
-            <SegmentedControl options={langOptions} value={lang} onChange={setLang} />
+            <SegmentedControl options={langOptions} value={lang} onChange={chooseLang} />
+            {langNotice ? (
+              <Text style={drawerStyles.langNotice}>תמיכה באנגלית תתווסף בהמשך</Text>
+            ) : null}
           </View>
 
           <AccountSection />
@@ -592,6 +600,12 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       gap: spacing.md,
       paddingTop: spacing.xs,
       paddingHorizontal: spacing.sm,
+    },
+    langNotice: {
+      fontSize: 13,
+      color: c.textMuted,
+      textAlign: layout.textStart,
+      marginTop: spacing.xs,
     },
     section: {
       gap: spacing.sm,

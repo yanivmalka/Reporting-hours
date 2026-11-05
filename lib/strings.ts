@@ -347,3 +347,10 @@ export const LANG_LABELS: Record<Lang, string> = {
 };
 
 export const RTL_LANGS: readonly Lang[] = ['he'];
+
+/**
+ * השפות שאפשר לעבור אליהן בפועל. אנגלית מוצגת בבורר אבל עדיין לא זמינה —
+ * רוב הטקסטים עוד לא עוברים דרך הקובץ הזה, ולכן בחירה בה מציגה הודעה
+ * והאפליקציה נשארת בעברית. כשהתרגום יושלם — מוסיפים כאן 'en'.
+ */
+export const AVAILABLE_LANGS: readonly Lang[] = ['he'];
