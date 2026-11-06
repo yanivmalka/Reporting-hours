@@ -55,6 +55,21 @@ export default function WorkplacesScreen() {
 
   const today = todayISO();
   const active = workplaces.filter((w) => !isArchived(w));
+  const byName = (a: Workplace, b: Workplace) => a.name.localeCompare(b.name, 'he');
+  /** קבוצת המקום: פעיל — יש לו קורס פעיל; מתוכנן — רק קורסים מתוכננים; אחרת — בלי קורסים */
+  const groupOf = (w: Workplace): 'active' | 'planned' | 'none' => {
+    const st = courses.filter((c) => c.workplaceId === w.id).map((c) => courseStatus(c, today));
+    return st.includes('active') ? 'active' : st.includes('planned') ? 'planned' : 'none';
+  };
+  const groups = (
+    [
+      { key: 'active', title: 'פעילים' },
+      { key: 'planned', title: 'מתוכננים' },
+      { key: 'none', title: 'ללא קורסים פעילים או מתוכננים' },
+    ] as const
+  )
+    .map((g) => ({ ...g, list: active.filter((w) => groupOf(w) === g.key).sort(byName) }))
+    .filter((g) => g.list.length > 0);
 
   /** ריבוע מקום עבודה: מספר הקורסים הפעילים והמתוכננים, והימים שבהם הם מתקיימים. */
   const Tile = ({ workplace }: { workplace: Workplace }) => {
@@ -111,11 +126,18 @@ export default function WorkplacesScreen() {
           </Text>
         </View>
       ) : (
-        <View style={styles.grid}>
-          {active.map((workplace) => (
-            <Tile key={workplace.id} workplace={workplace} />
-          ))}
-        </View>
+        groups.map((g) => (
+          <View key={g.key} style={styles.group}>
+            <Text style={styles.groupTitle}>
+              {g.title} ({g.list.length})
+            </Text>
+            <View style={styles.grid}>
+              {g.list.map((workplace) => (
+                <Tile key={workplace.id} workplace={workplace} />
+              ))}
+            </View>
+          </View>
+        ))
       )}
 
       {archived.length ? (
@@ -178,6 +200,8 @@ const makeStyles = (colors: AppColors) =>
       color: colors.textMuted,
       textAlign: TEXT_RIGHT,
     },
+    group: { gap: spacing.sm },
+    groupTitle: { fontSize: 15, fontWeight: '800', color: colors.textMuted, textAlign: TEXT_RIGHT },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',

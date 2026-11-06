@@ -27,6 +27,7 @@
 | אופן פדיון דקות | `lib/redeem.ts` | `reporting-hours/redeem-mode/v1` |
 | בסיס חישוב שכר (ברירת מחדל ישנה; לכל מקום — `Workplace.payBasis`) | `lib/payBasis.tsx` | `reporting-hours/pay-basis/v1` |
 | תאריך התחלת עבודה עם המערכת | `lib/trackingStart.ts` | `reporting-hours/tracking-start/v1` |
+| נעיצת התאריכון המלא ביומן | `app/reports.tsx` | `reporting-hours/journal-calendar-pin/v1` |
 | פרטים אישיים | `lib/profile.ts` | `reporting-hours/profile/v1` |
 | הצעות ארכיון שנדחו | `lib/recommend.ts` | `reporting-hours/recommend-dismissed/v1` |
 | התראות בית שנסגרו | `lib/home.ts` | `reporting-hours/home-dismissed/v1` |
