@@ -1,6 +1,7 @@
 /**
- * "תכנון" בדף "יומן": מפגשי הקורסים לפי יום בטווח שנבחר, עם סטטוס — ממתין /
- * דווח / בוטל / הועבר — וסיכום פוטנציאל וצפי. מפגש שנמחק מהתכנון לא מוצג.
+ * "תכנון" בדף "יומן": מפגשי הקורסים לפי יום בטווח שנבחר, עם סטטוס — מתוכנן
+ * (עתידי, אפור) / ממתין (היום) / חסר (עבר ולא דווח) / דווח / בוטל / הועבר — וסיכום
+ * פוטנציאל וצפי. מפגש שנמחק מהתכנון לא מוצג.
  * לחיצה: מפגש שדווח → תצוגת הדיווח; שלא דווח → דיווח ישיר; שבוטל → דיאלוג המפגש.
  */
 import { StyleSheet, View } from 'react-native';
@@ -23,10 +24,13 @@ import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { beforeTracking } from '../lib/trackingStart';
+import { todayISO } from '../lib/time';
 
-type Status = 'pending' | 'reported' | 'canceled' | 'moved' | 'untracked';
+/** planned — עתידי; pending — היום ולא דווח; missing — עבר ולא דווח */
+export type SessionStatus = 'planned' | 'pending' | 'missing' | 'reported' | 'canceled' | 'moved' | 'untracked';
+type Status = SessionStatus;
 
-type Row = {
+export type SessionRowData = {
   course: Course;
   workplace: Workplace;
   date: string;
@@ -66,44 +70,15 @@ export function PlanList({
   basis: PayBasis;
   onChanged: () => void;
   /** מיקום כרטיס היום בתוך הרשימה (y יחסית לראש הרשימה) — לגלילה ליום */
-  onDayLayout?: (date: string, y: number) => void;
+  onDayLayout?: (date: string, y: number, height: number) => void;
 }) {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const sessionDialog = useSessionCancel();
   const active = activeWorkplaces(workplaces).filter((w) => !wpFilter || w.id === wpFilter);
-  const byId = new Map(active.map((w) => [w.id, w]));
-
-  const rows: Row[] = [];
-  for (const course of courses) {
-    const workplace = byId.get(course.workplaceId);
-    if (!workplace) continue;
-    for (const s of courseSessions(course, from, to)) {
-      if (s.cancel?.kind === 'removed') continue; // נמחק מהתכנון — מוסתר
-      const report = courseReport(course, s.date, reports);
-      const status: Status = report
-        ? 'reported'
-        : s.cancel?.kind === 'moved'
-          ? 'moved'
-          : s.cancel
-            ? 'canceled'
-            : beforeTracking(s.date)
-              ? 'untracked'
-              : 'pending';
-      rows.push({
-        course,
-        workplace,
-        date: s.date,
-        status,
-        reportId: report?.id,
-        cancel: s.cancel,
-        movedFrom: s.movedFrom,
-      });
-    }
-  }
-  rows.sort((a, b) => a.date.localeCompare(b.date) || a.course.start.localeCompare(b.course.start));
-  const days = new Map<string, Row[]>();
+  const rows = buildSessionRows(courses, active, reports, from, to);
+  const days = new Map<string, SessionRowData[]>();
   for (const r of rows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
 
   const period = { start: from, end: to };
@@ -111,14 +86,13 @@ export function PlanList({
   const expected = active.reduce((n, w) => n + expectedFor(w, courses, period, basis), 0);
   const counts = {
     reported: rows.filter((r) => r.status === 'reported').length,
-    pending: rows.filter((r) => r.status === 'pending').length,
+    pending: rows.filter((r) => r.status === 'pending' || r.status === 'missing').length,
+    planned: rows.filter((r) => r.status === 'planned').length,
     canceled: rows.filter((r) => r.status === 'canceled').length,
   };
 
-  const open = (r: Row) => {
-    if (r.reportId) router.push({ pathname: '/report-view', params: { id: r.reportId } });
-    else if (r.status === 'pending' || r.status === 'untracked')
-      router.push({ pathname: '/report', params: { course: r.course.id, date: r.date } });
+  const open = (r: SessionRowData) => {
+    if (r.reportId || !(r.status === 'canceled' || r.status === 'moved')) openSession(router, r);
     else
       sessionDialog.open({
         course: r.course,
@@ -129,19 +103,12 @@ export function PlanList({
       });
   };
 
-  const tone: Record<Status, { label: string; fg: string; bg: string }> = {
-    pending: { label: 'ממתין', fg: colors.warning, bg: colors.background },
-    reported: { label: 'דווח', fg: colors.success, bg: colors.brandLight },
-    canceled: { label: 'בוטל', fg: colors.dangerText, bg: colors.dangerSoft },
-    moved: { label: 'הועבר', fg: colors.textMuted, bg: colors.background },
-    untracked: { label: 'לפני המעקב', fg: colors.textMuted, bg: colors.background },
-  };
-
   return (
     <View style={styles.wrap}>
       <View style={styles.summary}>
         <Text style={styles.summaryTitle}>
-          {rows.length} מפגשים · {counts.reported} דווחו · {counts.pending} ממתינים
+          {rows.length} מפגשים · {counts.reported} דווחו · {counts.pending} לדיווח
+          {counts.planned ? ` · ${counts.planned} מתוכננים` : ''}
           {counts.canceled ? ` · ${counts.canceled} בוטלו` : ''}
         </Text>
         <Text style={styles.summaryLine}>
@@ -158,47 +125,137 @@ export function PlanList({
           <View
             key={date}
             style={styles.day}
-            onLayout={onDayLayout ? (e) => onDayLayout(date, e.nativeEvent.layout.y) : undefined}
+            onLayout={
+              onDayLayout
+                ? (e) => onDayLayout(date, e.nativeEvent.layout.y, e.nativeEvent.layout.height)
+                : undefined
+            }
           >
             <Text style={styles.dayTitle}>{dayTitle(date)}</Text>
-            {list.map((r) => {
-              const t = tone[r.status];
-              return (
-                <Pressable
-                  key={`${r.course.id}@${r.date}`}
-                  onPress={() => open(r)}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-                >
-                  <View style={[styles.bar, { backgroundColor: workplaceColor(colors, r.workplace) }]} />
-                  <View style={styles.texts}>
-                    <Text
-                      style={[styles.name, (r.status === 'canceled' || r.status === 'moved') && styles.strike]}
-                      numberOfLines={1}
-                    >
-                      {r.course.name}
-                    </Text>
-                    <Text style={styles.meta} numberOfLines={1}>
-                      {r.status === 'moved' && r.cancel?.movedTo
-                        ? `הועבר ל־${short(r.cancel.movedTo)}`
-                        : r.status === 'canceled' && r.cancel?.reason
-                          ? r.cancel.reason
-                          : timeRange(r.course.start, r.course.end)}
-                      {r.movedFrom ? ` · הועבר מ־${short(r.movedFrom)}` : ''} · {r.workplace.name}
-                    </Text>
-                  </View>
-                  <View style={[styles.chip, { backgroundColor: t.bg }]}>
-                    <Text style={[styles.chipText, { color: t.fg }]}>{t.label}</Text>
-                  </View>
-                  <EnterChevron size={18} />
-                </Pressable>
-              );
-            })}
+            {list.map((r) => (
+              <SessionRow key={`${r.course.id}@${r.date}`} row={r} onPress={() => open(r)} />
+            ))}
           </View>
         ))
       )}
       {sessionDialog.dialog}
     </View>
+  );
+}
+
+/**
+ * מפגשי הקורסים בטווח, ממוינים לפי תאריך ושעה, עם הסטטוס של כל אחד.
+ * `workplaces` — המקומות שמוצגים (קורס של מקום אחר מדולג).
+ */
+export function buildSessionRows(
+  courses: readonly Course[],
+  workplaces: readonly Workplace[],
+  reports: readonly WorkReport[],
+  from: string,
+  to: string,
+): SessionRowData[] {
+  const byId = new Map(workplaces.map((w) => [w.id, w]));
+  const today = todayISO();
+  const rows: SessionRowData[] = [];
+  for (const course of courses) {
+    const workplace = byId.get(course.workplaceId);
+    if (!workplace) continue;
+    for (const s of courseSessions(course, from, to)) {
+      if (s.cancel?.kind === 'removed') continue; // נמחק מהתכנון — מוסתר
+      const report = courseReport(course, s.date, reports);
+      const status: Status = report
+        ? 'reported'
+        : s.cancel?.kind === 'moved'
+          ? 'moved'
+          : s.cancel
+            ? 'canceled'
+            : s.date > today
+              ? 'planned'
+              : beforeTracking(s.date)
+                ? 'untracked'
+                : s.date === today
+                  ? 'pending'
+                  : 'missing';
+      rows.push({
+        course,
+        workplace,
+        date: s.date,
+        status,
+        reportId: report?.id,
+        cancel: s.cancel,
+        movedFrom: s.movedFrom,
+      });
+    }
+  }
+  rows.sort((a, b) => a.date.localeCompare(b.date) || a.course.start.localeCompare(b.course.start));
+  return rows;
+}
+
+/** מפגש שדווח → תצוגת הדיווח; אחרת — דיווח ישיר. */
+export function openSession(router: ReturnType<typeof useRouter>, r: SessionRowData) {
+  if (r.reportId) router.push({ pathname: '/report-view', params: { id: r.reportId } });
+  else router.push({ pathname: '/report', params: { course: r.course.id, date: r.date } });
+}
+
+/** שורת מפגש: פס צבע המקום, שם הקורס, שעות / סיבה, ותג הסטטוס. */
+export function SessionRow({
+  row: r,
+  onPress,
+  showDate,
+}: {
+  row: SessionRowData;
+  onPress: () => void;
+  /** להציג גם את התאריך (ברשימה שאינה מקובצת לפי יום) */
+  showDate?: boolean;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
+  const tone: Record<Status, { label: string; fg: string; bg: string }> = {
+    planned: { label: 'מתוכנן', fg: colors.textMuted, bg: colors.background },
+    pending: { label: 'ממתין', fg: colors.brandDark, bg: colors.brandLight },
+    missing: { label: 'חסר', fg: colors.warning, bg: colors.background },
+    reported: { label: 'דווח', fg: colors.success, bg: colors.brandLight },
+    canceled: { label: 'בוטל', fg: colors.dangerText, bg: colors.dangerSoft },
+    moved: { label: 'הועבר', fg: colors.textMuted, bg: colors.background },
+    untracked: { label: 'לפני המעקב', fg: colors.textMuted, bg: colors.background },
+  };
+  const t = tone[r.status];
+  const faded = r.status === 'planned';
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      <View
+        style={[styles.bar, { backgroundColor: workplaceColor(colors, r.workplace) }, faded && styles.fadedBar]}
+      />
+      <View style={styles.texts}>
+        <Text
+          style={[
+            styles.name,
+            faded && styles.faded,
+            (r.status === 'canceled' || r.status === 'moved') && styles.strike,
+          ]}
+          numberOfLines={1}
+        >
+          {r.course.name}
+        </Text>
+        <Text style={styles.meta} numberOfLines={1}>
+          {showDate ? `${dayTitle(r.date)} · ` : ''}
+          {r.status === 'moved' && r.cancel?.movedTo
+            ? `הועבר ל־${short(r.cancel.movedTo)}`
+            : r.status === 'canceled' && r.cancel?.reason
+              ? r.cancel.reason
+              : timeRange(r.course.start, r.course.end)}
+          {r.movedFrom ? ` · הועבר מ־${short(r.movedFrom)}` : ''} · {r.workplace.name}
+        </Text>
+      </View>
+      <View style={[styles.chip, { backgroundColor: t.bg }]}>
+        <Text style={[styles.chipText, { color: t.fg }]}>{t.label}</Text>
+      </View>
+      <EnterChevron size={18} />
+    </Pressable>
   );
 }
 
@@ -224,6 +281,8 @@ const makeStyles = (colors: AppColors) =>
     bar: { width: 4, alignSelf: 'stretch', borderRadius: 2 },
     texts: { flex: 1, minWidth: 0, gap: 2 },
     name: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
+    faded: { color: colors.textMuted, fontWeight: '600' },
+    fadedBar: { opacity: 0.4 },
     strike: { textDecorationLine: 'line-through', color: colors.textMuted },
     meta: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     chip: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },

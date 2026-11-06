@@ -20,7 +20,8 @@ import {
 } from '../lib/dashboard';
 import { Button } from '../components/Button';
 import { ReportCard } from '../components/ReportCard';
-import { PlanList } from '../components/PlanList';
+import { PlanList, SessionRow, buildSessionRows, openSession, type SessionRowData } from '../components/PlanList';
+import { readJSON, writeJSON } from '../lib/storage';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { loadCourses, type Course } from '../lib/courses';
 import { Screen } from '../components/Screen';
@@ -29,12 +30,15 @@ import { usePayBasis } from '../lib/payBasis';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels, travelCostForDay } from '../lib/travel';
 import { isLocked, loadPayrollStatus, statusKey, type PayrollStatus } from '../lib/payroll';
-import { isArchived, loadWorkplaces, type Workplace } from '../lib/workplaces';
+import { activeWorkplaces, isArchived, loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
+
+/** נעיצת התאריכון המלא — כשמסומן, הוא נשאר מוצמד ולא מוחלף בפס השבוע */
+const CAL_PIN_KEY = 'reporting-hours/journal-calendar-pin/v1';
 
 /** מיון: תאריך יורד, ובאותו תאריך לפי סדר ההזנה היורד. */
 function byNewest(a: WorkReport, b: WorkReport): number {
@@ -90,12 +94,31 @@ export default function ReportsScreen() {
   const [calTop, setCalTop] = useState<number | null>(null);
   const [calHeight, setCalHeight] = useState(0);
   const [pinned, setPinned] = useState(false);
-  /** גובה הפס המוצמד (נמדד) — כדי שהיום שגוללים אליו לא יוסתר מתחתיו */
-  const [stripHeight, setStripHeight] = useState(120);
+  /** נעיצת התאריכון המלא: מוצמד כמו שהוא, בלי מעבר לפס השבוע */
+  const [calPin, setCalPin] = useState(false);
+  useEffect(() => {
+    readJSON<boolean>(CAL_PIN_KEY, false).then(setCalPin);
+  }, []);
+  const toggleCalPin = () => {
+    setCalPin((on) => {
+      void writeJSON(CAL_PIN_KEY, !on);
+      return !on;
+    });
+  };
+  /** היום שמסומן בתאריכון לפי הגלילה — האריח שמתחת לתחתית התאריכון המוצמד */
+  const [scrollDay, setScrollDay] = useState<string | null>(null);
+  /** גובה הפס / התאריכון המוצמד (נמדד) — כדי שהיום שגוללים אליו לא יוסתר מתחתיו */
+  const [weekStripHeight, setStripHeight] = useState(120);
+  /** גובה התאריכון הנעוץ כשהוא מוצמד (נמדד) */
+  const [pinCalHeight, setPinCalHeight] = useState(360);
+  const stripHeight = calPin ? pinCalHeight : weekStripHeight;
   const scrollRef = useRef<ScrollView>(null);
   /** מיקומי הימים ברשימה הנוכחית: ראש הרשימה + y של כל יום (המופע העליון) */
   const listTop = useRef(0);
-  const dayPos = useRef<{ key: string; map: Map<string, number> }>({ key: '', map: new Map() });
+  const dayPos = useRef<{ key: string; map: Map<string, { y: number; bottom: number }> }>({
+    key: '',
+    map: new Map(),
+  });
   /** גלילה שממתינה למדידת הרשימה: ליום מסוים, או לתחילת שבוע */
   const pending = useRef<{ kind: 'day' | 'week'; date: string } | null>(null);
   const resolveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,24 +156,28 @@ export default function ReportsScreen() {
     }
     pending.current = null;
     if (!target) return;
-    const y = listTop.current + (dayPos.current.map.get(target) ?? 0);
+    const y = listTop.current + (dayPos.current.map.get(target)?.y ?? 0);
     autoScrollUntil.current = Date.now() + 700;
     scrollRef.current?.scrollTo({ y: Math.max(0, y - stripHeight - 8), animated: true });
   }
 
-  /** פס השבוע עוקב אחרי הגלילה: השבוע של היום העליון שמוצג ברשימה (מתחת לפס). */
+  /**
+   * הגלילה מסמנת יום בתאריכון: האריח הראשון שמתחת לתחתית הפס / התאריכון
+   * המוצמד. גם פס השבוע עוקב אחריו.
+   */
   function followScroll(y: number) {
     if (Date.now() < autoScrollUntil.current) return;
-    const edge = y + stripHeight + 8 - listTop.current;
+    const edge = y + stripHeight - listTop.current;
     let top: string | null = null;
-    let topY = -Infinity;
-    for (const [date, dy] of dayPos.current.map) {
-      if (dy <= edge && dy > topY) {
+    let topY = Infinity;
+    for (const [date, pos] of dayPos.current.map) {
+      if (pos.bottom > edge + 4 && pos.y < topY) {
         top = date;
-        topY = dy;
+        topY = pos.y;
       }
     }
     if (!top) return;
+    if (top !== scrollDay) setScrollDay(top);
     const ws = weekStartOf(top);
     if (ws !== weekStart) setWeekStart(ws);
   }
@@ -168,16 +195,20 @@ export default function ReportsScreen() {
   }
 
   /** מדידת יום ברשימה — המופע העליון של כל תאריך. */
-  function onDayLayout(date: string, y: number) {
+  function onDayLayout(date: string, y: number, height: number) {
     const map = dayPos.current.map;
     const prev = map.get(date);
-    if (prev == null || y < prev) map.set(date, y);
+    map.set(date, {
+      y: prev == null ? y : Math.min(prev.y, y),
+      bottom: prev == null ? y + height : Math.max(prev.bottom, y + height),
+    });
     scheduleResolve();
   }
 
   /** לחיצה על יום בלי בחירת טווח: מסמנים אותו וגוללים אליו ברשימה. */
   function focusOn(day: string) {
     setFocusDay(day);
+    setScrollDay(null);
     if (day.slice(0, 7) !== calMonth) setCalMonth(day.slice(0, 7));
     requestScroll('day', day);
   }
@@ -353,6 +384,37 @@ export default function ReportsScreen() {
   const planFrom = range ? range.from : `${calMonth}-01`;
   const planTo = range ? range.to : `${calMonth}-${String(new Date(cy, cm, 0).getDate()).padStart(2, '0')}`;
 
+  // "דיווחים": גם מפגשים שעוד לא דווחו — של היום ("ממתין") ושעברו ("חסר").
+  // מפגשים עתידיים שייכים ל"תכנון" ולא מוצגים כאן.
+  const dueWorkplaces = activeWorkplaces(workplaces).filter((w) => !wpFilter || w.id === wpFilter);
+  const today = todayISO();
+  const dueRows: SessionRowData[] =
+    tab !== 'reports'
+      ? []
+      : periodMode
+        ? dueWorkplaces.flatMap((w) => {
+            const p = periodMode === 'current' ? currentPayPeriod(w.payday) : previousPayPeriod(w.payday);
+            return buildSessionRows(courses, [w], reports, p.start, p.end > today ? today : p.end);
+          })
+        : planFrom > today
+          ? []
+          : buildSessionRows(courses, dueWorkplaces, reports, planFrom, planTo > today ? today : planTo);
+  const due = dueRows.filter((r) => r.status === 'pending' || r.status === 'missing');
+  type Item = { kind: 'report'; report: WorkReport } | { kind: 'session'; row: SessionRowData };
+  const items: Item[] = [
+    ...filtered.map((report) => ({ kind: 'report' as const, report })),
+    ...due.map((row) => ({ kind: 'session' as const, row })),
+  ].sort((a, b) => {
+    const da = a.kind === 'report' ? a.report.date : a.row.date;
+    const db = b.kind === 'report' ? b.report.date : b.row.date;
+    if (da !== db) return da < db ? 1 : -1;
+    const sa = a.kind === 'report' ? a.report.start : a.row.course.start;
+    const sb = b.kind === 'report' ? b.report.start : b.row.course.start;
+    return sa.localeCompare(sb);
+  });
+  const missingCount = due.filter((r) => r.status === 'missing').length;
+  const pendingCount = due.length - missingCount;
+
   const isFiltered = wpFilter != null || range != null || periodMode != null;
   const timeLabel = periodMode
     ? periodMode === 'current'
@@ -369,12 +431,73 @@ export default function ReportsScreen() {
   if (dayPos.current.key !== listKey) dayPos.current = { key: listKey, map: new Map() };
 
   /** הסימון בתאריכון: הטווח (במצב טווח) או היום שאליו גוללים */
-  const shownRange: DateRangeValue = rangeMode ? range : focusDay ? { from: focusDay, to: focusDay } : null;
+  const markDay = (pinned ? scrollDay : null) ?? focusDay;
+  const shownRange: DateRangeValue = rangeMode ? range : markDay ? { from: markDay, to: markDay } : null;
   const dayPress = rangeMode ? undefined : focusOn;
 
   const showCalendar = !periodMode;
+  const calendar = (
+    <RangeCalendar
+      month={calMonth}
+      onMonthChange={(m) => {
+        setCalMonth(m);
+        setRange(null);
+        setFocusDay(null);
+        setScrollDay(null);
+      }}
+      range={shownRange}
+      onRangeChange={setRange}
+      onDayPress={dayPress}
+      counts={counts}
+      statusOf={filteredStatus}
+    />
+  );
+  const calActions = (
+    <View style={styles.calActions}>
+      <Pressable
+        onPress={() => {
+          setRangeMode((on) => !on);
+          setRange(null);
+          setFocusDay(null);
+        }}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: rangeMode }}
+        hitSlop={6}
+        style={styles.checkRow}
+      >
+        <Icon
+          name={rangeMode ? 'checkbox-marked' : 'checkbox-blank-outline'}
+          size={22}
+          color={rangeMode ? colors.brand : colors.textMuted}
+        />
+        <Text style={styles.checkText}>בחירת טווח</Text>
+      </Pressable>
+      <View style={{ flex: 1 }} />
+      {range ? (
+        <Pressable onPress={() => setRange(null)} hitSlop={8}>
+          <Text style={styles.clear}>ניקוי — כל החודש</Text>
+        </Pressable>
+      ) : null}
+      <Pressable
+        onPress={toggleCalPin}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: calPin }}
+        accessibilityLabel={calPin ? 'ביטול נעיצת התאריכון' : 'נעיצת התאריכון המלא'}
+        hitSlop={8}
+        style={[styles.pinBtn, calPin && styles.pinBtnOn]}
+      >
+        <Icon name={calPin ? 'pin' : 'pin-outline'} size={18} color={calPin ? colors.textOnBrand : colors.textMuted} />
+        <Text style={[styles.pinText, calPin && styles.pinTextOn]}>{calPin ? 'נעוץ' : 'נעץ'}</Text>
+      </Pressable>
+    </View>
+  );
   const strip =
-    showCalendar && pinned ? (
+    showCalendar && pinned && calPin ? (
+      <View style={styles.pinnedCal} onLayout={(e) => setPinCalHeight(e.nativeEvent.layout.height)}>
+        {calendar}
+        {calActions}
+      </View>
+    ) : showCalendar && pinned ? (
       <View onLayout={(e) => setStripHeight(e.nativeEvent.layout.height)}>
         <WeekStrip
           weekStart={weekStart}
@@ -411,9 +534,14 @@ export default function ReportsScreen() {
       onScroll={(e) => {
         const y = e.nativeEvent.contentOffset.y;
         // הפס המוצמד מחליף את התאריכון החודשי רק כשהתאריכון כמעט כולו נגלל
-        // מתחתיו — כך לא מוצגים שניהם יחד.
-        const next = calTop != null && calHeight > 0 && y > calTop + calHeight - stripHeight;
-        if (next !== pinned) setPinned(next);
+        // מתחתיו — כך לא מוצגים שניהם יחד. תאריכון נעוץ — מוצמד כמו שהוא
+        // מהרגע שראשו מגיע לראש המסך.
+        const next =
+          calTop != null && calHeight > 0 && (calPin ? y > calTop : y > calTop + calHeight - weekStripHeight);
+        if (next !== pinned) {
+          setPinned(next);
+          if (!next) setScrollDay(null);
+        }
         if (next) followScroll(y);
       }}
     >
@@ -445,46 +573,9 @@ export default function ReportsScreen() {
             }}
             style={pinned ? styles.calHidden : undefined}
           >
-          <RangeCalendar
-            month={calMonth}
-            onMonthChange={(m) => {
-              setCalMonth(m);
-              setRange(null);
-              setFocusDay(null);
-            }}
-            range={shownRange}
-            onRangeChange={setRange}
-            onDayPress={dayPress}
-            counts={counts}
-            statusOf={filteredStatus}
-          />
+          {calendar}
           </View>
-          <View style={styles.calActions}>
-            <Pressable
-              onPress={() => {
-                setRangeMode((on) => !on);
-                setRange(null);
-                setFocusDay(null);
-              }}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: rangeMode }}
-              hitSlop={6}
-              style={styles.checkRow}
-            >
-              <Icon
-                name={rangeMode ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                size={22}
-                color={rangeMode ? colors.brand : colors.textMuted}
-              />
-              <Text style={styles.checkText}>בחירת טווח</Text>
-            </Pressable>
-            <View style={{ flex: 1 }} />
-            {range ? (
-              <Pressable onPress={() => setRange(null)} hitSlop={8}>
-                <Text style={styles.clear}>ניקוי — כל החודש</Text>
-              </Pressable>
-            ) : null}
-          </View>
+          <View style={pinned && calPin ? styles.calHidden : undefined}>{calActions}</View>
         </>
       )}
 
@@ -508,6 +599,8 @@ export default function ReportsScreen() {
         <Text style={styles.summaryLine}>{timeLabel}</Text>
         <Text style={styles.summaryTitle}>
           {filtered.length} דיווחים · {totals.days} ימי עבודה
+          {missingCount ? ` · ${missingCount} חסרים` : ''}
+          {pendingCount ? ` · ${pendingCount} ממתינים` : ''}
         </Text>
         <Text style={styles.summaryLine}>
           {Math.round((totals.netMinutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳ אקדמיות · שכר{' '}
@@ -527,29 +620,48 @@ export default function ReportsScreen() {
         ) : null}
       </View>
 
-      {reports.length === 0 ? (
+      {items.length === 0 && reports.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>עדיין לא נשמרו דיווחים.</Text>
         </View>
-      ) : filtered.length === 0 ? (
+      ) : items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>אין דיווחים שמתאימים לסינון.</Text>
         </View>
       ) : (
         <View style={styles.list} onLayout={(e) => (listTop.current = e.nativeEvent.layout.y)}>
-          {filtered.map((report) => (
-            <View key={report.id} onLayout={(e) => onDayLayout(report.date, e.nativeEvent.layout.y)}>
-            <ReportCard
-              report={report}
-              workplaceName={nameOf(report.workplaceId)}
-              color={workplaceOf(report.workplaceId) ? workplaceColor(colors, workplaceOf(report.workplaceId)) : undefined}
-              pay={payOf(report)}
-              travel={travelOf(report)}
-              locked={lockOf(report) != null}
-              onPress={() => router.push({ pathname: '/report-view', params: { id: report.id } })}
-            />
-            </View>
-          ))}
+          {items.map((item) =>
+            item.kind === 'session' ? (
+              <View
+                key={`s:${item.row.course.id}@${item.row.date}`}
+                style={styles.dueCard}
+                onLayout={(e) => onDayLayout(item.row.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height)}
+              >
+                <SessionRow row={item.row} showDate onPress={() => openSession(router, item.row)} />
+              </View>
+            ) : (
+              <View
+                key={item.report.id}
+                onLayout={(e) =>
+                  onDayLayout(item.report.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height)
+                }
+              >
+                <ReportCard
+                  report={item.report}
+                  workplaceName={nameOf(item.report.workplaceId)}
+                  color={
+                    workplaceOf(item.report.workplaceId)
+                      ? workplaceColor(colors, workplaceOf(item.report.workplaceId))
+                      : undefined
+                  }
+                  pay={payOf(item.report)}
+                  travel={travelOf(item.report)}
+                  locked={lockOf(item.report) != null}
+                  onPress={() => router.push({ pathname: '/report-view', params: { id: item.report.id } })}
+                />
+              </View>
+            ),
+          )}
         </View>
       )}
 
@@ -614,6 +726,46 @@ const makeStyles = (colors: AppColors) =>
   },
   calHidden: {
     opacity: 0,
+  },
+  pinnedCal: {
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    gap: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  pinBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  pinBtnOn: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  pinText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  pinTextOn: {
+    color: colors.textOnBrand,
+  },
+  dueCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
   checkRow: {
     flexDirection: 'row',
