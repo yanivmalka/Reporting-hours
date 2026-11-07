@@ -17,7 +17,7 @@ import { useSessionCancel } from '../components/SessionCancelDialog';
 import { useSwipe } from '../components/useSwipe';
 import { useCloudSync } from '../components/CloudSync';
 import { loadAccumulated } from '../lib/accumulated';
-import { loadCourses, timeRange } from '../lib/courses';
+import { loadCourses, timeRange, type Course } from '../lib/courses';
 import { onDataChanged } from '../lib/demo';
 import { hebrewDate } from '../lib/hebrewDate';
 import {
@@ -32,6 +32,7 @@ import {
   type AgendaItem,
   type HomeAlert,
   type SessionStatus,
+  nextSessionAfter,
 } from '../lib/home';
 import { usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus } from '../lib/payroll';
@@ -39,7 +40,7 @@ import { loadProfile } from '../lib/profile';
 import { loadReports } from '../lib/reports';
 import { loadDismissedRecommendations } from '../lib/recommend';
 import { readJSON, writeJSON } from '../lib/storage';
-import { isTaxi, loadWorkplaces } from '../lib/workplaces';
+import { isTaxi, loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { isoDate } from '../lib/dashboard';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -51,7 +52,20 @@ import { useWorkplaceColor } from '../theme/workplaceColors';
 const DISMISSED_KEY = 'reporting-hours/home-dismissed/v1';
 const DISMISSED_MAX = 80;
 
-type Data = { days: AgendaDay[]; alerts: HomeAlert[]; name: string; next: NextRelevant };
+/** "יום ג׳ 10.11" */
+function nextDateLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `יום ${WEEKDAY_SHORT[new Date(y, m - 1, d).getDay()]} ${d}.${m}`;
+}
+
+type Data = {
+  days: AgendaDay[];
+  alerts: HomeAlert[];
+  name: string;
+  next: NextRelevant;
+  courses: Course[];
+  workplaces: Workplace[];
+};
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -102,6 +116,8 @@ export default function HomeScreen() {
             alerts: homeAlerts({ workplaces, courses, reports, accumulated, payroll, basis, recommendDismissed, now: at }),
             name: firstName(profile.fullName),
             next: nextRelevantDay(courses, workplaces, reports, at),
+            courses,
+            workplaces,
           });
         });
       void load();
@@ -138,6 +154,11 @@ export default function HomeScreen() {
   const hiddenAlerts = allAlerts.filter(isHidden);
   const hiddenCount = hiddenAlerts.filter((a) => !revealed.includes(a.key)).length;
   const todayIso = now ? isoDate(now) : '';
+  // אין קורס ביום שנבחר — הקורס הבא אחריו.
+  const nextAfter =
+    data && day && day.items.length === 0 && data.courses.length
+      ? nextSessionAfter(data.courses, data.workplaces, day.date)
+      : null;
 
   function pickDay(i: number) {
     if (i < 0 || i >= days.length || i === dayIdx) return;
@@ -279,7 +300,12 @@ export default function HomeScreen() {
             <Text style={styles.dayLabel}>{day.label}</Text>
             <Text style={styles.dayDate}>{day.dayLabel}</Text>
           </View>
-          {day.items.length === 0 ? (
+          {day.items.length === 0 && nextAfter ? (
+            <View style={styles.emptyDay}>
+              <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
+              <Text style={styles.emptyText}>אין קורסים ביום זה.</Text>
+            </View>
+          ) : day.items.length === 0 ? (
             <Pressable
               onPress={() => router.push('/workplaces')}
               style={({ pressed }) => [styles.emptyDay, pressed && styles.pressed]}
@@ -288,7 +314,29 @@ export default function HomeScreen() {
               <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
               <Text style={styles.emptyText}>אין קורסים מתוכננים. קורסים מגדירים במקום העבודה ←</Text>
             </Pressable>
-          ) : (
+          ) : null}
+          {day.items.length === 0 && nextAfter ? (
+            <Pressable
+              onPress={() => {
+                // המפגש הבא בתוך ימי הלו״ז — מעבר ליום שלו; אחרת — ליומן, על התאריך.
+                const i = days.findIndex((d) => d.date === nextAfter.date);
+                if (i >= 0) pickDay(i);
+                else router.push({ pathname: '/reports', params: { tab: 'plan', day: nextAfter.date } });
+              }}
+              accessibilityRole="link"
+              style={({ pressed }) => [styles.nextCourse, pressed && styles.pressed]}
+            >
+              <Icon name="calendar-arrow-left" size={20} color={colors.brand} />
+              <Text style={styles.nextCourseText}>
+                הקורס הבא: {nextAfter.course.name} · {nextDateLabel(nextAfter.date)}{' '}
+                <Text style={styles.showLink}>
+                  {days.some((d) => d.date === nextAfter.date) ? 'מעבר ליום' : 'ביומן'}
+                </Text>
+              </Text>
+              <EnterChevron size={18} color={colors.brand} />
+            </Pressable>
+          ) : null}
+          {day.items.length === 0 ? null : (
             day.items.map((item) => (
               <SessionRow
                 key={item.course.id}
@@ -613,6 +661,13 @@ const makeStyles = (colors: AppColors) =>
       borderRadius: 12,
     },
     chipText: { fontSize: 12, fontWeight: '700' },
+    nextCourse: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: 44,
+    },
+    nextCourseText: { flex: 1, fontSize: 14, color: colors.text, textAlign: TEXT_RIGHT },
     emptyDay: {
       flexDirection: 'row',
       alignItems: 'center',

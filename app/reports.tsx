@@ -71,6 +71,8 @@ export default function ReportsScreen() {
     to?: string;
     n?: string;
     tab?: string;
+    /** יום לגלול אליו ולסמן (למשל "הקורס הבא" מדף הבית) */
+    day?: string;
   }>();
   const [tab, setTab] = useState<'plan' | 'reports'>(params.tab === 'reports' ? 'reports' : 'plan');
   useEffect(() => {
@@ -240,6 +242,16 @@ export default function ReportsScreen() {
     setCalMonth(today.slice(0, 7));
     setWeekStart(weekStartOf(today));
   }
+
+  // ?day=YYYY-MM-DD — גלילה ליום וסימונו בתאריכון.
+  useEffect(() => {
+    if (!params.day || !/^\d{4}-\d{2}-\d{2}$/.test(params.day)) return;
+    setRangeMode(false);
+    setRange(null);
+    setPeriodMode(null);
+    focusOn(params.day);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.day, params.n]);
 
   // סינון שמגיע מלוח הבקרה: ?wp=<מזהה>&when=current|previous|YYYY-MM
   useEffect(() => {
