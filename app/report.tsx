@@ -11,6 +11,7 @@ import { useSessionCancel, useSessionMove } from '../components/SessionCancelDia
 import { DatePicker, longDate } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
+import { WheelNumber } from '../components/WheelNumber';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
@@ -18,6 +19,7 @@ import { useToast } from '../components/Toast';
 import { useFade } from '../components/useFlash';
 import { nextRelevantDay, unreportedOn } from '../lib/home';
 import { toAcademic } from '../lib/academic';
+import { loadLeftoverMode } from '../lib/leftover';
 import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../lib/accumulated';
 import { formatHours, payableHours, reportPay } from '../lib/pay';
 import { basisFor, usePayBasis } from '../lib/payBasis';
@@ -55,6 +57,8 @@ import { useWorkplaceColor } from '../theme/workplaceColors';
 
 /** שורת הפסקה בטופס — משך בדקות נשמר כמחרוזת לעריכה חופשית. */
 type BreakRow = { id: string; minutes: string };
+/** אורך ברירת המחדל של הפסקה חדשה */
+const DEFAULT_BREAK_MINUTES = 10;
 
 type Step = 'date' | 'course' | 'workplace' | 'times' | 'summary' | 'done';
 
@@ -205,6 +209,9 @@ export default function ReportScreen() {
         setCourses(crs);
         setWorkplaces(list);
         setExisting(reports);
+        // דיווח חדש — הדקות העודפות לפי ההגדרה הכללית (נטען מחדש גם בחזרה
+        // מהמסך שבו משנים אותה). דיווח קיים שומר את מה שנקבע בו.
+        if (!editId) loadLeftoverMode().then((m) => active && setLeftoverChoice(m));
         // מצב עריכה — טעינת הדיווח פעם אחת ומילוי הטופס.
         if (editId && !editing) {
           const r = reports.find((x) => x.id === editId);
@@ -324,7 +331,7 @@ export default function ReportScreen() {
 
 
   function addBreak() {
-    setBreaks((prev) => [...prev, { id: makeBreakId(), minutes: '' }]);
+    setBreaks((prev) => [...prev, { id: makeBreakId(), minutes: String(DEFAULT_BREAK_MINUTES) }]);
     setErrors((prev) => ({ ...prev, breaks: undefined }));
   }
 
@@ -703,6 +710,21 @@ export default function ReportScreen() {
     });
   }
 
+  /** עריכה: "השיעור לא התקיים" — המפגש מסומן כבוטל והדיווח עליו נמחק. */
+  function cancelEditedSession(r: WorkReport, c: Course) {
+    sessionDialog.open({
+      course: c,
+      date: r.date,
+      onDone: async (canceled) => {
+        if (!canceled) return;
+        await deleteReport(r.id);
+        if (r.carriedMinutes > 0) await adjustAccumulated(r.workplaceId, -r.carriedMinutes);
+        setTouched(false);
+        setExitReason('cancelled');
+      },
+    });
+  }
+
   // ── מחוון שלבים ──
   const STEPS: { key: Step[]; label: string }[] = [
     { key: ['date'], label: 'תאריך' },
@@ -984,21 +1006,8 @@ export default function ReportScreen() {
               ) : null}
             </FormField>
           ) : null}
+          {/* שעת התחלה משמאל ושעת סיום מימין — כמו "12:05–15:00". */}
           <View style={styles.timesRow}>
-            <View style={styles.timeCol}>
-              <FormField label="שעת התחלה" error={errors.start}>
-                <TimeInput
-                  value={start}
-                  onChange={(v) => {
-                    setStart(v);
-                    setErrors((prev) => ({ ...prev, start: undefined, end: undefined }));
-                  }}
-                  onComplete={() => endRef.current?.focus()}
-                  onOverflow={(d) => endRef.current?.feed(d)}
-                  invalid={Boolean(errors.start)}
-                />
-              </FormField>
-            </View>
             <View style={styles.timeCol}>
               <FormField label="שעת סיום" error={errors.end}>
                 <TimeInput
@@ -1013,18 +1022,33 @@ export default function ReportScreen() {
                 />
               </FormField>
             </View>
+            <View style={styles.timeCol}>
+              <FormField label="שעת התחלה" error={errors.start}>
+                <TimeInput
+                  value={start}
+                  onChange={(v) => {
+                    setStart(v);
+                    setErrors((prev) => ({ ...prev, start: undefined, end: undefined }));
+                  }}
+                  onComplete={() => endRef.current?.focus()}
+                  onOverflow={(d) => endRef.current?.feed(d)}
+                  invalid={Boolean(errors.start)}
+                />
+              </FormField>
+            </View>
           </View>
+          <Text style={styles.wheelHint}>אפשר גם לגרור למעלה או למטה בתוך התיבה</Text>
 
           <FormField label="הפסקות (בדקות)" error={errors.breaks}>
             <View style={styles.breaks}>
               {breaks.map((row, index) => (
                 <View key={row.id} style={styles.breakRow}>
                   <View style={styles.breakInput}>
-                    <TextField
+                    <WheelNumber
                       value={row.minutes}
-                      onChangeText={(t) => updateBreak(row.id, t.replace(/\D/g, ''))}
+                      onChange={(t) => updateBreak(row.id, t)}
                       placeholder={`הפסקה ${index + 1}`}
-                      numeric
+                      max={600}
                     />
                   </View>
                   <Pressable
@@ -1041,19 +1065,24 @@ export default function ReportScreen() {
           </FormField>
 
           {leftoverPreview > 0 ? (
-            <FormField
-              label="דקות עודפות"
-              hint={`${leftoverPreview} דק׳ אינן משלימות שעה אקדמית (45 דק׳)`}
-            >
-              <SegmentedControl<LeftoverChoice>
-                options={[
-                  { value: 'carry', label: 'למונה המצטבר' },
-                  { value: 'include', label: 'לכלול בדיווח' },
-                ]}
-                value={leftoverChoice}
-                onChange={setLeftoverChoice}
-              />
-            </FormField>
+            <View style={styles.leftoverRow}>
+              <Text style={styles.leftoverText}>
+                דקות עודפות ({leftoverPreview} דק׳):{' '}
+                {leftoverChoice === 'carry' ? 'למונה המצטבר' : 'נכללות בדיווח כשבר שעה'}
+                {editing ? ' · כפי שנקבע בדיווח' : ''}
+              </Text>
+              {editing ? null : (
+                <Pressable
+                  onPress={() => router.push({ pathname: '/settings', params: { focus: 'settings' } })}
+                  accessibilityRole="link"
+                  hitSlop={8}
+                  style={styles.leftoverLink}
+                >
+                  <Text style={styles.linkText}>שינוי בהגדרות</Text>
+                  <EnterChevron size={16} />
+                </Pressable>
+              )}
+            </View>
           ) : null}
 
           {netPreview != null ? (
@@ -1232,12 +1261,14 @@ export default function ReportScreen() {
           ) : (
             <Button label="חזרה" variant="secondary" onPress={goBack} />
           )}
-          {(step === 'times' || step === 'summary') && selectedCourse && !editId && !extraKind ? (
+          {(step === 'times' || step === 'summary') && selectedCourse && !extraKind && (!editId || editing) ? (
             <>
               <View style={styles.linkRow}>
                 <Text style={styles.linkLead}>השיעור לא התקיים?</Text>
                 <Pressable
-                  onPress={() => cancelSession(selectedCourse, true)}
+                  onPress={() =>
+                    editing ? cancelEditedSession(editing, selectedCourse) : cancelSession(selectedCourse, true)
+                  }
                   accessibilityRole="button"
                   hitSlop={8}
                 >
@@ -1248,8 +1279,16 @@ export default function ReportScreen() {
                 onPress={() =>
                   moveDialog.open({
                     course: selectedCourse,
-                    date,
-                    onDone: () => setExitReason('cancelled'),
+                    date: editing ? editing.date : date,
+                    // בעריכה: השיעור הועבר — הדיווח עובר איתו לתאריך החדש.
+                    onDone: editing
+                      ? async (to: string) => {
+                          const moved = { ...editing, date: to };
+                          await updateReport(editing.id, moved);
+                          setEditing(moved);
+                          setDate(to);
+                        }
+                      : () => setExitReason('cancelled'),
                   })
                 }
                 accessibilityRole="button"
@@ -1625,6 +1664,26 @@ const makeStyles = (colors: AppColors) =>
   chevron: {
     fontSize: 18,
     fontWeight: '800',
+  },
+  wheelHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: TEXT_RIGHT,
+    marginTop: -spacing.sm,
+  },
+  leftoverRow: {
+    gap: 2,
+  },
+  leftoverText: {
+    fontSize: 14,
+    color: colors.text,
+    textAlign: TEXT_RIGHT,
+  },
+  leftoverLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 2,
   },
   timesRow: {
     flexDirection: 'row',

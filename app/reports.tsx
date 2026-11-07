@@ -37,7 +37,12 @@ import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 
-/** נעיצת התאריכון המלא — כשמסומן, הוא נשאר מוצמד ולא מוחלף בפס השבוע */
+/**
+ * מצב התאריכון ביומן: 'auto' — התאריכון המלא מתחלף בפס השבוע בגלילה;
+ * 'full' — התאריכון המלא נעוץ; 'week' — פס השבוע נעוץ, במקום התאריכון המלא.
+ * (ערך ישן true = 'full'.)
+ */
+type CalMode = 'auto' | 'full' | 'week';
 const CAL_PIN_KEY = 'reporting-hours/journal-calendar-pin/v1';
 
 /** מיון: תאריך יורד, ובאותו תאריך לפי סדר ההזנה היורד. */
@@ -95,16 +100,19 @@ export default function ReportsScreen() {
   const [calHeight, setCalHeight] = useState(0);
   const [pinned, setPinned] = useState(false);
   /** נעיצת התאריכון המלא: מוצמד כמו שהוא, בלי מעבר לפס השבוע */
-  const [calPin, setCalPin] = useState(false);
+  const [calMode, setCalModeState] = useState<CalMode>('auto');
   useEffect(() => {
-    readJSON<boolean>(CAL_PIN_KEY, false).then(setCalPin);
+    readJSON<unknown>(CAL_PIN_KEY, 'auto').then((v) =>
+      setCalModeState(v === true || v === 'full' ? 'full' : v === 'week' ? 'week' : 'auto'),
+    );
   }, []);
-  const toggleCalPin = () => {
-    setCalPin((on) => {
-      void writeJSON(CAL_PIN_KEY, !on);
-      return !on;
-    });
+  const setCalMode = (m: CalMode) => {
+    setCalModeState(m);
+    setPinned(false);
+    void writeJSON(CAL_PIN_KEY, m);
   };
+  const calPin = calMode === 'full';
+  const toggleCalPin = () => setCalMode(calPin ? 'auto' : 'full');
   /** היום שמסומן בתאריכון לפי הגלילה — האריח שמתחת לתחתית התאריכון המוצמד */
   const [scrollDay, setScrollDay] = useState<string | null>(null);
   /** גובה הפס / התאריכון המוצמד (נמדד) — כדי שהיום שגוללים אליו לא יוסתר מתחתיו */
@@ -479,6 +487,18 @@ export default function ReportsScreen() {
         </Pressable>
       ) : null}
       <Pressable
+        onPress={() => {
+          goToday();
+          requestScroll('day', todayISO());
+        }}
+        accessibilityRole="link"
+        hitSlop={8}
+        style={styles.todayLink}
+      >
+        <Icon name="calendar-today" size={16} color={colors.brandDark} />
+        <Text style={styles.todayText}>היום</Text>
+      </Pressable>
+      <Pressable
         onPress={toggleCalPin}
         accessibilityRole="switch"
         accessibilityState={{ checked: calPin }}
@@ -491,14 +511,7 @@ export default function ReportsScreen() {
       </Pressable>
     </View>
   );
-  const strip =
-    showCalendar && pinned && calPin ? (
-      <View style={styles.pinnedCal} onLayout={(e) => setPinCalHeight(e.nativeEvent.layout.height)}>
-        {calendar}
-        {calActions}
-      </View>
-    ) : showCalendar && pinned ? (
-      <View onLayout={(e) => setStripHeight(e.nativeEvent.layout.height)}>
+  const weekStrip = (
         <WeekStrip
           weekStart={weekStart}
           onWeekChange={changeWeek}
@@ -510,8 +523,16 @@ export default function ReportsScreen() {
           onRangeChange={setRange}
           onDayPress={dayPress}
           counts={counts}
-          onTitlePress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
-          onExpand={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          onTitlePress={() => {
+            if (calMode === 'week') setCalMode('auto');
+            scrollRef.current?.scrollTo({ y: 0, animated: true });
+          }}
+          onExpand={() => {
+            if (calMode === 'week') setCalMode('auto');
+            scrollRef.current?.scrollTo({ y: 0, animated: true });
+          }}
+          pinned={calMode === 'week'}
+          onPin={() => setCalMode(calMode === 'week' ? 'auto' : 'week')}
           statusOf={filteredStatus}
           extra={
             <SelectField<string | null>
@@ -524,6 +545,16 @@ export default function ReportsScreen() {
             />
           }
         />
+  );
+  const strip =
+    showCalendar && pinned && calPin ? (
+      <View style={styles.pinnedCal} onLayout={(e) => setPinCalHeight(e.nativeEvent.layout.height)}>
+        {calendar}
+        {calActions}
+      </View>
+    ) : showCalendar && pinned ? (
+      <View style={styles.pinnedStrip} onLayout={(e) => setStripHeight(e.nativeEvent.layout.height)}>
+        {weekStrip}
       </View>
     ) : null;
 
@@ -537,7 +568,7 @@ export default function ReportsScreen() {
         // מתחתיו — כך לא מוצגים שניהם יחד. תאריכון נעוץ — מוצמד כמו שהוא
         // מהרגע שראשו מגיע לראש המסך.
         const next =
-          calTop != null && calHeight > 0 && (calPin ? y > calTop : y > calTop + calHeight - weekStripHeight);
+          calTop != null && calHeight > 0 && (calMode !== 'auto' ? y > calTop : y > calTop + calHeight - weekStripHeight);
         if (next !== pinned) {
           setPinned(next);
           if (!next) setScrollDay(null);
@@ -573,7 +604,7 @@ export default function ReportsScreen() {
             }}
             style={pinned ? styles.calHidden : undefined}
           >
-          {calendar}
+          {calMode === 'week' ? weekStrip : calendar}
           </View>
           <View style={pinned && calPin ? styles.calHidden : undefined}>{calActions}</View>
         </>
@@ -735,6 +766,20 @@ const makeStyles = (colors: AppColors) =>
     gap: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+  },
+  pinnedStrip: {
+    backgroundColor: colors.background,
+  },
+  todayLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  todayText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.brandDark,
+    textDecorationLine: 'underline',
   },
   pinBtn: {
     flexDirection: 'row',

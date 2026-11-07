@@ -61,9 +61,12 @@ type Props = {
   statusOf?: (date: string) => DayStatus | null;
   /** החלקה אנכית על הפס (למטה) — פתיחת התאריכון החודשי */
   onExpand?: () => void;
+  /** כפתור "נעץ": הפס נעוץ — מוצג תמיד במקום התאריכון המלא */
+  pinned?: boolean;
+  onPin?: () => void;
 };
 
-export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts, onDayPress, onTitlePress, extra, statusOf: statusOverride, onExpand }: Props) {
+export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChange, counts, onDayPress, onTitlePress, extra, statusOf: statusOverride, onExpand, pinned, onPin }: Props) {
   const styles = useStyles(makeStyles);
   const ownStatus = useDayStatus();
   const statusOf = statusOverride ?? ownStatus;
@@ -176,6 +179,17 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
           <Text style={[styles.todayText, showsToday && styles.todayTextOff]}>היום</Text>
         </Pressable>
         {extra}
+        {onPin ? (
+          <Pressable
+            onPress={onPin}
+            style={[styles.todayBtn, pinned && { backgroundColor: colors.brand, borderColor: colors.brand }]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: Boolean(pinned) }}
+            accessibilityLabel={pinned ? 'ביטול נעיצת פס השבוע' : 'נעיצת פס השבוע במקום התאריכון המלא'}
+          >
+            <Icon name={pinned ? 'pin' : 'pin-outline'} size={16} color={pinned ? colors.textOnBrand : colors.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
       <View style={styles.viewport} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
         {/*

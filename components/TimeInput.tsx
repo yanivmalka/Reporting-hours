@@ -9,12 +9,15 @@
  *   מועברות הלאה לשדה הבא במקום ללכת לאיבוד.
  * - כניסה לשדה מלא מנקה אותו (בלי בחירת טקסט); הערך הקודם מוצג כרמז אפור
  *   ומוחזר אם יוצאים בלי להקליד.
+ * - גלגלת: גרירה אנכית על השעות או הדקות (וגלגלת עכבר ב־web) משנה בצעד של
+ *   שעה / דקה. דקות שעוברות את 59 או יורדות מתחת ל־00 מעדכנות את השעה.
  * - הערך החיצוני הוא "HH:MM" כששני החלקים מלאים, אחרת מחרוזת ריקה.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text, TextInput } from './Text';
 import type { TextInput as RNTextInput } from 'react-native';
+import { useWheel } from './useWheel';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -175,6 +178,20 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     feedMinutes(d);
   }
 
+  /** צעד גלגלת: delta דקות מהשעה הנוכחית (חלק ריק נחשב 0), בטווח היממה. */
+  function wheel(deltaMinutes: number) {
+    const [h, m] = partsRef.current;
+    const prev = savedRef.current;
+    const hNum = Number(h || prev[0] || 0);
+    const mNum = Number(m || prev[1] || 0);
+    const total = (((hNum * 60 + mNum + deltaMinutes) % 1440) + 1440) % 1440;
+    setSavedPart(0, '');
+    setSavedPart(1, '');
+    emit(String(Math.floor(total / 60)).padStart(2, '0'), String(total % 60).padStart(2, '0'));
+  }
+  const hourWheel = useWheel((d) => wheel(d * 60));
+  const minuteWheel = useWheel((d) => wheel(d));
+
   useImperativeHandle(
     ref,
     () => ({
@@ -204,6 +221,7 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
 
   return (
     <View style={styles.row}>
+      <View ref={hourWheel.ref} {...hourWheel.panHandlers} style={styles.cell}>
       <TextInput
         ref={hourRef}
         value={hh}
@@ -216,7 +234,9 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         onSubmitEditing={focusMinutes}
         {...common}
       />
+      </View>
       <Text style={styles.colon}>:</Text>
+      <View ref={minuteWheel.ref} {...minuteWheel.panHandlers} style={styles.cell}>
       <TextInput
         ref={minuteRef}
         value={mm}
@@ -229,6 +249,7 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         onSubmitEditing={() => onComplete?.()}
         {...common}
       />
+      </View>
     </View>
   );
 });
@@ -243,12 +264,15 @@ const makeStyles = (colors: AppColors) =>
       alignItems: 'center',
       gap: spacing.xs,
     },
-    part: {
+    cell: {
       // width 0 + flexGrow: בלי זה שדה טקסט ב־web מקבל רוחב פנימי ודוחף את השורה החוצה.
       flexGrow: 1,
       flexBasis: 0,
       width: 0,
       minWidth: 0,
+    },
+    part: {
+      width: '100%',
       minHeight: 48,
       backgroundColor: colors.surface,
       borderWidth: 1,
