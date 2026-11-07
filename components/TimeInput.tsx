@@ -17,7 +17,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { StyleSheet, View } from 'react-native';
 import { Text, TextInput } from './Text';
 import type { TextInput as RNTextInput } from 'react-native';
-import { useWheel } from './useWheel';
+import { hideWheelBubbles, useWheel } from './useWheel';
+import { WheelBubble } from './WheelBubble';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -38,6 +39,8 @@ type TimeInputProps = {
   invalid?: boolean;
   hourPlaceholder?: string;
   minutePlaceholder?: string;
+  /** גרירת גלגלת התחילה / הסתיימה — כדי שההורה ירים את השדה מעל שכניו */
+  onDragging?: (on: boolean) => void;
 };
 
 const onlyDigits = (text: string) => text.replace(/\D/g, '');
@@ -55,7 +58,7 @@ function take(d: string, maxFirst: number): [string, string] {
 }
 
 export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function TimeInput(
-  { value, onChange, onComplete, onOverflow, invalid, hourPlaceholder = '00', minutePlaceholder = '00' },
+  { value, onChange, onComplete, onOverflow, invalid, hourPlaceholder = '00', minutePlaceholder = '00', onDragging },
   ref,
 ) {
   const styles = useThemedStyles(makeStyles);
@@ -191,6 +194,20 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
   }
   const hourWheel = useWheel((d) => wheel(d * 60));
   const minuteWheel = useWheel((d) => wheel(d));
+  /** מיקום תיבת הדקות בשורה — הבועה של הדקות מחושבת יחסית לה */
+  const [minuteX, setMinuteX] = useState(0);
+  const dragging = hourWheel.drag ?? minuteWheel.drag;
+  const draggingOn = Boolean(dragging);
+  const draggingRef = useRef(onDragging);
+  draggingRef.current = onDragging;
+  useEffect(() => {
+    draggingRef.current?.(draggingOn);
+  }, [draggingOn]);
+  const bubble = hourWheel.drag
+    ? { x: hourWheel.drag.x, y: hourWheel.drag.y, part: 0 as const }
+    : minuteWheel.drag
+      ? { x: minuteX + minuteWheel.drag.x, y: minuteWheel.drag.y, part: 1 as const }
+      : null;
 
   useImperativeHandle(
     ref,
@@ -220,13 +237,16 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
   };
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, bubble && styles.rowRaised]}>
       <View ref={hourWheel.ref} {...hourWheel.panHandlers} style={styles.cell}>
       <TextInput
         ref={hourRef}
         value={hh}
         onChangeText={onHour}
-        onFocus={() => onFieldFocus(0)}
+        onFocus={() => {
+          hideWheelBubbles();
+          onFieldFocus(0);
+        }}
         onBlur={() => restoreIfEmpty(0)}
         placeholder={saved[0] || hourPlaceholder}
         accessibilityLabel="שעות"
@@ -236,12 +256,20 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
       />
       </View>
       <Text style={styles.colon}>:</Text>
-      <View ref={minuteWheel.ref} {...minuteWheel.panHandlers} style={styles.cell}>
+      <View
+        ref={minuteWheel.ref}
+        {...minuteWheel.panHandlers}
+        style={styles.cell}
+        onLayout={(e) => setMinuteX(e.nativeEvent.layout.x)}
+      >
       <TextInput
         ref={minuteRef}
         value={mm}
         onChangeText={onMinute}
-        onFocus={() => onFieldFocus(1)}
+        onFocus={() => {
+          hideWheelBubbles();
+          onFieldFocus(1);
+        }}
         onBlur={() => restoreIfEmpty(1)}
         placeholder={saved[1] || minutePlaceholder}
         accessibilityLabel="דקות"
@@ -250,6 +278,15 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         {...common}
       />
       </View>
+      {bubble ? (
+        <WheelBubble x={bubble.x} y={bubble.y}>
+          <Text style={styles.bubbleText}>
+            <Text style={bubble.part === 0 ? styles.bubbleOn : styles.bubbleOff}>{hh || '00'}</Text>
+            <Text style={styles.bubbleOff}>:</Text>
+            <Text style={bubble.part === 1 ? styles.bubbleOn : styles.bubbleOff}>{mm || '00'}</Text>
+          </Text>
+        </WheelBubble>
+      ) : null}
     </View>
   );
 });
@@ -283,6 +320,24 @@ const makeStyles = (colors: AppColors) =>
       color: colors.text,
       textAlign: 'center',
       fontVariant: ['tabular-nums'],
+    },
+    rowRaised: {
+      zIndex: 50,
+      elevation: 8,
+    },
+    bubbleText: {
+      fontSize: 30,
+      fontVariant: ['tabular-nums'],
+      // שעה משמאל, דקות מימין — בכל שפה.
+      writingDirection: 'ltr',
+    },
+    bubbleOn: {
+      fontWeight: '800',
+      color: colors.brand,
+    },
+    bubbleOff: {
+      fontWeight: '700',
+      color: colors.textMuted,
     },
     invalid: {
       borderColor: colors.danger,

@@ -93,6 +93,29 @@ const AGENDA_DAYS: { key: AgendaDayKey; offset: number; label: string }[] = [
 ];
 
 /** מיקום "היום" ברשימת ימי הלו״ז. */
+/**
+ * המפגש הבא אחרי `after` ("YYYY-MM-DD") במקומות העבודה הפעילים — מפגש שמתקיים
+ * (לא בוטל, לא בחג או בחופשה). עד שנה קדימה; null אם אין.
+ */
+export function nextSessionAfter(
+  courses: readonly Course[],
+  workplaces: readonly Workplace[],
+  after: string,
+  cancel: CancelIndex = currentCancel(),
+): { date: string; course: Course } | null {
+  const ids = new Set(activeWorkplaces(workplaces).map((w) => w.id));
+  const mine = courses.filter((c) => ids.has(c.workplaceId));
+  if (mine.length === 0) return null;
+  const [y, m, d] = after.split('-').map(Number);
+  const start = new Date(y, m - 1, d);
+  for (let i = 1; i <= 366; i++) {
+    const date = isoDate(addDays(start, i));
+    const found = coursesOn(mine, date, undefined, cancel);
+    if (found.length) return { date, course: found[0] };
+  }
+  return null;
+}
+
 export const AGENDA_TODAY_INDEX = AGENDA_DAYS.findIndex((d) => d.key === 'today');
 
 /**

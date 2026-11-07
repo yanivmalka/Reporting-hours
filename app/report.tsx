@@ -161,6 +161,8 @@ export default function ReportScreen() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [breaks, setBreaks] = useState<BreakRow[]>([]);
+  /** עמודת השעה שנגררת כגלגלת — מורמת מעל השכנה, כדי שהבועה לא תוסתר */
+  const [dragCol, setDragCol] = useState<'start' | 'end' | null>(null);
   const [leftoverChoice, setLeftoverChoice] = useState<LeftoverChoice>('carry');
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
@@ -1008,7 +1010,7 @@ export default function ReportScreen() {
           ) : null}
           {/* שעת התחלה משמאל ושעת סיום מימין — כמו "12:05–15:00". */}
           <View style={styles.timesRow}>
-            <View style={styles.timeCol}>
+            <View style={[styles.timeCol, dragCol === 'end' && styles.raised]}>
               <FormField label="שעת סיום" error={errors.end}>
                 <TimeInput
                   ref={endRef}
@@ -1018,11 +1020,12 @@ export default function ReportScreen() {
                     setErrors((prev) => ({ ...prev, end: undefined }));
                   }}
                   onComplete={() => Keyboard.dismiss()}
+                  onDragging={(on) => setDragCol(on ? 'end' : null)}
                   invalid={Boolean(errors.end)}
                 />
               </FormField>
             </View>
-            <View style={styles.timeCol}>
+            <View style={[styles.timeCol, dragCol === 'start' && styles.raised]}>
               <FormField label="שעת התחלה" error={errors.start}>
                 <TimeInput
                   value={start}
@@ -1032,6 +1035,7 @@ export default function ReportScreen() {
                   }}
                   onComplete={() => endRef.current?.focus()}
                   onOverflow={(d) => endRef.current?.feed(d)}
+                  onDragging={(on) => setDragCol(on ? 'start' : null)}
                   invalid={Boolean(errors.start)}
                 />
               </FormField>
@@ -1684,6 +1688,10 @@ const makeStyles = (colors: AppColors) =>
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 2,
+  },
+  raised: {
+    zIndex: 50,
+    elevation: 8,
   },
   timesRow: {
     flexDirection: 'row',

@@ -14,6 +14,7 @@ type TextFieldProps = {
   /** מספר טלפון: מקלדת חיוג, משמאל לימין */
   phone?: boolean;
   invalid?: boolean;
+  onFocus?: () => void;
 };
 
 /** שדה טקסט אחיד. `numeric` מפעיל מקלדת מספרית ומיישר לשמאל. */
@@ -25,6 +26,7 @@ export function TextField({
   email,
   phone,
   invalid,
+  onFocus,
 }: TextFieldProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -32,6 +34,7 @@ export function TextField({
     <TextInput
       value={value}
       onChangeText={onChangeText}
+      onFocus={onFocus}
       placeholder={placeholder}
       placeholderTextColor={colors.textMuted}
       keyboardType={numeric ? 'numeric' : email ? 'email-address' : phone ? 'phone-pad' : 'default'}
