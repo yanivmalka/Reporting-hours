@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLeftoverMode } from '../lib/leftover';
 import { EnterChevron } from '../components/Chevrons';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
@@ -52,6 +53,9 @@ export default function SettingsScreen() {
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [statuses, setStatuses] = useState<StatusMap>({});
   const [mode, setMode] = useRedeemMode();
+  const [leftover, setLeftover] = useLeftoverMode();
+  /** ?focus=settings (מאשף הדיווח) — קבוצת "הגדרות" נפתחת */
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const confirm = useConfirm();
 
   useFocusEffect(
@@ -181,9 +185,21 @@ export default function SettingsScreen() {
       </View>
 
       <FoldSection
+        key={focus === 'settings' ? 'open' : 'closed'}
+        defaultOpen={focus === 'settings'}
         title="הגדרות"
-        summary={`${mode === 'complete' ? 'השלמה לשעה שלמה' : 'שעות שלמות בלבד'} · בסיס השכר — בהגדרות כל מקום עבודה`}
+        summary={`דקות עודפות ${leftover === 'carry' ? 'למונה' : 'בדיווח'} · ${mode === 'complete' ? 'השלמה לשעה שלמה' : 'שעות שלמות בלבד'} · בסיס השכר — בהגדרות כל מקום עבודה`}
       >
+        <Checkbox
+          checked={leftover === 'carry'}
+          onChange={(on) => setLeftover(on ? 'carry' : 'include')}
+          label="דקות עודפות למונה המצטבר"
+          hint={
+            leftover === 'carry'
+              ? 'דקות שאינן משלימות שעה אקדמית נכנסות למונה, ונפדות כאן בהמשך.'
+              : 'דקות שאינן משלימות שעה אקדמית נכללות בדיווח עצמו כשבר שעה.'
+          }
+        />
         <Checkbox
           checked={mode === 'complete'}
           onChange={(on) => setMode(on ? 'complete' : 'whole')}

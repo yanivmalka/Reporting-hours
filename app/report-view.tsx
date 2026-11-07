@@ -3,7 +3,7 @@
  * "עריכה" פותח את האשף, ו"חזרה" באשף מחזירה לכאן.
  * דיווח בחודש שהדוח שלו כבר נשלח לשכר — נעול; במקום עריכה יש מעבר לדוח.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
@@ -11,7 +11,6 @@ import { Button } from '../components/Button';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { useConfirm } from '../components/ConfirmDialog';
-import { useSessionCancel, useSessionMove } from '../components/SessionCancelDialog';
 import { adjustAccumulated } from '../lib/accumulated';
 import { courseReport, coursesOn, loadCourses, type Course } from '../lib/courses';
 import { NO_CANCEL } from '../lib/sessions';
@@ -20,7 +19,7 @@ import { hebrewDate } from '../lib/hebrewDate';
 import { reportPay } from '../lib/pay';
 import { usePayBasis } from '../lib/payBasis';
 import { isLocked, isPaid, loadPayrollStatus, periodTitle, statusKey } from '../lib/payroll';
-import { academicOf, deleteReport, EXTRA_SESSION_LABELS, loadReports, netMinutes, totalBreakMinutes, updateReport, type WorkReport } from '../lib/reports';
+import { academicOf, deleteReport, EXTRA_SESSION_LABELS, loadReports, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -48,9 +47,9 @@ export default function ReportViewScreen() {
     /** הקורס שהדיווח מכסה (אם יש) — לסימון "השיעור לא התקיים" */
     course?: Course;
   } | null>(null);
-  const sessionDialog = useSessionCancel();
-  const moveDialog = useSessionMove();
-  const [reloadTick, setReloadTick] = useState(0);
+  const [reloadTick] = useState(0);
+  /** הדיווח כבר הוצג — אם נעלם בחזרה מהעריכה, הוא נמחק */
+  const hadReport = useRef(false);
   const confirm = useConfirm();
 
   // נטען מחדש בכל חזרה למסך — כדי לשקף עריכה שנשמרה באשף.
@@ -80,6 +79,13 @@ export default function ReportViewScreen() {
             : coursesOn(crs, report.date, report.workplaceId, NO_CANCEL).find((c) =>
                 courseReport(c, report.date, [report]),
               );
+        // הדיווח נמחק בעריכה (מחיקה או "סימון כבוטל") — חוזרים למקום המוצא.
+        if (!report && hadReport.current) {
+          hadReport.current = false;
+          router.back();
+          return;
+        }
+        hadReport.current = Boolean(report);
         setData({ report, workplace, lockedStart, paid, course });
       });
       return () => {
@@ -195,49 +201,7 @@ export default function ReportViewScreen() {
       ) : (
         <>
           <Button label="עריכה" onPress={() => router.push({ pathname: '/report', params: { id: report.id } })} />
-          {course && !report.extraKind ? (
-            <>
-              <View style={styles.linkRow}>
-                <Text style={styles.linkLead}>השיעור לא התקיים?</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  hitSlop={8}
-                  onPress={() =>
-                    sessionDialog.open({
-                      course,
-                      date: report.date,
-                      // המפגש בוטל — הדיווח עליו נמחק (וגם הדקות שנצברו ממנו).
-                      onDone: async (canceled) => {
-                        if (!canceled) return;
-                        await deleteReport(report.id);
-                        if (report.carriedMinutes > 0) await adjustAccumulated(report.workplaceId, -report.carriedMinutes);
-                        router.back();
-                      },
-                    })
-                  }
-                >
-                  <Text style={styles.link}>סימון כבוטל</Text>
-                </Pressable>
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                style={styles.linkRow}
-                onPress={() =>
-                  moveDialog.open({
-                    course,
-                    date: report.date,
-                    // השיעור הועבר — הדיווח עובר איתו לתאריך החדש.
-                    onDone: async (to) => {
-                      await updateReport(report.id, { ...report, date: to });
-                      setReloadTick((n) => n + 1);
-                    },
-                  })
-                }
-              >
-                <Text style={styles.link}>העברת השיעור לתאריך אחר</Text>
-              </Pressable>
-            </>
-          ) : null}
+          {/* "סימון כבוטל" ו"העברת השיעור" — רק במצב עריכה (באשף). */}
           <Button
             label="מחיקת הדיווח"
             variant="dangerLink"
@@ -257,8 +221,6 @@ export default function ReportViewScreen() {
           />
         </>
       )}
-      {sessionDialog.dialog}
-      {moveDialog.dialog}
       {confirm.dialog}
     </Screen>
   );

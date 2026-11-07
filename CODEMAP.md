@@ -27,7 +27,8 @@
 | אופן פדיון דקות | `lib/redeem.ts` | `reporting-hours/redeem-mode/v1` |
 | בסיס חישוב שכר (ברירת מחדל ישנה; לכל מקום — `Workplace.payBasis`) | `lib/payBasis.tsx` | `reporting-hours/pay-basis/v1` |
 | תאריך התחלת עבודה עם המערכת | `lib/trackingStart.ts` | `reporting-hours/tracking-start/v1` |
-| נעיצת התאריכון המלא ביומן | `app/reports.tsx` | `reporting-hours/journal-calendar-pin/v1` |
+| מצב התאריכון ביומן (`auto` / `full` — מלא נעוץ / `week` — פס שבוע נעוץ) | `app/reports.tsx` | `reporting-hours/journal-calendar-pin/v1` |
+| דקות עודפות — למונה / בדיווח (הגדרה כללית) | `lib/leftover.ts` | `reporting-hours/leftover-mode/v1` |
 | פרטים אישיים | `lib/profile.ts` | `reporting-hours/profile/v1` |
 | הצעות ארכיון שנדחו | `lib/recommend.ts` | `reporting-hours/recommend-dismissed/v1` |
 | התראות בית שנסגרו | `lib/home.ts` | `reporting-hours/home-dismissed/v1` |
@@ -46,7 +47,7 @@
 
 ### דיווח שדווח בטעות
 
-- **השיעור לא התקיים**: במסך התצוגה (`app/report-view.tsx`) יש כפתור "השיעור לא התקיים — סימון כבוטל", שמופיע רק כשהדיווח משויך לקורס: לפי `courseId` (גם אם הקורס נערך ולא מתקיים עוד בתאריך), ובדיווח ישן בלי מזהה — לפי קורסי אותו יום. הכפתור פותח את `SessionCancelDialog`, ובאישור המפגש מסומן כמבוטל, הדיווח נמחק והדקות שהעביר למונה יורדות.
+- **השיעור לא התקיים**: בעריכת הדיווח (אשף `app/report.tsx`, מתחת ל"חזרה", לצד "העברת השיעור לתאריך אחר") יש קישור "סימון כבוטל", שמופיע רק כשהדיווח משויך לקורס: לפי `courseId` (גם אם הקורס נערך ולא מתקיים עוד בתאריך), ובדיווח ישן בלי מזהה — לפי קורסי אותו יום. הכפתור פותח את `SessionCancelDialog`, ובאישור המפגש מסומן כמבוטל, הדיווח נמחק והדקות שהעביר למונה יורדות.
 - **דיווח שגוי סתם**: "מחיקת הדיווח" במסך התצוגה (`app/report-view.tsx`), וגם בשלב הסיכום של אשף העריכה (`app/report.tsx`). המחיקה לצמיתות, בלי אשפה.
 - **נשלח לשכר**: מבטלים קודם את השליחה בדוח השכר. **שולם**: הדיווח נעול לצמיתות.
 
@@ -81,7 +82,7 @@
 | `_layout.tsx` | Stack, כותרות (☰ / חזרה מימין, ⋮ משמאל), Providers |
 | `index.tsx` | בית: ברכה; שורה עליונה — כפתור דיווח ("היום הרלוונטי הבא", `nextRelevantDay`) ואריח לוח בקרה; לו״ז עם קישור "ליומן"; התראות (כולל מוסתרות) |
 | `report.tsx` | אשף דיווח: כניסה ישירה (`?course&date` — מסך אחד "דיווח מפגש") או מלאה (פס שלבים); עריכה ומחיקה |
-| `report-view.tsx` | תצוגת דיווח (קריאה בלבד), עריכה, "השיעור לא התקיים" |
+| `report-view.tsx` | תצוגת דיווח (קריאה בלבד), עריכה ומחיקה; נסגר לבד כשהדיווח נמחק בעריכה |
 | `reports.tsx` | "יומן": בורר תכנון (`components/PlanList.tsx`) · דיווחים (`?tab=reports`); תאריכון, שורה מוצמדת (`WeekStrip`) וסינון משותפים |
 | `workplaces.tsx` / `workplace.tsx` / `workplace-form.tsx` | רשימת מקומות / פירוט מקום / עריכת מקום — קבוצות מתקפלות; מקום חדש בוויזארד; `?focus=payroll` פותח את "דוחות שכר" ומדגיש |
 | `course-form.tsx` | קורס מחזורי |
