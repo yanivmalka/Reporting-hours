@@ -3,6 +3,7 @@
  * "עריכה" פותח את האשף, ו"חזרה" באשף מחזירה לכאן.
  * דיווח בחודש שהדוח שלו כבר נשלח לשכר — נעול; במקום עריכה יש מעבר לדוח.
  */
+import { useAccess } from '../components/Access';
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
@@ -51,6 +52,7 @@ export default function ReportViewScreen() {
   /** הדיווח כבר הוצג — אם נעלם בחזרה מהעריכה, הוא נמחק */
   const hadReport = useRef(false);
   const confirm = useConfirm();
+  const { canReport } = useAccess();
 
   // נטען מחדש בכל חזרה למסך — כדי לשקף עריכה שנשמרה באשף.
   useFocusEffect(
@@ -137,6 +139,7 @@ export default function ReportViewScreen() {
     ...(report.extraKind ? ([['סוג מפגש', `מפגש נוסף · ${EXTRA_SESSION_LABELS[report.extraKind]}`]] as [string, string][]) : []),
     ['שעות', `⁦${report.start}–${report.end}⁩`],
     ['הפסקות', breaks > 0 ? formatDuration(breaks) : 'ללא'],
+    ...(report.by ? ([['דווח על ידי', report.by.name || report.by.email]] as [string, string][]) : []),
     ['זמן עבודה נטו', net == null ? '—' : formatDuration(net)],
     [
       'שעות אקדמיות',
@@ -199,6 +202,7 @@ export default function ReportViewScreen() {
           />
         </>
       ) : (
+        canReport ? (
         <>
           <Button label="עריכה" onPress={() => router.push({ pathname: '/report', params: { id: report.id } })} />
           {/* "סימון כבוטל" ו"העברת השיעור" — רק במצב עריכה (באשף). */}
@@ -220,6 +224,7 @@ export default function ReportViewScreen() {
             }
           />
         </>
+        ) : null
       )}
       {confirm.dialog}
     </Screen>

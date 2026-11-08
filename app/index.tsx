@@ -16,6 +16,7 @@ import { useFade } from '../components/useFlash';
 import { useSessionCancel } from '../components/SessionCancelDialog';
 import { useSwipe } from '../components/useSwipe';
 import { useCloudSync } from '../components/CloudSync';
+import { useAccess } from '../components/Access';
 import { loadAccumulated } from '../lib/accumulated';
 import { loadCourses, timeRange, type Course } from '../lib/courses';
 import { onDataChanged } from '../lib/demo';
@@ -73,6 +74,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const { basis } = usePayBasis();
   const { user } = useCloudSync();
+  const { canReport } = useAccess();
   // null עד הטעינה בדפדפן: ב־web המסך מרונדר מראש בזמן הבנייה, ושעה שונה
   // בין הבנייה לדפדפן גורמת לאי־התאמה (hydration).
   const [now, setNow] = useState<Date | null>(null);
@@ -210,6 +212,7 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.topRow}>
+        {canReport ? (
         <Pressable
           onPress={() => router.push(reportHref)}
           accessibilityRole="button"
@@ -240,6 +243,7 @@ export default function HomeScreen() {
             )}
           </View>
         </Pressable>
+        ) : null}
         <Pressable
           onPress={() => router.push('/dashboard')}
           accessibilityRole="link"

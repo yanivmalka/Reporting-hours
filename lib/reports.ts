@@ -1,6 +1,7 @@
 import { toAcademic, type AcademicBreakdown } from './academic';
 import { readJSON, writeJSON } from './storage';
 import { parseTime } from './time';
+import { actingAs } from './sync';
 
 /**
  * מודל הדיווח על יום עבודה (סעיף 4 ב־WISHLIST) והפעולות לשמירתו.
@@ -58,10 +59,15 @@ export type WorkReport = {
   demo?: boolean;
   /** חותמת יצירה (מילישניות) — לסידור דיווחים באותו תאריך */
   createdAt: number;
+  /**
+   * מי דיווח או ערך לאחרונה, כשזה מורשה שעובד על נתוני הבעלים (docs/sharing-spec.md).
+   * חסר — הבעלים עצמם.
+   */
+  by?: { name: string; email: string };
 };
 
 /** נתוני טופס לפני שמירה — בלי שדות שנוצרים אוטומטית. */
-export type WorkReportDraft = Omit<WorkReport, 'id' | 'createdAt' | 'demo'>;
+export type WorkReportDraft = Omit<WorkReport, 'id' | 'createdAt' | 'demo' | 'by'>;
 
 const STORAGE_KEY = 'reporting-hours/reports/v1';
 
@@ -74,8 +80,21 @@ export async function loadReports(): Promise<WorkReport[]> {
   }));
 }
 
-export function saveReports(list: WorkReport[]): Promise<void> {
-  return writeJSON(STORAGE_KEY, list);
+export async function saveReports(list: WorkReport[]): Promise<void> {
+  // דיווח שנוסף או השתנה מקבל את שם המדווח (מורשה), או מאבד אותו כשהבעלים עורכים.
+  const actor = actingAs();
+  const prev = new Map((await readJSON<WorkReport[]>(STORAGE_KEY, [])).map((r) => [r.id, r]));
+  const stamped = list.map((r) => {
+    const old = prev.get(r.id);
+    const { by: _by, ...rest } = r;
+    if (old) {
+      const { by: _oldBy, ...oldRest } = old;
+      if (JSON.stringify(oldRest) === JSON.stringify({ ...rest, carriedMinutes: rest.carriedMinutes ?? 0 }) ||
+          JSON.stringify(oldRest) === JSON.stringify(rest)) return r;
+    }
+    return actor ? { ...rest, by: actor } : rest;
+  });
+  return writeJSON(STORAGE_KEY, stamped);
 }
 
 function makeId(): string {

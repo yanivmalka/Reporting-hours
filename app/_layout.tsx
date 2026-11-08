@@ -12,6 +12,7 @@ import { UpdateProvider } from '../components/UpdateChecker';
 import { DemoSeeder } from '../components/DemoSeeder';
 import { BackupScheduler } from '../components/BackupScheduler';
 import { SyncProvider, useCloudSync } from '../components/CloudSync';
+import { BlockedWriteNotice } from '../components/Access';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -57,6 +58,7 @@ function Chrome() {
         <DemoSeeder />
         <BackupScheduler />
         <ExitGuard />
+        <BlockedWriteNotice />
         {/* במסך רחב: תפריט קבוע בצד ההתחלה (ימין בעברית) והניווט לצדו */}
         <View style={{ flex: 1, flexDirection: 'row' }}>
           {wide ? <SideNav /> : null}
@@ -101,6 +103,7 @@ function Chrome() {
               <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
               <Stack.Screen name="holidays" options={{ title: t('nav.holidays') }} />
               <Stack.Screen name="data" options={{ title: t('nav.data') }} />
+              <Stack.Screen name="sharing" options={{ title: t('nav.sharing') }} />
             </Stack>
           </View>
         </View>

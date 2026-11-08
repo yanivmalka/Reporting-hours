@@ -1,3 +1,4 @@
+import { RequireAccess, useAccess } from '../components/Access';
 import { useEffect, useRef, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
@@ -58,7 +59,8 @@ const BREAK_OPTIONS = [0, 10, 15, 20, 30];
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 /** טופס קורס מחזורי: שם, יום בשבוע, שעות קבועות, הפסקה ותקופה. */
-export default function CourseFormScreen() {
+function CourseFormScreenInner() {
+  const { canEdit } = useAccess();
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -464,7 +466,7 @@ export default function CourseFormScreen() {
         </View>
         {sessionsCard}
         {id && workplaceId ? <VacationsCard target={{ kind: 'course', id, workplaceId }} onChanged={refreshMarks} /> : null}
-        <Button label="עריכה" onPress={() => setViewing(false)} />
+        {canEdit ? <Button label="עריכה" onPress={() => setViewing(false)} /> : null}
         <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
       </Screen>
     );
@@ -762,3 +764,14 @@ const makeStyles = (colors: AppColors) =>
       textAlign: TEXT_RIGHT,
     },
   });
+
+export default function CourseFormScreen() {
+  // תצוגת קורס פתוחה לכולם; עריכה ויצירה — רק בהרשאה מלאה (docs/sharing-spec.md).
+  const { view } = useLocalSearchParams<{ view?: string }>();
+  if (view === '1') return <CourseFormScreenInner />;
+  return (
+    <RequireAccess need="edit">
+      <CourseFormScreenInner />
+    </RequireAccess>
+  );
+}

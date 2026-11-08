@@ -64,4 +64,7 @@
 
 ## שרת
 
-פרויקט Firebase המשותף `malka-apps`, שמשמש את כל האפליקציות. הנתונים נשמרים תחת `apps/reporting-hours/users/{uid}/...`: `kv` (סנכרון), `backups` (פרטי הגיבויים) ו־`backup-data` (תוכן הגיבויים).
+פרויקט Firebase המשותף `malka-apps`, שמשמש את כל האפליקציות. הנתונים נשמרים תחת `apps/reporting-hours/users/{uid}/...`: `kv` (סנכרון), `backups` (פרטי הגיבויים) ו־`backup-data` (תוכן הגיבויים). חוקי האבטחה — בריפו `apps-platform` (`firestore.rules`, עם בדיקות).
+
+- **שיתוף חשבון** ([docs/sharing-spec.md](./docs/sharing-spec.md)): הרשאה לפי מייל ב־`users/{owner}/grants/{email}` ואינדקס ב־`shared/{email}/owners/{owner}` (`lib/sharing.ts`). רמות על כל החשבון: צפייה · מדווח (רק `reports`, `sessions`, `accumulated`) · מלאה. המעבר בין חשבונות — `switchAccount` ב־`lib/sync.ts`; בממשק `useAccess()` / `RequireAccess` (`components/Access.tsx`), פס `SharedBanner` בכל `Screen`, ובורר `AccountSwitcher` בראש תפריט ☰. גיבויים, ניהול נתונים ושיתוף — רק לבעלים. רשימת המפתחות שמדווח רשאי לכתוב חייבת להיות זהה ב־`REPORTER_KEYS` ובחוקי האבטחה.
+- **מיזוג בסנכרון** (`lib/merge.ts`): לכל מפתח נשמר בסיס (`reporting-hours-sync/base/…`), ושינויים מקבילים ממוזגים לפי רשומה (`id`, או `courseId`+`date`); מונה הדקות — חיבור השינויים. הדחיפה בטרנזקציה.

@@ -19,9 +19,25 @@ import {
 import { AppState, Platform, View } from 'react-native';
 import { Text } from './Text';
 import { Button } from './Button';
+import { Pressable } from './Pressable';
+import { Icon } from './Icon';
+import { ROLE_LABELS, leaveShare, listSharedWithMe } from '../lib/sharing';
 import { useI18n } from '../lib/i18n';
 import { cloudSupported, signInWithGoogle, signOutCloud, watchUser, type CloudUser } from '../lib/firebase';
-import { cloudHasData, flush, getSyncStatus, onRemoteChange, onSyncStatus, pull, setSyncUser, type SyncStatus } from '../lib/sync';
+import {
+  cloudHasData,
+  flush,
+  getAccess,
+  getSyncStatus,
+  onAccessChange,
+  onRemoteChange,
+  onSyncStatus,
+  pull,
+  setSyncUser,
+  switchAccount as switchSyncAccount,
+  type SharedAccess,
+  type SyncStatus,
+} from '../lib/sync';
 import { isDemoLoaded, onDataChanged, removeDemoData } from '../lib/demo';
 import { loadProfile } from '../lib/profile';
 import { spacing } from '../theme/colors';
@@ -32,6 +48,12 @@ type SyncContextValue = {
   ready: boolean;
   status: SyncStatus;
   revision: number;
+  /** חשבון של בעלים אחר שהמשתמש צופה בו (docs/sharing-spec.md). null — הנתונים שלו. */
+  access: SharedAccess | null;
+  /** ההרשאה לחשבון ששותף בוטלה, והאפליקציה חזרה לנתונים שלך (שם הבעלים, להודעה) */
+  accessLost: string | null;
+  dismissAccessLost: () => void;
+  switchAccount: (a: SharedAccess | null) => Promise<void>;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -41,6 +63,10 @@ const SyncContext = createContext<SyncContextValue>({
   ready: false,
   status: 'off',
   revision: 0,
+  access: null,
+  accessLost: null,
+  dismissAccessLost: () => {},
+  switchAccount: async () => {},
   signIn: async () => {},
   signOut: async () => {},
 });
@@ -54,8 +80,20 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(!cloudSupported);
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus());
   const [revision, setRevision] = useState(0);
+  const [access, setAccess] = useState<SharedAccess | null>(getAccess());
+  const [accessLost, setAccessLost] = useState<string | null>(null);
 
   useEffect(() => onSyncStatus(setStatus), []);
+  useEffect(
+    () =>
+      onAccessChange((a, lost) => {
+        setAccess((prev) => {
+          if (lost && prev) setAccessLost(prev.ownerName || prev.ownerEmail);
+          return a;
+        });
+      }),
+    [],
+  );
   useEffect(
     () =>
       onRemoteChange(() => {
@@ -107,10 +145,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await signOutCloud();
   }, []);
+  const switchAccount = useCallback(async (a: SharedAccess | null) => {
+    setAccessLost(null);
+    await switchSyncAccount(a);
+    // גם כשלא השתנו נתונים (חשבון ריק) — המסכים נטענים מחדש בהקשר החדש.
+    setRevision((r) => r + 1);
+  }, []);
+  const dismissAccessLost = useCallback(() => setAccessLost(null), []);
 
   const value = useMemo(
-    () => ({ user, ready, status, revision, signIn, signOut }),
-    [user, ready, status, revision, signIn, signOut],
+    () => ({ user, ready, status, revision, access, accessLost, dismissAccessLost, switchAccount, signIn, signOut }),
+    [user, ready, status, revision, access, accessLost, dismissAccessLost, switchAccount, signIn, signOut],
   );
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
@@ -211,5 +256,134 @@ function makeStyles(c: ColorScheme, layout: StyleLayout) {
     },
     text: { fontSize: 14, color: c.text, textAlign: layout.textStart, lineHeight: 20 },
     error: { color: c.danger },
+  };
+}
+
+/**
+ * בורר חשבון הנתונים בתפריט הצד (docs/sharing-spec.md): "הנתונים שלי" וכל
+ * חשבון ששותף עם המשתמש. מוצג רק כשיש חשבונות כאלה.
+ */
+export function AccountSwitcher({ onSwitched }: { onSwitched?: () => void }) {
+  const styles = useStyles(makeSwitcherStyles);
+  const { user, access, switchAccount } = useCloudSync();
+  const [list, setList] = useState<SharedAccess[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setList([]);
+      return;
+    }
+    let alive = true;
+    listSharedWithMe()
+      .then((l) => alive && setList(l))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [user, access]);
+
+  if (!user || (list.length === 0 && !access)) return null;
+
+  async function go(a: SharedAccess | null) {
+    const id = a?.ownerUid ?? 'me';
+    if ((access?.ownerUid ?? 'me') === id) return;
+    setBusy(id);
+    setError(null);
+    try {
+      await switchAccount(a);
+      onSwitched?.();
+    } catch {
+      setError('המעבר נכשל — ייתכן שההרשאה בוטלה או שאין חיבור לרשת.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const rows: { id: string; label: string; sub: string; a: SharedAccess | null }[] = [
+    { id: 'me', label: 'הנתונים שלי', sub: user.email ?? '', a: null },
+    ...list.map((a) => ({ id: a.ownerUid, label: a.ownerName || a.ownerEmail, sub: ROLE_LABELS[a.role], a })),
+  ];
+  const current = access?.ownerUid ?? 'me';
+  return (
+    <View style={styles.wrap}>
+      <Text style={styles.label}>חשבון</Text>
+      {rows.map((r) => (
+        <Pressable
+          key={r.id}
+          onPress={() => void go(r.a)}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: r.id === current }}
+          style={({ pressed }) => [styles.row, r.id === current && styles.rowOn, pressed && styles.pressed]}
+        >
+          <Icon
+            name={r.id === current ? 'radiobox-marked' : 'radiobox-blank'}
+            size={20}
+            color={r.id === current ? styles.on.color : styles.off.color}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={1}>
+              {busy === r.id ? 'עובר…' : r.label}
+            </Text>
+            {r.sub ? (
+              <Text style={styles.sub} numberOfLines={1}>
+                {r.sub}
+              </Text>
+            ) : null}
+          </View>
+          {r.a ? (
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                const owner = r.a!;
+                void (async () => {
+                  try {
+                    if (access?.ownerUid === owner.ownerUid) await switchAccount(null);
+                    await leaveShare(owner.ownerUid);
+                    setList((l) => l.filter((x) => x.ownerUid !== owner.ownerUid));
+                  } catch {
+                    setError('העזיבה נכשלה. נסו שוב.');
+                  }
+                })();
+              }}
+            >
+              <Text style={styles.leave}>עזיבה</Text>
+            </Pressable>
+          ) : null}
+        </Pressable>
+      ))}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
+  );
+}
+
+function makeSwitcherStyles(c: ColorScheme, layout: StyleLayout) {
+  return {
+    wrap: { gap: 2, paddingBottom: spacing.sm },
+    label: {
+      fontSize: 13,
+      fontWeight: '700' as const,
+      color: c.textMuted,
+      textAlign: layout.textStart,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+    },
+    row: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: 10,
+    },
+    rowOn: { backgroundColor: c.brandLight },
+    pressed: { opacity: 0.7 },
+    on: { color: c.brand },
+    off: { color: c.textMuted },
+    name: { fontSize: 15, color: c.text, textAlign: layout.textStart },
+    sub: { fontSize: 12, color: c.textMuted, textAlign: layout.textStart },
+    leave: { fontSize: 13, color: c.dangerText },
+    error: { fontSize: 13, color: c.danger, textAlign: layout.textStart, paddingHorizontal: spacing.md },
   };
 }

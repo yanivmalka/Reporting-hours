@@ -1,3 +1,4 @@
+import { RequireAccess } from '../components/Access';
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
@@ -23,7 +24,7 @@ type Action = 'load' | 'removeDemo' | 'resetAll';
 type Stats = { reports: number; demoReports: number; workplaces: number; demo: boolean; anyDemo: boolean };
 
 /** מסך ניהול נתונים: טעינת נתוני הדגמה, מחיקתם, או איפוס מלא של האפליקציה. */
-export default function DataScreen() {
+function DataScreenInner() {
   const styles = useThemedStyles(makeStyles);
   const { showToast } = useToast();
   const { setPaletteId } = useTheme();
@@ -256,3 +257,12 @@ const makeStyles = (colors: AppColors) =>
       textAlign: TEXT_RIGHT,
     },
   });
+
+/** מורשה בלי הרשאה מתאימה (docs/sharing-spec.md) רואה מסך "אין הרשאה". */
+export default function DataScreen() {
+  return (
+    <RequireAccess need="owner">
+      <DataScreenInner />
+    </RequireAccess>
+  );
+}

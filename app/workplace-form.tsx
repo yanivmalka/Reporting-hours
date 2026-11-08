@@ -1,3 +1,4 @@
+import { RequireAccess } from '../components/Access';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Animated, Platform, ScrollView, StyleSheet, View } from 'react-native';
@@ -208,7 +209,7 @@ function parseNum(value: string): number {
   return Number(value.replace(',', '.').trim());
 }
 
-export default function WorkplaceFormScreen() {
+function WorkplaceFormScreenInner() {
   const { basis } = usePayBasis();
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
@@ -1380,3 +1381,12 @@ const makeStyles = (colors: AppColors) =>
   stepLabel: { fontSize: 11, color: colors.textMuted, textAlign: 'center' },
   stepLabelOn: { color: colors.brand, fontWeight: '800' },
 });
+
+/** מורשה בלי הרשאה מתאימה (docs/sharing-spec.md) רואה מסך "אין הרשאה". */
+export default function WorkplaceFormScreen() {
+  return (
+    <RequireAccess need="edit">
+      <WorkplaceFormScreenInner />
+    </RequireAccess>
+  );
+}

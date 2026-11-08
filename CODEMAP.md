@@ -34,6 +34,9 @@
 | התראות בית שנסגרו | `lib/home.ts` | `reporting-hours/home-dismissed/v1` |
 | נתוני הדגמה | `lib/demo.ts` | `reporting-hours/demo/v1`, `demo-auto/v1` |
 | שפה / ערכת נושא | `lib/i18n.tsx`, `theme/ThemeContext.tsx` | `lang/v1`, `theme/v1` |
+| סנכרון: מטא, בסיס למיזוג, חשבון נתונים פעיל (מקומי בלבד) | `lib/sync.ts` | `reporting-hours-sync/meta/v1`, `…/base/<key>`, `…/active/v1` |
+
+שיתוף חשבון (`lib/sharing.ts`, מסך `app/sharing.tsx`): ההרשאות בענן, לא באחסון המקומי — `apps/reporting-hours/users/{owner}/grants/{email}` ו־`apps/reporting-hours/shared/{email}/owners/{owner}`. דיווח שמורשה יצר או ערך שומר `WorkReport.by`.
 
 ## מחזור החיים של מפגש ודיווח
 
@@ -91,6 +94,7 @@
 | `payments.tsx`, `tax.tsx`, `profile.tsx` | תשלומים, מס, פרטים אישיים |
 | `archive.tsx`, `trash.tsx` | ארכיון ואשפה |
 | `settings.tsx`, `data.tsx` | דקות מצטברות (מונה ובסיס חישוב שכר); ניהול נתונים וגיבוי |
+| `sharing.tsx` | שיתוף והרשאות: הוספת מורשה (מייל + רמה), שינוי רמה, הסרה, שליחת הודעה (בעלים בלבד) |
 | `holidays.tsx` | חגים וחופשות: מתגי הביטול האוטומטי, לוח החופשות (`VacationBoard`) וסיבות הביטול |
 
 ## חישובים (`lib/`)

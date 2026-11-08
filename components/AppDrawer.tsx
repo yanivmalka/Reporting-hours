@@ -41,7 +41,8 @@ import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { SegmentedControl } from './SegmentedControl';
 import { UpdateSection } from './UpdateChecker';
-import { AccountSection } from './CloudSync';
+import { AccountSection, AccountSwitcher } from './CloudSync';
+import { useAccess, type Access } from './Access';
 import { useHydrated } from '../lib/useHydrated';
 
 type DrawerContextValue = {
@@ -156,7 +157,17 @@ const SETTINGS_LINKS: NavLink[] = [
   { href: '/settings', key: 'nav.settings', icon: 'timer-cog-outline' },
   { href: '/profile', key: 'nav.profile', icon: 'account-circle-outline' },
   { href: '/data', key: 'nav.data', icon: 'database-cog-outline' },
+  { href: '/sharing', key: 'nav.sharing', icon: 'account-multiple-outline' },
 ];
+
+/** הקישורים שהרמה בחשבון הפעיל מתירה (docs/sharing-spec.md). */
+function allowed(a: Access) {
+  return (l: NavLink) => {
+    if (l.href === '/report') return a.canReport;
+    if (l.href === '/data' || l.href === '/sharing') return a.isOwner;
+    return true;
+  };
+}
 
 /** האם הקישור הוא המסך הנוכחי. */
 const isCurrent = (href: Href, pathname: string) => String(href) === pathname;
@@ -166,6 +177,7 @@ const isCurrent = (href: Href, pathname: string) => String(href) === pathname;
  * הניווט של תפריט ☰ (כמו ביומן Google). במסך הראשי — ריק.
  */
 export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintColor?: string }) {
+  const ok = allowed(useAccess());
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useI18n();
@@ -214,7 +226,7 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
           <View style={menuStyles.anchorRow} pointerEvents="box-none">
             <View style={menuStyles.menu}>
               <ScrollView style={{ flexGrow: 0 }}>
-                {MAIN_LINKS.map(item)}
+                {MAIN_LINKS.filter(ok).map(item)}
                 <View style={menuStyles.divider} />
                 {PAY_LINKS.map(item)}
                 <View style={menuStyles.divider} />
@@ -391,6 +403,7 @@ export function SideNav() {
 
 /** תוכן התפריט — משותף למגירה ולתפריט הקבוע. */
 function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
+  const ok = allowed(useAccess());
   const { t, lang, setLang, langLabels } = useI18n();
   const { paletteId, setPaletteId, palettes, colors } = useTheme();
   const drawerStyles = useStyles(makeStyles);
@@ -441,7 +454,8 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <ScrollView contentContainerStyle={drawerStyles.body}>
-      {MAIN_LINKS.map(navItem)}
+      <AccountSwitcher onSwitched={onNavigate} />
+      {MAIN_LINKS.filter(ok).map(navItem)}
       <View style={drawerStyles.divider} />
       {PAY_LINKS.map(navItem)}
       <View style={drawerStyles.divider} />
@@ -460,7 +474,7 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
 
       {settingsOpen ? (
         <View style={drawerStyles.settings}>
-          {SETTINGS_LINKS.map(navItem)}
+          {SETTINGS_LINKS.filter(ok).map(navItem)}
 
           <View style={drawerStyles.section}>
             <SectionLabel icon="palette-outline" text={t('drawer.appearance')} />
