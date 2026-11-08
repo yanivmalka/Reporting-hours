@@ -1,3 +1,4 @@
+import { RequireAccess } from '../components/Access';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EnterChevron } from '../components/Chevrons';
 import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
@@ -88,7 +89,7 @@ function sumBreaks(rows: BreakRow[]): number {
 /** כמה שניות אחרי שמירה חוזרים אוטומטית (לבית, או לתצוגת הדיווח בעריכה). */
 const AUTO_RETURN_SECONDS = 5;
 
-export default function ReportScreen() {
+function ReportScreenInner() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
@@ -1817,3 +1818,12 @@ const makeStyles = (colors: AppColors) =>
     textAlign: TEXT_RIGHT,
   },
 });
+
+/** מורשה בלי הרשאה מתאימה (docs/sharing-spec.md) רואה מסך "אין הרשאה". */
+export default function ReportScreen() {
+  return (
+    <RequireAccess need="report">
+      <ReportScreenInner />
+    </RequireAccess>
+  );
+}

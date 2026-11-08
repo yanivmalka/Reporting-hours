@@ -12,6 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
+import { SharedBanner } from './SharedBanner';
 
 type ScreenProps = {
   children: ReactNode;
@@ -84,6 +85,8 @@ export function Screen({ children, scroll = true, keyboardFooter = false, onScro
   );
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SharedBanner />
+      <View style={styles.body}>
       {scroll ? (
         <ScrollView
           ref={scrollRef}
@@ -103,6 +106,7 @@ export function Screen({ children, scroll = true, keyboardFooter = false, onScro
           <View style={styles.overlayInner}>{overlay}</View>
         </View>
       ) : null}
+      </View>
     </SafeAreaView>
   );
 }
@@ -113,6 +117,7 @@ const makeStyles = (colors: AppColors) =>
       flex: 1,
       backgroundColor: colors.background,
     },
+    body: { flex: 1 },
     scroll: {
       flexGrow: 1,
     },
