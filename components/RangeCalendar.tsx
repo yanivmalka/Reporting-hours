@@ -167,7 +167,10 @@ function MonthGrid({
         ))}
       </View>
       <View style={styles.grid}>
-        {cells.map((cell, i) => {
+        {chunk7(cells).map((row, r) => (
+          <View key={`r${r}`} style={styles.row}>
+            {row.map((cell, j) => {
+              const i = r * 7 + j;
           if (!cell) return <View key={`e${i}`} style={styles.cell} />;
           const inRange = range != null && cell >= range.from && cell <= range.to;
           const isEdge = range != null && (cell === range.from || cell === range.to);
@@ -191,6 +194,8 @@ function MonthGrid({
             </Pressable>
           );
         })}
+        </View>
+        ))}
       </View>
     </View>
   );
@@ -270,18 +275,18 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       flexDirection: layout.rowStart,
     },
     weekday: {
-      width: `${100 / 7}%`,
+      flex: 1,
       textAlign: 'center',
       fontSize: 12,
       fontWeight: '700',
       color: c.textMuted,
     },
-    grid: {
+    grid: {},
+    row: {
       flexDirection: layout.rowStart,
-      flexWrap: 'wrap',
     },
     cell: {
-      width: `${100 / 7}%`,
+      flex: 1,
       alignItems: 'center',
       paddingVertical: 2,
     },
@@ -325,3 +330,11 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       color: 'transparent',
     },
   });
+
+/** מחלק את תאי החודש לשורות של 7 — שורות מפורשות במקום flexWrap, כי באנדרואיד
+ * עיגול הפיקסלים של 7 תאים ברוחב 100/7% חורג מהשורה, והתא השביעי (שבת) נשבר לשורה הבאה. */
+function chunk7<T>(list: T[]): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < list.length; i += 7) rows.push(list.slice(i, i + 7));
+  return rows;
+}
