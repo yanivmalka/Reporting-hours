@@ -187,6 +187,7 @@ export default function HomeScreen() {
   }
 
   const todayCount = today?.items.filter((i) => i.status !== 'canceled').length ?? 0;
+  const todayReported = today?.items.filter((i) => i.status === 'reported').length ?? 0;
 
   return (
     <Screen>
@@ -204,9 +205,15 @@ export default function HomeScreen() {
           <Text style={styles.context}>
             {todayCount === 0
               ? 'אין קורסים מתוכננים להיום'
-              : todayCount === 1
-                ? 'מפגש אחד מתוכנן להיום'
-                : `${todayCount} מפגשים מתוכננים להיום`}
+              : todayReported === todayCount
+                ? todayCount === 1
+                  ? 'המפגש של היום דווח'
+                  : `כל ${todayCount} המפגשים של היום דווחו`
+                : todayCount === 1
+                  ? 'מפגש אחד מתוכנן להיום'
+                  : todayReported > 0
+                    ? `${todayCount} מפגשים היום · ${todayReported} דווחו`
+                    : `${todayCount} מפגשים מתוכננים להיום`}
           </Text>
         ) : null}
       </View>
