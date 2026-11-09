@@ -8,6 +8,7 @@ import { View } from 'react-native';
 import { DrawerProvider, HeaderEnd, HeaderStart, SideNav, useWideLayout } from '../components/AppDrawer';
 import { ExitGuard } from '../components/ExitGuard';
 import { ToastProvider } from '../components/Toast';
+import { WheelOverlayHost } from '../components/WheelOverlay';
 import { UpdateProvider } from '../components/UpdateChecker';
 import { DemoSeeder } from '../components/DemoSeeder';
 import { BackupScheduler } from '../components/BackupScheduler';
@@ -27,6 +28,7 @@ export default function RootLayout() {
               <SafeAreaProvider>
                 <ToastProvider>
                   <Chrome />
+                  <WheelOverlayHost />
                 </ToastProvider>
               </SafeAreaProvider>
             </PayBasisProvider>
