@@ -216,6 +216,14 @@ export type MonthPoint = {
 const MONTH_SHORT_HE = ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'];
 const MONTH_LONG_HE = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
+/**
+ * החודש שהתקופה שייכת אליו ("YYYY-MM"): החודש שבו היא מסתיימת —
+ * ביום האחרון לדיווח שכר. למשל יום אחרון 24: 25.10–24.11 = נובמבר.
+ */
+export function periodMonthKey(period: Pick<PayPeriod, 'end'>): string {
+  return period.end.slice(0, 7);
+}
+
 export function monthName(key: string): string {
   const [y, m] = key.split('-').map(Number);
   return `${MONTH_LONG_HE[m - 1]} ${y}`;

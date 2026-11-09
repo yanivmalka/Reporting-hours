@@ -18,12 +18,12 @@
 import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { potentialSessions, sessionMinutes, type Course } from './courses';
-import { currentPayPeriod, expectedPaymentDate, isoDate, totalsFor, type PayPeriod } from './dashboard';
+import { currentPayPeriod, expectedPaymentDate, isoDate, periodMonthKey, totalsFor, type PayPeriod } from './dashboard';
 import { basisFor, type PayBasis } from './payBasis';
 import { expectedPayment, reportLate, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
 import { travelCostForDay } from './travel';
-import { paymentTermsOf, workplaceAt, type Workplace } from './workplaces';
+import { LAST_DAY, paymentTermsOf, reportDeadlineDay, workplaceAt, type Workplace } from './workplaces';
 
 export type ForecastMode = 'work' | 'pay';
 
@@ -70,9 +70,12 @@ export type ForecastMonth = {
 
 const monthKey = (iso: string) => iso.slice(0, 7);
 
-/** התקופה של מקום עבודה שמתחילה בחודש נתון. */
+/** התקופה ("החודש") של מקום עבודה שמסתיימת ביום האחרון לדיווח שכר בחודש נתון. */
 function periodInMonth(w: Workplace, year: number, month0: number): PayPeriod {
-  const day = Math.min(Math.max(1, Math.round(w.payday) || 1), new Date(year, month0 + 1, 0).getDate());
+  const last = reportDeadlineDay(w);
+  const dim = new Date(year, month0 + 1, 0).getDate();
+  // בחודש קצר מיום התשלום, יום התשלום נדחס לסוף החודש — היום האחרון לדיווח הוא יום לפניו.
+  const day = last >= LAST_DAY ? dim : Math.min(last, dim - 1);
   return currentPayPeriod(w.payday, new Date(year, month0, day));
 }
 
@@ -222,7 +225,7 @@ export function forecastYear(
     for (let m = fromMonth; m < 12; m++) {
       const period = periodInMonth(w, year, m);
       const f = periodForecast(w, period, reports, courses, statuses, basis, today);
-      const key = mode === 'work' ? monthKey(period.start) : monthKey(f.expected);
+      const key = mode === 'work' ? periodMonthKey(period) : monthKey(f.expected);
       const i = index.get(key);
       if (i == null) continue;
       const cell = months[i].byWorkplace[w.id];

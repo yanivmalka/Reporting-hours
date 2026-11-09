@@ -18,6 +18,7 @@ import {
   currentPeriods,
   dateRange,
   monthName,
+  periodMonthKey,
   monthlyTrend,
   roundingStats,
   shortDate,
@@ -364,7 +365,7 @@ export default function DashboardScreen() {
   const detailsOf = (row: (typeof rowsAll)[number]) => {
     const out: { text: string; tone?: 'warn' | 'muted' }[] = [];
     if (row.last) {
-      if (mode === 'pay') out.push({ text: `עבור ${monthName(row.last.period.start.slice(0, 7))}` });
+      if (mode === 'pay') out.push({ text: `עבור ${monthName(periodMonthKey(row.last.period))}` });
       out.push({
         text: `יום אחרון לדיווח שכר ${shortDate(row.last.period.end)} · צפי תשלום ${shortDate(row.last.expected)} · ${paymentTermsLabel(row.workplace)}`,
       });
