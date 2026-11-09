@@ -13,6 +13,7 @@ import { DatePicker, longDate } from '../components/DatePicker';
 import { FormField } from '../components/FormField';
 import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
 import { WheelNumber } from '../components/WheelNumber';
+import { useWheelActive } from '../components/WheelOverlay';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
@@ -163,7 +164,15 @@ function ReportScreenInner() {
   const [end, setEnd] = useState('');
   const [breaks, setBreaks] = useState<BreakRow[]>([]);
   /** עמודת השעה שנגררת כגלגלת — מורמת מעל השכנה, כדי שהבועה לא תוסתר */
-  const [dragCol, setDragCol] = useState<'start' | 'end' | null>(null);
+  // בזמן גרירת גלגלת החישובים שמתחת לשעות (דקות עודפות, נטו) לא מתעדכנים —
+  // כדי שהתצוגה לא תקפוץ; מתעדכנים בעזיבה.
+  const wheelActive = useWheelActive();
+  const heldPreview = useRef<{
+    leftover: number;
+    net: number | null;
+    academic: number;
+    money: number | null;
+  } | null>(null);
   const [leftoverChoice, setLeftoverChoice] = useState<LeftoverChoice>('carry');
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
@@ -531,6 +540,15 @@ function ReportScreenInner() {
     workplace != null &&
     existing.some((r) => r.workplaceId === workplace.id && r.date === date && r.id !== editing?.id);
   const travel = workplace && !travelCounted ? travelCostForDay(workplace, date) : 0;
+  if (!wheelActive || !heldPreview.current) {
+    heldPreview.current = {
+      leftover: leftoverPreview,
+      net: netPreview,
+      academic: academicHoursNow,
+      money: pay != null ? pay + travel : null,
+    };
+  }
+  const shown = heldPreview.current;
   const workedDates = existing.map((r) => r.date);
   // קורסים קבועים שמתקיימים בתאריך שנבחר (במקום העבודה שנבחר, או בכולם).
   // נבחר מקום עבודה מראש — רק הקורסים שלו.
@@ -1011,7 +1029,7 @@ function ReportScreenInner() {
           ) : null}
           {/* שעת התחלה משמאל ושעת סיום מימין — כמו "12:05–15:00". */}
           <View style={styles.timesRow}>
-            <View style={[styles.timeCol, dragCol === 'end' && styles.raised]}>
+            <View style={styles.timeCol}>
               <FormField label="שעת סיום" error={errors.end}>
                 <TimeInput
                   ref={endRef}
@@ -1020,13 +1038,13 @@ function ReportScreenInner() {
                     setEnd(v);
                     setErrors((prev) => ({ ...prev, end: undefined }));
                   }}
+                  label="שעת סיום"
                   onComplete={() => Keyboard.dismiss()}
-                  onDragging={(on) => setDragCol(on ? 'end' : null)}
                   invalid={Boolean(errors.end)}
                 />
               </FormField>
             </View>
-            <View style={[styles.timeCol, dragCol === 'start' && styles.raised]}>
+            <View style={styles.timeCol}>
               <FormField label="שעת התחלה" error={errors.start}>
                 <TimeInput
                   value={start}
@@ -1035,14 +1053,14 @@ function ReportScreenInner() {
                     setErrors((prev) => ({ ...prev, start: undefined, end: undefined }));
                   }}
                   onComplete={() => endRef.current?.focus()}
+                  label="שעת התחלה"
                   onOverflow={(d) => endRef.current?.feed(d)}
-                  onDragging={(on) => setDragCol(on ? 'start' : null)}
                   invalid={Boolean(errors.start)}
                 />
               </FormField>
             </View>
           </View>
-          <Text style={styles.wheelHint}>אפשר גם לגרור למעלה או למטה בתוך התיבה</Text>
+          <Text style={styles.wheelHint}>אפשר גם לגרור למעלה או למטה בתוך התיבה: בצד שמאל — שעות, בצד ימין — דקות</Text>
 
           <FormField label="הפסקות (בדקות)" error={errors.breaks}>
             <View style={styles.breaks}>
@@ -1053,6 +1071,7 @@ function ReportScreenInner() {
                       value={row.minutes}
                       onChange={(t) => updateBreak(row.id, t)}
                       placeholder={`הפסקה ${index + 1}`}
+                      label={`הפסקה ${index + 1}`}
                       max={600}
                     />
                   </View>
@@ -1069,10 +1088,10 @@ function ReportScreenInner() {
             </View>
           </FormField>
 
-          {leftoverPreview > 0 ? (
+          {shown.leftover > 0 ? (
             <View style={styles.leftoverRow}>
               <Text style={styles.leftoverText}>
-                דקות עודפות ({leftoverPreview} דק׳):{' '}
+                דקות עודפות ({shown.leftover} דק׳):{' '}
                 {leftoverChoice === 'carry' ? 'למונה המצטבר' : 'נכללות בדיווח כשבר שעה'}
                 {editing ? ' · כפי שנקבע בדיווח' : ''}
               </Text>
@@ -1090,10 +1109,10 @@ function ReportScreenInner() {
             </View>
           ) : null}
 
-          {netPreview != null ? (
+          {shown.net != null ? (
             <Text style={styles.hint}>
-              נטו {formatDuration(netPreview)} · {formatHours(academicHoursNow)} שע׳ אקדמיות
-              {pay != null ? ` · ${formatShekels(pay + travel)}` : ''}
+              נטו {formatDuration(shown.net)} · {formatHours(shown.academic)} שע׳ אקדמיות
+              {shown.money != null ? ` · ${formatShekels(shown.money)}` : ''}
             </Text>
           ) : null}
         </>
@@ -1689,10 +1708,6 @@ const makeStyles = (colors: AppColors) =>
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 2,
-  },
-  raised: {
-    zIndex: 50,
-    elevation: 8,
   },
   timesRow: {
     flexDirection: 'row',
