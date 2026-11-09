@@ -29,7 +29,7 @@ import {
   timeRange,
   type Course,
 } from '../lib/courses';
-import { isoDate, monthName, shortDate } from '../lib/dashboard';
+import { isoDate, monthName, periodMonthKey, shortDate } from '../lib/dashboard';
 import { hebrewRange } from '../lib/hebrewDate';
 import { unbreakable } from '../components/DateText';
 import { EnterChevron } from '../components/Chevrons';
@@ -193,7 +193,7 @@ export default function WorkplaceDetailScreen() {
             >
               <View style={styles.payrollTitleRow}>
                 <Text style={styles.payrollTitle}>
-                  {monthName(f.period.start.slice(0, 7))} · {STATUS_LABEL[f.status]}
+                  {monthName(periodMonthKey(f.period))} · {STATUS_LABEL[f.status]}
                 </Text>
                 <Text style={styles.payrollAmount}>
                   {f.status === 'open' && f.planned > 0
@@ -298,7 +298,7 @@ export default function WorkplaceDetailScreen() {
           {tax > 0 ? <Text style={styles.heroSub}>ברוטו · {money(netOf(next))} נטו</Text> : null}
         </View>
         <Text style={styles.heroLine}>
-          עבור {monthName(next.period.start.slice(0, 7))} · צפי {shortDate(next.expected)} ({paymentTermsLabel(w)})
+          עבור {monthName(periodMonthKey(next.period))} · צפי {shortDate(next.expected)} ({paymentTermsLabel(w)})
         </Text>
         <View style={styles.heroTiles}>
           <View style={styles.heroTile}>
@@ -420,7 +420,7 @@ export default function WorkplaceDetailScreen() {
       <View style={styles.actions}>
         {lastClosed ? (
           <Button
-            label={`דוח השכר של ${monthName(lastClosed.period.start.slice(0, 7))}`}
+            label={`דוח השכר של ${monthName(periodMonthKey(lastClosed.period))}`}
             onPress={() =>
               router.push({ pathname: '/payroll-report', params: { wp: w.id, start: lastClosed.period.start } })
             }

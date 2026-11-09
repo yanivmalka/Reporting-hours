@@ -318,11 +318,10 @@ const academic = (minutes: number) => {
   return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0$/, '');
 };
 
-/** שם החודש של התקופה — לפי החודש שבו רוב ימיה (למשל "אוקטובר 2026"). */
+/** שם החודש של התקופה — החודש שבו היא מסתיימת, ביום האחרון לדיווח (למשל "אוקטובר 2026"). */
 export function periodTitle(period: PayPeriod): string {
-  const [y, m, d] = period.start.split('-').map(Number);
-  const mid = new Date(y, m - 1, d + 14);
-  return `${MONTHS[mid.getMonth()]} ${mid.getFullYear()}`;
+  const [y, m] = period.end.split('-').map(Number);
+  return `${MONTHS[m - 1]} ${y}`;
 }
 
 export function payrollSubject(report: PayrollReport): string {
