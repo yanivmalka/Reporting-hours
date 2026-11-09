@@ -36,6 +36,8 @@ export type SessionRowData = {
   date: string;
   status: Status;
   reportId?: string;
+  /** השעות שדווחו בפועל ("HH:MM") — כשהמפגש דווח */
+  reported?: { start: string; end: string };
   cancel: Cancellation | null;
   movedFrom?: string;
 };
@@ -182,6 +184,7 @@ export function buildSessionRows(
         date: s.date,
         status,
         reportId: report?.id,
+        reported: report ? { start: report.start, end: report.end } : undefined,
         cancel: s.cancel,
         movedFrom: s.movedFrom,
       });
@@ -247,7 +250,9 @@ export function SessionRow({
             ? `הועבר ל־${short(r.cancel.movedTo)}`
             : r.status === 'canceled' && r.cancel?.reason
               ? r.cancel.reason
-              : timeRange(r.course.start, r.course.end)}
+              : r.reported
+                ? timeRange(r.reported.start, r.reported.end)
+                : timeRange(r.course.start, r.course.end)}
           {r.movedFrom ? ` · הועבר מ־${short(r.movedFrom)}` : ''} · {r.workplace.name}
         </Text>
       </View>

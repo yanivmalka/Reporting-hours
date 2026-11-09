@@ -141,15 +141,16 @@ export function agenda(
       if (!workplace) continue;
       let status: SessionStatus = 'upcoming';
       let reportId: string | undefined;
+      const report = courseReport(course, date, reports);
       const canceled = sessionCancel(course, date, cancel) ?? undefined;
       // מפגש שבוטל אך בכל זאת דווח — מוצג כמדווח.
-      const covering = courseReport(course, date, reports)?.id;
+      const covering = report?.id;
       // מפגש שנמחק מהתכנון מוסתר מהלו״ז (מופיע רק בדף הקורס, ומשם מחזירים).
       if (canceled?.kind === 'removed' && !covering) continue;
       if (canceled && !covering) {
         status = 'canceled';
       } else if (offset <= 0) {
-        reportId = courseReport(course, date, reports)?.id;
+        reportId = report?.id;
         const s = parseTime(course.start) ?? 0;
         const e = parseTime(course.end) ?? 0;
         if (reportId) status = 'reported';
@@ -163,7 +164,8 @@ export function agenda(
         date,
         status,
         reportId,
-        time: timeRange(course.start, course.end),
+        // מפגש שדווח — השעות שדווחו בפועל, לא שעות הקורס.
+        time: report && status === 'reported' ? timeRange(report.start, report.end) : timeRange(course.start, course.end),
         cancel: status === 'canceled' ? canceled : undefined,
       });
     }
