@@ -15,6 +15,7 @@ import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
 import { useShowHebrewDates } from '../lib/hebrewDatePref';
 import { useI18n } from '../lib/i18n';
+import { useTrackingStart } from '../lib/trackingStart';
 import { MonthSlide } from './MonthSlide';
 import { useSwipe } from './useSwipe';
 import { radius, spacing } from '../theme/colors';
@@ -144,6 +145,7 @@ function MonthGrid({
   const ownStatus = useDayStatus();
   const statusOf = statusOverride ?? ownStatus;
   const heb = useShowHebrewDates();
+  const trackingStart = useTrackingStart();
   const [y, m] = month.split('-').map(Number);
   const first = new Date(y, m - 1, 1).getDay();
   const days = new Date(y, m, 0).getDate();
@@ -175,8 +177,17 @@ function MonthGrid({
           const inRange = range != null && cell >= range.from && cell <= range.to;
           const isEdge = range != null && (cell === range.from || cell === range.to);
           const count = counts[cell] ?? 0;
+          // לפני תחילת העבודה עם המערכת — היום אפור ולא לחיץ (אלא אם יש בו דיווח).
+          const off = trackingStart != null && cell < trackingStart && count === 0;
           return (
-            <Pressable key={cell} style={styles.cell} onPress={() => onTap(cell)} accessibilityLabel={cell}>
+            <Pressable
+              key={cell}
+              style={[styles.cell, off && styles.cellOff]}
+              onPress={() => onTap(cell)}
+              disabled={off}
+              accessibilityState={{ disabled: off }}
+              accessibilityLabel={cell}
+            >
               <View
                 style={[
                   styles.day,
@@ -289,6 +300,9 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       flex: 1,
       alignItems: 'center',
       paddingVertical: 2,
+    },
+    cellOff: {
+      opacity: 0.35,
     },
     day: {
       width: 38,

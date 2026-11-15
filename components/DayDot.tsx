@@ -10,6 +10,8 @@ import { loadCourses } from '../lib/courses';
 import { dayStatusIndex, type DayStatus, type DayStatusInput } from '../lib/dayStatus';
 import { onDataChanged } from '../lib/demo';
 import { loadReports } from '../lib/reports';
+import { onLocalWrite } from '../lib/storage';
+import { useTrackingStart } from '../lib/trackingStart';
 import { loadWorkplaces } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import type { AppColors } from '../theme/colors';
@@ -24,25 +26,45 @@ export const DAY_STATUS_LABEL: Record<DayStatus, string> = {
   planned: 'מתוכנן',
 };
 
-/** מצב הימים — נטען פעם אחת ומתעדכן בכל שינוי נתונים. `input` — כשהנתונים כבר בידי המסך. */
+/** המפתחות שמשפיעים על מצב היום: דיווחים, קורסים, מקומות, סימוני מפגש, חגים וחופשות. */
+const STATUS_KEYS = /^reporting-hours\/(reports|courses|workplaces|sessions|holiday-cancel|vacations)\//;
+
+/** מצב הימים — נטען פעם אחת ומתעדכן בכל שינוי נתונים (כולל שמירת דיווח או ביטול מפגש). `input` — כשהנתונים כבר בידי המסך. */
 export function useDayStatus(input?: DayStatusInput): (date: string) => DayStatus | null {
   const [loaded, setLoaded] = useState<DayStatusInput | null>(null);
+  // סימון מפגש (ביטול / העברה) משנה את אינדקס הביטולים בלי לשנות את הנתונים שבידי המסך.
+  const [tick, setTick] = useState(0);
+  const trackingStart = useTrackingStart();
   useEffect(() => {
-    if (input) return;
-    let active = true;
-    const load = () =>
-      Promise.all([loadCourses(), loadWorkplaces(), loadReports()]).then(([courses, workplaces, reports]) => {
-        if (active) setLoaded({ courses, workplaces, reports });
+    if (input) {
+      return onLocalWrite((key) => {
+        // האינדקס נבנה מחדש מיד אחרי הכתיבה — מחכים רגע לפני חישוב מחדש.
+        if (STATUS_KEYS.test(key)) setTimeout(() => setTick((t) => t + 1), 150);
       });
+    }
+    let active = true;
+    // כמה כתיבות ברצף (דיווח + מונה דקות) — רק הטעינה האחרונה קובעת.
+    let seq = 0;
+    const load = () => {
+      const mine = ++seq;
+      return Promise.all([loadCourses(), loadWorkplaces(), loadReports()]).then(([courses, workplaces, reports]) => {
+        if (active && mine === seq) setLoaded({ courses, workplaces, reports });
+      });
+    };
     void load();
     const off = onDataChanged(() => void load());
+    const offWrite = onLocalWrite((key) => {
+      if (STATUS_KEYS.test(key)) void load();
+    });
     return () => {
       active = false;
       off();
+      offWrite();
     };
   }, [input]);
   const data = input ?? loaded;
-  return useMemo(() => (data ? dayStatusIndex(data) : () => null), [data]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => (data ? dayStatusIndex(data) : () => null), [data, tick, trackingStart]);
 }
 
 export function DayDot({ status, size = 6 }: { status: DayStatus | null; size?: number }) {

@@ -227,6 +227,34 @@ export function nextRelevantDay(
 }
 
 /**
+ * היום ל"דיווח נוסף" אחרי שמירת דיווח בתאריך `after`: מתקדמים בסדר הזמן —
+ * קודם מפגש נוסף שטרם דווח באותו יום, אחר כך הדיווח החסר הבא אחריו (עד
+ * היום). רק כשאין חסר קדימה — חוזרים לכלל הרגיל (`nextRelevantDay`).
+ * כך משלימים רצף דיווחים ישנים בלי לקפוץ בכל פעם לדיווח החסר הכי חדש.
+ */
+export function nextMissingAfter(
+  courses: readonly Course[],
+  workplaces: readonly Workplace[],
+  reports: readonly WorkReport[],
+  after: string,
+  now: Date = new Date(),
+): NextRelevant {
+  const today = isoDate(now);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(after) && after <= today) {
+    const [y, m, d] = after.split('-').map(Number);
+    for (let i = 0; i <= NEXT_LOOKBACK_DAYS * 2; i++) {
+      const date = isoDate(new Date(y, m - 1, d + i));
+      if (date > today) break;
+      const list = unreportedOn(courses, workplaces, reports, date);
+      if (list.length) {
+        return { date, kind: date === today ? 'today' : 'missing', course: list[0], count: list.length };
+      }
+    }
+  }
+  return nextRelevantDay(courses, workplaces, reports, now);
+}
+
+/**
  * הקורס שכדאי למלא מראש בכפתור הדיווח: מפגש של היום שהסתיים או מתקיים
  * עכשיו ולא דווח (המוקדם מביניהם). null כשאין.
  */

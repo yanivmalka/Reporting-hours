@@ -9,6 +9,14 @@ import { noteLocalWrite } from './sync';
  * כל השגיאות נבלעות בכוונה — אם האחסון לא זמין (למשל גלישה פרטית),
  * המשתמש עדיין יכול להשתמש באפליקציה, פשוט בלי התמדה.
  */
+
+/** מאזינים לכתיבה מקומית (לפי מפתח) — כדי שרכיבים פתוחים, כמו נקודות התאריכון, יתרעננו מיד. */
+const writeListeners = new Set<(key: string) => void>();
+export function onLocalWrite(listener: (key: string) => void): () => void {
+  writeListeners.add(listener);
+  return () => writeListeners.delete(listener);
+}
+
 export async function readJSON<T>(key: string, fallback: T): Promise<T> {
   try {
     const raw = await AsyncStorage.getItem(key);
@@ -24,6 +32,7 @@ export async function writeJSON<T>(key: string, value: T): Promise<void> {
     await AsyncStorage.setItem(key, JSON.stringify(value));
     // כשהמשתמש מחובר — הכתיבה משוכפלת גם לענן (lib/sync.ts).
     noteLocalWrite(key);
+    writeListeners.forEach((l) => l(key));
   } catch {
     // מתעלמים משגיאות אחסון (מכסת דיסק, גלישה פרטית וכו').
   }

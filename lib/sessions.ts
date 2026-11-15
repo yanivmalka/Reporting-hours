@@ -173,7 +173,15 @@ export function cancelIndex(
     if (mark?.status === 'removed')
       return { reason: mark.reason?.trim() ?? '', reasonId: mark.reasonId, auto: false, kind: 'removed' };
     if (mark?.status === 'moved' && mark.movedTo) {
-      return { reason: `הועבר ל־${shortDate(mark.movedTo)}`, auto: false, kind: 'moved', movedTo: mark.movedTo };
+      // העברה עם סיבה — ביטול עם "דחיית השיעורים" (pushSession).
+      const why = mark.reason?.trim();
+      return {
+        reason: `הועבר ל־${shortDate(mark.movedTo)}${why ? ` · ${why}` : ''}`,
+        reasonId: mark.reasonId,
+        auto: false,
+        kind: 'moved',
+        movedTo: mark.movedTo,
+      };
     }
     if (mark?.status === 'held' || explicit) return null;
     if (vac && !vac.reported(courseId, date)) {
@@ -364,6 +372,53 @@ export function returnToPlan(courseId: string, date: string, reason?: string, re
 /** העברת מפגש לתאריך אחר — נשמר "הועבר ל…" במקור ו"הועבר מ…" ביעד. */
 export function moveSession(courseId: string, date: string, to: string): Promise<void> {
   return setSessionMark(courseId, date, 'moved', undefined, to);
+}
+
+/**
+ * המועד הקבוע הפנוי הבא אחרי סוף הקורס — אותו כלל כמו חופשה במצב "הזזה"
+ * (`planShifts`): בדילוג על חגים, על כל חופשה שחלה על הקורס ועל תאריכים
+ * שכבר יש בהם מפגש נוסף או מועבר (ידנית או מחופשה). null — הקורס לא נמצא.
+ */
+export async function nextFreeSlot(courseId: string): Promise<string | null> {
+  const [marks, settings, courses] = await Promise.all([
+    loadSessionMarks(),
+    loadHolidaySettings(),
+    readJSON<ShiftCourse[]>(COURSES_KEY, []),
+  ]);
+  const c = courses.find((x) => x.id === courseId);
+  if (!c) return null;
+  const vac = await loadVacationContext(marks, settings);
+  const taken = new Set([...(c.extraDates ?? []), ...movesIndex(marks, vac.shifts)(courseId).map((m) => m.date)]);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const [y, m, day] = c.to.split('-').map(Number);
+  const d = new Date(y, m - 1, day + 1, 12);
+  d.setDate(d.getDate() + ((c.weekday - d.getDay() + 7) % 7));
+  for (let guard = 0; guard < 520; guard++, d.setDate(d.getDate() + 7)) {
+    const date = isoOf(d);
+    if (taken.has(date) || autoCancelReason(date, settings) != null) continue;
+    if (vacationOn(vac.vacations, c.id, c.workplaceId, date)) continue;
+    return date;
+  }
+  return null;
+}
+
+/**
+ * ביטול מפגש עם "דחיית השיעורים": המפגש לא מתקיים, כל השיעורים שאחריו נדחים
+ * בשבוע, והקורס מתארך במפגש אחד — במועד הפנוי הבא אחרי סופו (`nextFreeSlot`,
+ * ביחס לחגים ולחופשות). נשמר כהעברה ('moved') עם סיבת הביטול, כך שהפוטנציאל
+ * עובר עם המפגש. מחזיר את התאריך החדש, או null כשלא נמצא מועד.
+ */
+export async function pushSession(
+  courseId: string,
+  date: string,
+  reason?: string,
+  reasonId?: string,
+): Promise<string | null> {
+  const to = await nextFreeSlot(courseId);
+  if (!to) return null;
+  await setSessionMark(courseId, date, 'moved', reason, to, reasonId);
+  return to;
 }
 
 /** "עדכן פוטנציאל": כל המפגשים שבוטלו (בלי הסרה) של הקורסים — מוסרים מהפוטנציאל. */
