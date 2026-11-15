@@ -11,12 +11,21 @@
  *   …
  *   {sessionDialog.dialog}
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { hebrewDate } from '../lib/hebrewDate';
 import { longDayLabel } from '../lib/home';
-import { moveSession, removeFromPlan, restoreSession, returnToPlan, setSessionMark, type Cancellation } from '../lib/sessions';
+import {
+  moveSession,
+  nextFreeSlot,
+  pushSession,
+  removeFromPlan,
+  restoreSession,
+  returnToPlan,
+  setSessionMark,
+  type Cancellation,
+} from '../lib/sessions';
 import { DateField } from './DatePicker';
 import type { Course } from '../lib/courses';
 import { radius, spacing } from '../theme/colors';
@@ -64,9 +73,23 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
   // הסיבות מהרשימה הגלובלית (חגים וחופשות → סיבות ביטול)
   const reasons = useCancelReasons();
   const reasonId = reasons.find((r) => r.name.trim() === reason.trim())?.id;
-  const [removeToo, setRemoveToo] = useState(false);
+  // מה קורה למפגש: נשאר בפוטנציאל · נמחק מהתכנון · השיעורים נדחים והקורס מתארך.
+  const [mode, setMode] = useState<'keep' | 'remove' | 'push'>('keep');
   const [busy, setBusy] = useState(false);
   const canceled = request.cancel ?? null;
+  // המועד שאליו יתארך הקורס ב"דחיית השיעורים" — הפנוי הבא אחרי סופו, ביחס לחגים ולחופשות.
+  const [pushTo, setPushTo] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void nextFreeSlot(request.course.id).then((d) => active && setPushTo(d));
+    return () => {
+      active = false;
+    };
+  }, [request.course.id]);
+  const shortDay = (iso: string) => {
+    const [, m, d] = iso.split('-').map(Number);
+    return `${d}/${m}`;
+  };
 
   async function run(action: () => Promise<void>, message: string, nowCanceled: boolean) {
     setBusy(true);
@@ -115,17 +138,26 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
                 ))}
               </View>
               {[
-                { remove: false, title: 'השאר בפוטנציאל', sub: 'נשמר מה שציפית; יורד רק מהצפי' },
-                { remove: true, title: 'מחיקת המפגש מהתכנון', sub: 'המפגש לא ייספר בפוטנציאל ובצפי' },
+                { mode: 'keep' as const, title: 'השאר בפוטנציאל', sub: 'נשמר מה שציפית; יורד רק מהצפי' },
+                { mode: 'remove' as const, title: 'מחיקת המפגש מהתכנון', sub: 'המפגש לא ייספר בפוטנציאל ובצפי' },
+                ...(pushTo
+                  ? [
+                      {
+                        mode: 'push' as const,
+                        title: 'דחיית כל השיעורים',
+                        sub: `השיעורים הבאים נדחים בשבוע, והקורס מתארך עד ${shortDay(pushTo)} — בדילוג על חגים וחופשות`,
+                      },
+                    ]
+                  : []),
               ].map((o) => (
                 <Pressable
                   key={o.title}
-                  onPress={() => setRemoveToo(o.remove)}
+                  onPress={() => setMode(o.mode)}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: removeToo === o.remove }}
-                  style={[styles.option, removeToo === o.remove && styles.optionOn]}
+                  accessibilityState={{ checked: mode === o.mode }}
+                  style={[styles.option, mode === o.mode && styles.optionOn]}
                 >
-                  <View style={[styles.radio, removeToo === o.remove && styles.radioOn]} />
+                  <View style={[styles.radio, mode === o.mode && styles.radioOn]} />
                   <View style={styles.optionTexts}>
                     <Text style={styles.optionTitle}>{o.title}</Text>
                     <Text style={styles.optionSub}>{o.sub}</Text>
@@ -187,23 +219,31 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
           ) : (
             <View style={styles.stack}>
               <Button
-                label="סימון כבוטל"
+                label={mode === 'push' ? 'ביטול ודחיית השיעורים' : 'סימון כבוטל'}
                 variant="danger"
                 loading={busy}
                 onPress={() =>
-                  run(
-                    () =>
-                      setSessionMark(
-                        request.course.id,
-                        request.date,
-                        removeToo ? 'removed' : 'canceled',
-                        reason,
-                        undefined,
-                        reasonId,
-                      ),
-                    removeToo ? 'המפגש נמחק מהתכנון' : 'המפגש סומן כבוטל',
-                    true,
-                  )
+                  mode === 'push'
+                    ? run(
+                        async () => {
+                          await pushSession(request.course.id, request.date, reason, reasonId);
+                        },
+                        pushTo ? `השיעורים נדחו · הקורס מתארך עד ${shortDay(pushTo)}` : 'המפגש סומן כבוטל',
+                        true,
+                      )
+                    : run(
+                        () =>
+                          setSessionMark(
+                            request.course.id,
+                            request.date,
+                            mode === 'remove' ? 'removed' : 'canceled',
+                            reason,
+                            undefined,
+                            reasonId,
+                          ),
+                        mode === 'remove' ? 'המפגש נמחק מהתכנון' : 'המפגש סומן כבוטל',
+                        true,
+                      )
                 }
               />
               <Button label="חזרה" variant="secondary" onPress={onClose} disabled={busy} />

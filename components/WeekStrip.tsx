@@ -19,6 +19,7 @@ import { Icon } from './Icon';
 import { iso, nextRange, type DateRangeValue } from './RangeCalendar';
 import { useSwipe } from './useSwipe';
 import { useI18n } from '../lib/i18n';
+import { useTrackingStart } from '../lib/trackingStart';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme } from '../theme/useStyles';
@@ -73,6 +74,7 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
   const { colors } = useTheme();
   const { isRTL } = useI18n();
   const heb = useShowHebrewDates();
+  const trackingStart = useTrackingStart();
   // השבוע שמוצג בפס בפועל — מתעדכן לשבוע החדש רק בסוף המעבר.
   const [shown, setShown] = useState(weekStart);
   const [width, setWidth] = useState(0);
@@ -230,10 +232,14 @@ export function WeekStrip({ weekStart, onWeekChange, onToday, range, onRangeChan
                   const inRange = range != null && day >= range.from && day <= range.to;
                   const isEdge = range != null && (day === range.from || day === range.to);
                   const count = counts[day] ?? 0;
+                  // לפני תחילת העבודה עם המערכת — היום אפור ולא לחיץ (אלא אם יש בו דיווח).
+                  const off = trackingStart != null && day < trackingStart && count === 0;
                   return (
                     <Pressable
                       key={day}
-                      style={styles.cell}
+                      style={[styles.cell, off && styles.cellOff]}
+                      disabled={off}
+                      accessibilityState={{ disabled: off }}
                       onPress={() => (onDayPress ? onDayPress(day) : onRangeChange(nextRange(range, day)))}
                       accessibilityLabel={day}
                     >
@@ -353,6 +359,7 @@ const makeStyles = (c: ColorScheme) =>
     dayInRange: { backgroundColor: c.brandLight },
     dayEdge: { backgroundColor: c.brand },
     dayToday: { borderWidth: 1.5, borderColor: c.brand },
+    cellOff: { opacity: 0.35 },
     dayText: { fontSize: 15, fontWeight: '600', color: c.text },
     dayTextEdge: { color: c.textOnBrand, fontWeight: '800' },
     dayTextEmpty: { color: c.textMuted, fontWeight: '400' },

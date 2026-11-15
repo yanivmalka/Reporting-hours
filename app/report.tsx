@@ -19,7 +19,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { useToast } from '../components/Toast';
 import { useFade } from '../components/useFlash';
-import { nextRelevantDay, unreportedOn } from '../lib/home';
+import { nextMissingAfter, nextRelevantDay, unreportedOn } from '../lib/home';
 import { toAcademic } from '../lib/academic';
 import { loadLeftoverMode } from '../lib/leftover';
 import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../lib/accumulated';
@@ -699,8 +699,9 @@ function ReportScreenInner() {
     setBaseline({ start: '', end: '', note: '', breaks: 0 });
     setExitReason(null);
     setDirect(false);
-    // "דיווח נוסף" — על היום הרלוונטי הבא (היום, או הדיווח החסר הקרוב אחורה).
-    openOnDate(nextRelevantDay(courses, workplaces ?? [], existing).date);
+    // "דיווח נוסף" — מתקדמים לדיווח החסר הבא אחרי התאריך שדווח עכשיו (ולא
+    // לדיווח החסר הכי חדש); כשאין חסר קדימה — היום הרלוונטי הבא.
+    openOnDate(nextMissingAfter(courses, workplaces ?? [], existing, date).date);
   }
 
   /** יציאה מהאשף למקום המוצא. עם שינויים שלא נשמרו — דיאלוג "לצאת בלי לשמור?". */
