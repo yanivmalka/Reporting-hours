@@ -32,6 +32,7 @@ import { isLocked, payrollItems, statusKey, updatePayrollStatus, type StatusMap 
 import { netMinutes, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import type { Workplace } from './workplaces';
+import { KEYS } from './keys';
 
 export type RedeemMode = 'complete' | 'whole';
 
@@ -42,7 +43,7 @@ export const REDEEM_MODE_LABELS: Record<RedeemMode, string> = {
   whole: 'שעות שלמות בלבד',
 };
 
-const STORAGE_KEY = 'reporting-hours/redeem-mode/v1';
+const STORAGE_KEY = KEYS.redeemMode;
 
 export async function loadRedeemMode(): Promise<RedeemMode> {
   const v = await readJSON<unknown>(STORAGE_KEY, null);

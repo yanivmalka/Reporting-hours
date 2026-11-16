@@ -28,10 +28,11 @@ import { useConfirm } from './ConfirmDialog';
 import { Icon } from './Icon';
 import { Pressable } from './Pressable';
 import { useToast } from './Toast';
+import { isoDate } from '../lib/dates';
 
 const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 const pad = (n: number) => String(n).padStart(2, '0');
-const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const isoOf = isoDate;
 
 /** "יום ג׳ 3.11 · 14:05" */
 function when(ms: number): string {

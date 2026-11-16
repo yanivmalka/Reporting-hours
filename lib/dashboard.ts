@@ -16,6 +16,7 @@ import type { PayBasis } from './payBasis';
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
 import { travelCostForWorkplace } from './travel';
 import { paymentTermsOf, type Workplace } from './workplaces';
+import { isoDate } from './dates';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -37,11 +38,8 @@ export type Totals = {
 // ───────────────────────── תאריכים ─────────────────────────
 
 /** "YYYY-MM-DD" של תאריך מקומי. */
-export function isoDate(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
+/** נשמר כאן לתאימות — המקור ב־lib/dates.ts. */
+export { isoDate };
 
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();

@@ -10,6 +10,7 @@ import type { WorkReport } from './reports';
 import { parseTime } from './time';
 import { activeWorkplaces, type Workplace } from './workplaces';
 import { beforeTracking } from './trackingStart';
+import { isoDate } from './dates';
 
 export type DayStatus = 'done' | 'missing' | 'planned';
 
@@ -19,8 +20,7 @@ export type DayStatusInput = {
   reports: readonly WorkReport[];
 };
 
-const isoOf = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const isoOf = isoDate;
 
 /** מצב יום אחד. */
 export function dayStatus(date: string, input: DayStatusInput, now: Date = new Date()): DayStatus | null {

@@ -40,6 +40,7 @@ import {
   type ShiftPlan,
   type Vacation,
 } from './vacations';
+import { KEYS, LEGACY_KEYS } from './keys';
 
 export type SessionMark = {
   courseId: string;
@@ -101,10 +102,10 @@ function shortDate(iso: string): string {
   return `${d}/${m}`;
 }
 
-const MARKS_KEY = 'reporting-hours/sessions/v1';
+const MARKS_KEY = KEYS.sessions;
 /** גרסה 1 — בוליאני יחיד (חגים בלבד); מומרת לגרסה 2 בטעינה. */
-const HOLIDAYS_KEY_V1 = 'reporting-hours/holiday-cancel/v1';
-const HOLIDAYS_KEY = 'reporting-hours/holiday-cancel/v2';
+const HOLIDAYS_KEY_V1 = LEGACY_KEYS.holidayCancelV1;
+const HOLIDAYS_KEY = KEYS.holidayCancel;
 
 /** אילו סוגי ימים מיוחדים מבטלים מפגשים אוטומטית. */
 export type HolidaySettings = Record<RestDayKind, boolean>;
@@ -270,8 +271,8 @@ function reportCovers(c: { id: string; name: string; start: string; end: string 
 
 // המפתחות נקראים ישירות מהאחסון (ולא דרך lib/courses / lib/reports) כדי שלא
 // ייווצר מעגל ייבוא — lib/courses קורא ל־loadCancelIndex.
-const COURSES_KEY = 'reporting-hours/courses/v1';
-const REPORTS_KEY = 'reporting-hours/reports/v1';
+const COURSES_KEY = KEYS.courses;
+const REPORTS_KEY = KEYS.reports;
 
 async function loadVacationContext(
   marks: readonly SessionMark[],

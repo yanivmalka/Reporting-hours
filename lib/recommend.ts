@@ -16,6 +16,7 @@ import type { StatusMap } from './payroll';
 import type { WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import { isArchived, type Workplace } from './workplaces';
+import { KEYS } from './keys';
 
 /** כמה ימים בלי דיווח ובלי קורס פעיל עד שמציעים להעביר מקום עבודה לארכיון. */
 export const IDLE_DAYS = 60;
@@ -25,7 +26,7 @@ export type Recommendation =
   | { key: string; kind: 'trash-workplace'; workplace: Workplace }
   | { key: string; kind: 'delete-course'; course: Course; workplace?: Workplace };
 
-const DISMISSED_KEY = 'reporting-hours/recommend-dismissed/v1';
+const DISMISSED_KEY = KEYS.recommendDismissed;
 
 export async function loadDismissedRecommendations(): Promise<string[]> {
   return readJSON<string[]>(DISMISSED_KEY, []);

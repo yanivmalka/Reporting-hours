@@ -30,38 +30,22 @@ import {
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
+import { DATA_PREFIX, KEYS, isBackedUpKey, isSyncedKey as isSyncedByScope, isViewerLocalKey } from './keys';
 import { APP_ID, firestore, type CloudUser } from './firebase';
 import { merge3Raw } from './merge';
 
-const PREFIX = 'reporting-hours/';
+const PREFIX = DATA_PREFIX;
 const META_KEY = 'reporting-hours-sync/meta/v1';
 /** הערך האחרון שסונכרן לכל מפתח (לא מסונכרן בעצמו — התחילית שונה). */
 const BASE_PREFIX = 'reporting-hours-sync/base/';
 /** החשבון שהנתונים שלו מוצגים (כשמורשה צופה בנתוני בעלים אחר). */
 const ACTIVE_KEY = 'reporting-hours-sync/active/v1';
-/** מפתחות שנשארים לכל מכשיר בנפרד: העדפות תצוגה וסימוני הדגמה. */
-const LOCAL_ONLY = new Set([
-  'reporting-hours/lang/v1',
-  'reporting-hours/theme/v1',
-  'reporting-hours/demo/v1',
-  'reporting-hours/demo-auto/v1',
-]);
-/** כשצופים בנתוני אחר — גם העדפות התצוגה האלה נשארות במכשיר ולא נכתבות לבעלים. */
-const SHARED_LOCAL_ONLY = new Set([
-  'reporting-hours/home-dismissed/v1',
-  'reporting-hours/recommend-dismissed/v1',
-  'reporting-hours/journal-calendar-pin/v1',
-  'reporting-hours/show-hebrew-dates/v1',
-]);
+/* אילו מפתחות מסונכרנים ואילו נשארים במכשיר — במרשם המפתחות (lib/keys.ts). */
 /** מה שמורשה ברמת "מדווח" רשאי לשנות (זהה לחוקי האבטחה ב־apps-platform). */
-const REPORTER_KEYS = new Set([
-  'reporting-hours/reports/v1',
-  'reporting-hours/sessions/v1',
-  'reporting-hours/accumulated/v2',
-]);
+const REPORTER_KEYS = new Set<string>([KEYS.reports, KEYS.sessions, KEYS.accumulated]);
 /** מונה: שינויים מקבילים מצטברים במיזוג. */
-const ADDITIVE_KEYS = new Set(['reporting-hours/accumulated/v2']);
-const DEMO_META_KEY = 'reporting-hours/demo/v1';
+const ADDITIVE_KEYS = new Set<string>([KEYS.accumulated]);
+const DEMO_META_KEY = KEYS.demo;
 const PUSH_DELAY_MS = 1500;
 
 export type SyncStatus = 'off' | 'syncing' | 'synced' | 'paused-demo' | 'error';
@@ -78,8 +62,8 @@ type Meta = {
 };
 
 export function isSyncedKey(key: string): boolean {
-  if (!key.startsWith(PREFIX) || LOCAL_ONLY.has(key)) return false;
-  if (access && SHARED_LOCAL_ONLY.has(key)) return false;
+  if (!isSyncedByScope(key)) return false;
+  if (access && isViewerLocalKey(key)) return false;
   return true;
 }
 
@@ -489,7 +473,8 @@ export async function replaceAllUserData(snapshot: Record<string, string>): Prom
   if (!col || !db) throw new Error('cloud-unavailable');
   await loadMeta();
   const now = Date.now();
-  const entries = Object.entries(snapshot).filter(([k]) => isSyncedKey(k));
+  // רק נתוני המשתמש מוחלפים; העדפות התצוגה ומפתחות המכשיר נשארים כמו שהם.
+  const entries = Object.entries(snapshot).filter(([k]) => isBackedUpKey(k));
   const keep = new Set(entries.map(([k]) => k));
 
   // שרת — באצווה אחת (אטומית).
@@ -497,7 +482,7 @@ export async function replaceAllUserData(snapshot: Record<string, string>): Prom
   const batch = writeBatch(db);
   existing.forEach((d) => {
     const key = fromDocId(d.id);
-    if (isSyncedKey(key) && !keep.has(key)) batch.delete(d.ref);
+    if (isBackedUpKey(key) && !keep.has(key)) batch.delete(d.ref);
   });
   for (const [k, v] of entries) {
     const ref = kvDoc(uid, k);
@@ -507,15 +492,22 @@ export async function replaceAllUserData(snapshot: Record<string, string>): Prom
 
   // מכשיר.
   const allKeys = await AsyncStorage.getAllKeys();
-  const stale = allKeys.filter((k) => (isSyncedKey(k) && !keep.has(k)) || k.startsWith(BASE_PREFIX));
+  const stale = allKeys.filter(
+    (k) =>
+      (isBackedUpKey(k) && !keep.has(k)) ||
+      (k.startsWith(BASE_PREFIX) && isBackedUpKey(k.slice(BASE_PREFIX.length))),
+  );
   if (stale.length) await AsyncStorage.multiRemove(stale);
   await AsyncStorage.multiSet(entries);
   await AsyncStorage.multiSet(entries.map(([k, v]) => [BASE_PREFIX + k, v]));
   await AsyncStorage.removeItem(DEMO_META_KEY).catch(() => {});
+  // מצב הסנכרון של מה שלא הוחלף (העדפות תצוגה) נשמר.
+  const untouched = <T,>(rec: Record<string, T> | undefined) =>
+    meta.uid === uid ? Object.fromEntries(Object.entries(rec ?? {}).filter(([k]) => !isBackedUpKey(k))) : {};
   meta = {
     uid,
-    stamps: Object.fromEntries(entries.map(([k]) => [k, now])),
-    remote: Object.fromEntries(entries.map(([k]) => [k, now])),
+    stamps: { ...untouched(meta.stamps), ...Object.fromEntries(entries.map(([k]) => [k, now])) },
+    remote: { ...untouched(meta.remote), ...Object.fromEntries(entries.map(([k]) => [k, now])) },
   };
   dirty.clear();
   await saveMeta();

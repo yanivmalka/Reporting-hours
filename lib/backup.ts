@@ -32,19 +32,15 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { APP_ID, firestore } from './firebase';
+import { KEYS, isBackedUpKey } from './keys';
 import { replaceAllUserData, syncUser } from './sync';
+import { isoDate } from './dates';
 
 export const BACKUP_RETENTION_DAYS = 30;
 
-const DATA_PREFIX = 'reporting-hours/';
-/** לא נכללים בגיבוי: העדפות המכשיר וסימוני ההדגמה. */
-const EXCLUDED = new Set([
-  'reporting-hours/lang/v1',
-  'reporting-hours/theme/v1',
-  'reporting-hours/demo/v1',
-  'reporting-hours/demo-auto/v1',
-]);
-const DEMO_META_KEY = 'reporting-hours/demo/v1';
+/* מה נכלל בגיבוי — נתוני המשתמש בלבד (isBackedUpKey במרשם lib/keys.ts): לא העדפות
+ * תצוגה, לא שפה וערכת צבעים, ולא סימוני ההדגמה. */
+const DEMO_META_KEY = KEYS.demo;
 /** סימון מקומי קטן: באיזה יום כבר גובה (לכל משתמש) — כדי לא לבדוק בשרת בכל פעם. */
 const DONE_KEY = 'reporting-hours-backup/done/v1';
 
@@ -64,10 +60,7 @@ type Snapshot = Record<string, string>;
 
 // ───────────────────────── עזר ─────────────────────────
 
-function isoDay(d: Date = new Date()): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+const isoDay = (d: Date = new Date()) => isoDate(d);
 
 const cutoffMs = () => Date.now() - BACKUP_RETENTION_DAYS * 86_400_000;
 
@@ -95,7 +88,7 @@ const isRec = (x: unknown): x is Rec => x != null && typeof x === 'object' && !A
 /** מזהי מקומות העבודה, הקורסים והדיווחים של ההדגמה. */
 function demoIds(raw: Snapshot): Set<string> {
   const ids = new Set<string>();
-  for (const key of ['reporting-hours/workplaces/v1', 'reporting-hours/courses/v1', 'reporting-hours/reports/v1']) {
+  for (const key of [KEYS.workplaces, KEYS.courses, KEYS.reports]) {
     try {
       const list: unknown = JSON.parse(raw[key] ?? '[]');
       if (Array.isArray(list)) for (const x of list) if (isRec(x) && x.demo === true && typeof x.id === 'string') ids.add(x.id);
@@ -129,10 +122,18 @@ function stripDemo(value: unknown, ids: Set<string>): unknown {
 
 /** תמונת מצב של נתוני המשתמש במכשיר, בלי הדגמה ובלי העדפות מכשיר. */
 async function userSnapshot(): Promise<Snapshot> {
-  const keys = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(DATA_PREFIX) && !EXCLUDED.has(k));
+  const keys = (await AsyncStorage.getAllKeys()).filter(isBackedUpKey);
   const raw: Snapshot = {};
   for (const [k, v] of await AsyncStorage.multiGet(keys)) if (v != null) raw[k] = v;
   const demoLoaded = (await AsyncStorage.getItem(DEMO_META_KEY)) != null;
+  return userDataOnly(raw, demoLoaded);
+}
+
+/**
+ * תמונת מצב בלי נתוני הדגמה — פונקציה טהורה (נבדקת ב־test/backup.test.ts).
+ * כשאין הדגמה (לא טעונה ואין פריטי demo) — מוחזר הקלט כמו שהוא.
+ */
+export function userDataOnly(raw: Snapshot, demoLoaded: boolean): Snapshot {
   const ids = demoIds(raw);
   if (!demoLoaded && ids.size === 0) return raw;
   const out: Snapshot = {};
@@ -157,9 +158,9 @@ function count(raw: string | undefined): number {
 
 function summarize(s: Snapshot): BackupSummary {
   return {
-    reports: count(s['reporting-hours/reports/v1']),
-    workplaces: count(s['reporting-hours/workplaces/v1']),
-    courses: count(s['reporting-hours/courses/v1']),
+    reports: count(s[KEYS.reports]),
+    workplaces: count(s[KEYS.workplaces]),
+    courses: count(s[KEYS.courses]),
   };
 }
 

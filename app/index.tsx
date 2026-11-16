@@ -48,9 +48,10 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useWorkplaceColor } from '../theme/workplaceColors';
+import { KEYS } from '../lib/keys';
 
 /** התראות שנסגרו — לפי המפתח שלהן (שכולל תאריך כשהן תלויות יום). */
-const DISMISSED_KEY = 'reporting-hours/home-dismissed/v1';
+const DISMISSED_KEY = KEYS.homeDismissed;
 const DISMISSED_MAX = 80;
 
 /** "יום ג׳ 10.11" */

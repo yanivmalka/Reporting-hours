@@ -3,6 +3,7 @@
  * נשמרים במכשיר, ומסונכרנים לחשבון כשהמשתמש מחובר (lib/sync.ts).
  */
 import { readJSON, writeJSON } from './storage';
+import { KEYS } from './keys';
 
 export type Profile = {
   fullName: string;
@@ -11,7 +12,7 @@ export type Profile = {
   address: string;
 };
 
-const KEY = 'reporting-hours/profile/v1';
+const KEY = KEYS.profile;
 
 export const EMPTY_PROFILE: Profile = { fullName: '', phone: '', email: '', address: '' };
 

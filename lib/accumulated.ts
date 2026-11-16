@@ -1,5 +1,6 @@
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { readJSON, writeJSON } from './storage';
+import { KEYS, LEGACY_KEYS } from './keys';
 
 /**
  * מונה "דקות עבודה מצטברות" (סעיף 5 ב־WISHLIST) — נפרד לכל מקום עבודה.
@@ -27,10 +28,10 @@ export type AccumulatedState = {
   byWorkplace: Record<string, AccumulatedEntry>;
 };
 
-const STORAGE_KEY = 'reporting-hours/accumulated/v2';
+const STORAGE_KEY = KEYS.accumulated;
 /** מונה גלובלי ישן (לפני הפיצול למקומות עבודה) — להסבה חד־פעמית. */
-const LEGACY_KEY = 'reporting-hours/accumulated/v1';
-const REPORTS_KEY = 'reporting-hours/reports/v1';
+const LEGACY_KEY = LEGACY_KEYS.accumulatedV1;
+const REPORTS_KEY = KEYS.reports;
 
 const EMPTY_ENTRY: AccumulatedEntry = { minutes: 0, redeemedHours: 0 };
 

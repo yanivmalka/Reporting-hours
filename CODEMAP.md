@@ -4,6 +4,8 @@
 
 ## מבנה התיקיות
 
+- `test/` — בדיקות יחידה (Vitest, `npm test`) לחישובי `lib/`; תחליפים ל־react-native ול־AsyncStorage ב־`test/stubs/`.
+
 - `app/` — מסכים (expo-router, קובץ = נתיב).
 - `lib/` — מודלים, אחסון וחישובים טהורים. אין בו רכיבי מסך, חוץ מ־`i18n.tsx` ו־`payBasis.tsx` שהם Providers.
 - `components/` — רכיבי UI ודיאלוגים משותפים.
@@ -11,7 +13,7 @@
 
 ## מודל הנתונים ומפתחות האחסון
 
-כל מפתח נשמר ב־AsyncStorage (`lib/storage.ts`) ומשוכפל לענן (`lib/sync.ts`) תחת `apps/reporting-hours/users/{uid}/kv/{key}`.
+כל מפתח רשום ב־`lib/keys.ts` (שם והיקף: `synced` / `viewerDevice` / `device`), נשמר ב־AsyncStorage (`lib/storage.ts`), ומפתחות `synced` ו־`viewerDevice` משוכפלים לענן (`lib/sync.ts`) תחת `apps/reporting-hours/users/{uid}/kv/{key}`. רק `synced` נכלל בגיבוי.
 
 | ישות | קובץ | מפתח |
 |---|---|---|
@@ -103,7 +105,7 @@
 - כסף: `pay.ts`, `payBasis.tsx`, `travel.ts`, `payroll.ts`, `forecast.ts`.
 - לוח שנה: `hebrewDate.ts`, `holidays.ts`, `sessions.ts`, `vacations.ts`.
 - מסכים: `home.ts` (כולל `nextRelevantDay`), `dashboard.ts` (כולל `deadlineRelative`), `recommend.ts`, `dayStatus.ts`.
-- תשתית: `storage.ts`, `sync.ts`, `firebase.ts`, `authPlatform(.web).ts`, `backup.ts`, `update.ts`, `rtl.ts`, `i18n.tsx`, `strings.ts`, `demo.ts`.
+- תשתית: `keys.ts` (מרשם המפתחות), `dates.ts` (המרות ISO), `storage.ts`, `sync.ts`, `firebase.ts`, `authPlatform(.web).ts`, `backup.ts`, `update.ts`, `rtl.ts`, `i18n.tsx`, `strings.ts`, `demo.ts`.
 
 ## רכיבים בולטים (`components/`)
 

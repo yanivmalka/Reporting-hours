@@ -17,6 +17,7 @@ import { basisFor, type PayBasis } from './payBasis';
 import type { Cancellation } from './sessions';
 import { readJSON, writeJSON } from './storage';
 import { workplaceAt, type Workplace } from './workplaces';
+import { KEYS } from './keys';
 
 export type CancelReason = { id: string; name: string };
 
@@ -38,7 +39,7 @@ export const DEFAULT_CANCEL_REASONS: CancelReason[] = [
   { id: 'r_event', name: 'אירוע מיוחד' },
 ];
 
-const KEY = 'reporting-hours/cancel-reasons/v1';
+const KEY = KEYS.cancelReasons;
 
 // מאגר ברמת המודול — כמו אינדקס הביטולים: חישובים טהורים קוראים currentReasons().
 let reasons: CancelReason[] = DEFAULT_CANCEL_REASONS;

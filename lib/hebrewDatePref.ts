@@ -10,8 +10,9 @@
  */
 import { useSyncExternalStore } from 'react';
 import { readJSON, writeJSON } from './storage';
+import { KEYS } from './keys';
 
-const STORAGE_KEY = 'reporting-hours/show-hebrew-dates/v1';
+const STORAGE_KEY = KEYS.showHebrewDates;
 
 let value = true;
 const listeners = new Set<() => void>();

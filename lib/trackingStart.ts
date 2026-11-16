@@ -10,8 +10,9 @@
  */
 import { useSyncExternalStore } from 'react';
 import { readJSON, writeJSON } from './storage';
+import { KEYS } from './keys';
 
-const STORAGE_KEY = 'reporting-hours/tracking-start/v1';
+const STORAGE_KEY = KEYS.trackingStart;
 
 let value: string | null = null;
 const listeners = new Set<() => void>();

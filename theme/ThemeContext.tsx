@@ -16,6 +16,7 @@ import {
   type Palette,
   type PaletteId,
 } from './palettes';
+import { KEYS } from '../lib/keys';
 
 /**
  * ניהול ערכת הצבעים הפעילה ואספקתה לכל עץ הרכיבים דרך useTheme().
@@ -35,7 +36,7 @@ type ThemeContextValue = {
   setPaletteId: (id: PaletteId) => void;
 };
 
-const STORAGE_KEY = 'reporting-hours/theme/v1';
+const STORAGE_KEY = KEYS.theme;
 
 const DEFAULT_VALUE: ThemeContextValue = {
   colors: fallbackColors,
