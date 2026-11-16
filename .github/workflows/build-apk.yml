@@ -46,8 +46,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Typecheck and unit tests
+        run: npm run check
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install --clean

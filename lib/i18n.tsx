@@ -28,8 +28,9 @@ import {
   type Lang,
   type StringTree,
 } from './strings';
+import { KEYS } from './keys';
 
-const STORAGE_KEY = 'reporting-hours/lang/v1';
+const STORAGE_KEY = KEYS.lang;
 
 export type TranslateVars = Record<string, string | number>;
 

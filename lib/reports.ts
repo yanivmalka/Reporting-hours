@@ -2,6 +2,7 @@ import { toAcademic, type AcademicBreakdown } from './academic';
 import { readJSON, writeJSON } from './storage';
 import { parseTime } from './time';
 import { actingAs } from './sync';
+import { KEYS } from './keys';
 
 /**
  * מודל הדיווח על יום עבודה (סעיף 4 ב־WISHLIST) והפעולות לשמירתו.
@@ -69,7 +70,7 @@ export type WorkReport = {
 /** נתוני טופס לפני שמירה — בלי שדות שנוצרים אוטומטית. */
 export type WorkReportDraft = Omit<WorkReport, 'id' | 'createdAt' | 'demo' | 'by'>;
 
-const STORAGE_KEY = 'reporting-hours/reports/v1';
+const STORAGE_KEY = KEYS.reports;
 
 export async function loadReports(): Promise<WorkReport[]> {
   const list = await readJSON<WorkReport[]>(STORAGE_KEY, []);

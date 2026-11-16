@@ -1,5 +1,6 @@
 import { readJSON, writeJSON } from './storage';
 import type { PayBasis } from './payBasis';
+import { KEYS } from './keys';
 
 /**
  * מודל הנתונים של מקום עבודה (סעיף 3 ב־WISHLIST) והפעולות לשמירה/טעינה שלו.
@@ -185,7 +186,7 @@ export function taxPercentOf(w: Pick<Workplace, 'taxPercent'>): number {
 /** נתוני טופס לפני שמירה — כמו Workplace אך בלי מזהה ובלי שדות מערכת. */
 export type WorkplaceDraft = Omit<Workplace, 'id' | 'deletedAt' | 'archivedAt' | 'demo' | 'termsHistory' | 'trashed'>;
 
-const STORAGE_KEY = 'reporting-hours/workplaces/v1';
+const STORAGE_KEY = KEYS.workplaces;
 
 /** ברירת המחדל של "שוטף +" — שוטף + 30. */
 export const DEFAULT_PAYMENT_TERMS = 30;

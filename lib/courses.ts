@@ -22,6 +22,8 @@ import {
   type MovesIndex,
 } from './sessions';
 import { parseTime } from './time';
+import { KEYS } from './keys';
+import { dateFromIso, isoDate } from './dates';
 
 export type Course = {
   id: string;
@@ -48,7 +50,7 @@ export type Course = {
 
 export type CourseDraft = Omit<Course, 'id' | 'demo'>;
 
-const STORAGE_KEY = 'reporting-hours/courses/v1';
+const STORAGE_KEY = KEYS.courses;
 
 export const WEEKDAY_NAMES = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 export const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
@@ -85,15 +87,9 @@ export async function deleteCourse(id: string): Promise<Course[]> {
 
 // ───────────────────────── חישובים ─────────────────────────
 
-function parseISO(value: string): Date {
-  const [y, m, d] = value.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
+const parseISO = dateFromIso;
 
-function iso(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+const iso = isoDate;
 
 /** זמן עבודה נטו של מפגש אחד בדקות. */
 export function sessionMinutes(course: Pick<Course, 'start' | 'end' | 'breakMinutes'>): number {

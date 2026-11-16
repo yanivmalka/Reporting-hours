@@ -21,6 +21,8 @@ import { basisFor, type PayBasis } from './payBasis';
 import { expectedPaymentDate } from './dashboard';
 import { paymentTermsOf } from './workplaces';
 import { signatureLines, type Profile } from './profile';
+import { KEYS } from './keys';
+import { isoDate } from './dates';
 
 // ───────────────────────── מצב הדוחות ─────────────────────────
 
@@ -47,7 +49,7 @@ export const isPaid = (st: PayrollStatus | undefined) => Boolean(st?.paidAt);
 
 export type StatusMap = Record<string, PayrollStatus>;
 
-const STATUS_KEY = 'reporting-hours/payroll/v1';
+const STATUS_KEY = KEYS.payroll;
 
 export const statusKey = (workplaceId: string, periodStart: string) => `${workplaceId}|${periodStart}`;
 
@@ -135,10 +137,6 @@ export function pendingPayroll(items: readonly PayrollItem[]): PayrollItem[] {
     .sort((a, b) => a.period.end.localeCompare(b.period.end));
 }
 
-function isoDate(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
 
 // ───────────────────────── תוכן הדוח ─────────────────────────
 

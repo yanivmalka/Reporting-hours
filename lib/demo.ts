@@ -19,12 +19,14 @@ import { formatTime } from './time';
 import { loadCourses, reportsOfCourse, saveCourses, type Course } from './courses';
 import { expectedPayment, loadPayrollStatus, payrollItems, savePayrollStatus, statusKey } from './payroll';
 import { saveWorkplaces, type Workplace } from './workplaces';
+import { DATA_PREFIX, KEYS } from './keys';
+import { isoDate } from './dates';
 
-const KEY_PREFIX = 'reporting-hours/';
-const DEMO_META_KEY = 'reporting-hours/demo/v1';
+const KEY_PREFIX = DATA_PREFIX;
+const DEMO_META_KEY = KEYS.demo;
 /** דגל שנשמר אחרי הבדיקה הראשונה, כדי שנתוני ההדגמה ייטענו אוטומטית פעם אחת בלבד. */
-const AUTO_SEED_FLAG = 'reporting-hours/demo-auto/v1';
-const WORKPLACES_KEY = 'reporting-hours/workplaces/v1';
+const AUTO_SEED_FLAG = KEYS.demoAuto;
+const WORKPLACES_KEY = KEYS.workplaces;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -323,12 +325,7 @@ function rng(seed: number) {
   };
 }
 
-function iso(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+const iso = isoDate;
 
 /** ימים ללא לימודים (חגי תשרי תשפ"ז, תשעה באב ועוד). */
 const HOLIDAYS = new Set([

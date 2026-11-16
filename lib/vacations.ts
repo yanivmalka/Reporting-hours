@@ -23,6 +23,8 @@
  */
 import { useEffect, useSyncExternalStore } from 'react';
 import { readJSON } from './storage';
+import { KEYS } from './keys';
+import { isoDate } from './dates';
 
 export type VacationScope =
   | { kind: 'all' }
@@ -44,7 +46,7 @@ export type Vacation = {
   exclude: string[];
 };
 
-export const VACATIONS_KEY = 'reporting-hours/vacations/v1';
+export const VACATIONS_KEY = KEYS.vacations;
 
 export const makeVacationId = () => `v_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -210,8 +212,7 @@ export type ShiftPlan = {
   movedIn: Map<string, { date: string; from: string }[]>;
 };
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const isoOf = isoDate;
 const dateOf = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d, 12);

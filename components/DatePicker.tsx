@@ -17,19 +17,14 @@ import { MonthSlide } from './MonthSlide';
 import { useSwipe } from './useSwipe';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
+import { isoDate, parseIsoDate } from '../lib/dates';
 
 const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
-function iso(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+const iso = isoDate;
 
-function parse(value: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
-}
+const parse = parseIsoDate;
 
 /** "יום ד׳ · 28/10/2026" — לועזי בלבד */
 export function gregorianLong(value: string): string {

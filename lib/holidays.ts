@@ -13,6 +13,7 @@
  * תאריך יכול להשתייך לכמה סוגים (למשל ערב שביעי של פסח הוא גם חול המועד).
  */
 import { HDate, months } from '@hebcal/hdate';
+import { dateFromIso } from './dates';
 
 export type RestDayKind = 'yomTov' | 'eve' | 'cholHamoed' | 'tishaBav';
 
@@ -25,10 +26,7 @@ export const REST_DAY_KIND_LABELS: Record<RestDayKind, string> = {
   tishaBav: 'תשעה באב',
 };
 
-function toDate(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
+const toDate = dateFromIso;
 
 /** ימים קבועים בלוח העברי: [חודש, יום, שם, סוג]. */
 const FIXED: [number, number, string, RestDayKind][] = [

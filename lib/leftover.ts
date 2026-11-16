@@ -7,12 +7,13 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { readJSON, writeJSON } from './storage';
+import { KEYS } from './keys';
 
 export type LeftoverMode = 'carry' | 'include';
 
 export const DEFAULT_LEFTOVER_MODE: LeftoverMode = 'carry';
 
-const STORAGE_KEY = 'reporting-hours/leftover-mode/v1';
+const STORAGE_KEY = KEYS.leftoverMode;
 
 export async function loadLeftoverMode(): Promise<LeftoverMode> {
   const v = await readJSON<unknown>(STORAGE_KEY, null);

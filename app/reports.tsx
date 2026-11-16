@@ -36,6 +36,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
+import { KEYS } from '../lib/keys';
 
 /**
  * מצב התאריכון ביומן: 'auto' — התאריכון המלא מתחלף בפס השבוע בגלילה;
@@ -43,7 +44,7 @@ import { workplaceColor } from '../theme/workplaceColors';
  * (ערך ישן true = 'full'.)
  */
 type CalMode = 'auto' | 'full' | 'week';
-const CAL_PIN_KEY = 'reporting-hours/journal-calendar-pin/v1';
+const CAL_PIN_KEY = KEYS.journalCalendarPin;
 
 /** מיון: תאריך יורד, ובאותו תאריך לפי סדר ההזנה היורד. */
 function byNewest(a: WorkReport, b: WorkReport): number {

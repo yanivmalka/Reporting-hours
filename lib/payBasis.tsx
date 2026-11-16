@@ -21,6 +21,7 @@ import {
   type ReactNode,
 } from 'react';
 import { readJSON, writeJSON } from './storage';
+import { KEYS } from './keys';
 
 export type PayBasis = 'academic' | 'regular';
 
@@ -41,7 +42,7 @@ export function basisFor(w: { payBasis?: PayBasis } | null | undefined, fallback
   return w?.payBasis ?? fallback;
 }
 
-const STORAGE_KEY = 'reporting-hours/pay-basis/v1';
+const STORAGE_KEY = KEYS.payBasis;
 
 function isPayBasis(value: unknown): value is PayBasis {
   return value === 'academic' || value === 'regular';

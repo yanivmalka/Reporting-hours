@@ -4,11 +4,9 @@
  * בלי תלות בתמיכת Intl של המכשיר.
  */
 import { HDate } from '@hebcal/hdate';
+import { dateFromIso, isoDate } from './dates';
 
-function toDate(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
+const toDate = dateFromIso;
 
 /** חלקי התאריך העברי: יום (גימטריה), חודש, שנה — למשל ["כ״א", "חשון", "תשפ״ז"]. */
 function parts(iso: string): { day: string; month: string; year: string } {
@@ -45,10 +43,7 @@ export function hebrewMonthSpan(year: number, month0: number): string {
   return a.year === b.year ? `${a.month}–${b.month} ${b.year}` : `${a.month} ${a.year}–${b.month} ${b.year}`;
 }
 
-function iso(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+const iso = isoDate;
 
 /** שמות החודשים העבריים שחלים בחודש לועזי, בלי שנה — ["חשון", "כסלו"]. */
 export function hebrewMonthNames(year: number, month0: number): string[] {
