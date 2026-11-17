@@ -12,7 +12,7 @@ import { todayISO } from '../lib/time';
 import { isArchived, loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { spacing, type AppColors } from '../theme/colors';
+import { cardShadow, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { useScreenData } from '../components/useScreenData';
@@ -205,8 +205,7 @@ const makeStyles = (colors: AppColors) =>
       gap: 4,
       borderRadius: 14,
       backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      ...cardShadow,
     },
     tileFoot: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 'auto' },
     tileName: { fontSize: 16, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
@@ -221,8 +220,7 @@ const makeStyles = (colors: AppColors) =>
       paddingHorizontal: spacing.md,
       borderRadius: 12,
       backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      ...cardShadow,
     },
     archiveTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.textMuted, textAlign: TEXT_RIGHT },
     empty: {

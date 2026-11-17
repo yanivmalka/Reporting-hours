@@ -24,7 +24,7 @@ import { Checkbox } from '../components/Checkbox';
 import { FoldSection } from '../components/FoldSection';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
@@ -274,9 +274,8 @@ const makeStyles = (colors: AppColors) =>
     checkGroup: {
       borderRadius: radius.md,
       backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
       overflow: 'hidden',
+      ...cardShadow,
     },
     checkRow: {
       flexDirection: 'row',
@@ -356,10 +355,9 @@ const makeStyles = (colors: AppColors) =>
   row: {
     gap: spacing.xs,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
+    ...cardShadow,
   },
   rowLabel: {
     flex: 1,
@@ -381,10 +379,9 @@ const makeStyles = (colors: AppColors) =>
   explain: {
     gap: spacing.xs,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
+    ...cardShadow,
   },
   example: {
     fontSize: 12,

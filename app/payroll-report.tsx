@@ -26,7 +26,7 @@ import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
 
@@ -424,11 +424,10 @@ const makeStyles = (colors: AppColors) =>
     statusPending: { color: colors.warning },
     card: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.xs,
+      ...cardShadow,
     },
     label: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textAlign: TEXT_RIGHT },
     email: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },

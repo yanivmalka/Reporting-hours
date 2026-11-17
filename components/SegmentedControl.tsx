@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, spacing, type AppColors } from '../theme/colors';
 
 type Option<T extends string> = { value: T; label: string };
 
@@ -44,29 +44,28 @@ const makeStyles = (colors: AppColors) =>
     row: {
       flexDirection: 'row',
       gap: spacing.xs,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.md,
+      backgroundColor: colors.border,
+      borderRadius: 18,
       padding: spacing.xs,
     },
     segment: {
       flex: 1,
-      minHeight: 40,
+      minHeight: 44,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: radius.sm,
+      borderRadius: 14,
       paddingHorizontal: spacing.sm,
     },
     segmentSelected: {
-      backgroundColor: colors.brand,
+      backgroundColor: colors.surface,
+      ...cardShadow,
     },
     label: {
       fontSize: 14,
-      fontWeight: '600',
-      color: colors.text,
+      color: colors.textMuted,
     },
     labelSelected: {
-      color: colors.textOnBrand,
+      fontWeight: '700',
+      color: colors.text,
     },
   });

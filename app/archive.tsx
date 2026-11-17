@@ -24,7 +24,7 @@ import { deleteOrEndCourse, trashWorkplaceWithData } from '../lib/trash';
 import { isArchived, loadWorkplaces, setWorkplaceArchived, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useScreenData } from '../components/useScreenData';
 
@@ -286,8 +286,7 @@ const makeStyles = (colors: AppColors) =>
       gap: 2,
       borderRadius: 22,
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...cardShadow,
     },
     pageTab: { flex: 1, minHeight: 40, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
     pageTabOn: { backgroundColor: colors.brand },
@@ -298,11 +297,10 @@ const makeStyles = (colors: AppColors) =>
     name: { fontSize: 16, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     card: {
       backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
       borderRadius: 16,
       padding: 14,
       gap: spacing.sm,
+      ...cardShadow,
     },
     cardMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     recCard: {

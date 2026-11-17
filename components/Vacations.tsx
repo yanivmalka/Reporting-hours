@@ -32,7 +32,7 @@ import {
   type Vacation,
   type VacationScope,
 } from '../lib/vacations';
-import { radius, spacing } from '../theme/colors';
+import { cardShadow, radius, spacing } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -417,11 +417,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     card: {
       backgroundColor: c.surface,
       borderRadius: radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       gap: spacing.sm,
+      ...cardShadow,
     },
     cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, textAlign: layout.textStart, paddingTop: 4 },
     groupLabel: { fontSize: 12, color: c.textMuted, textAlign: layout.textStart, paddingTop: spacing.sm },

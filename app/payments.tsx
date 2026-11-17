@@ -18,7 +18,7 @@ import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { FoldChevron } from '../components/Chevrons';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
@@ -235,11 +235,10 @@ const makeStyles = (colors: AppColors) =>
     list: { gap: spacing.sm },
     row: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       padding: spacing.md,
       gap: 3,
+      ...cardShadow,
     },
     rowOverdue: { borderColor: colors.danger, borderWidth: 1.5 },
     pressed: { opacity: 0.7 },

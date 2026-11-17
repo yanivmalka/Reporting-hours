@@ -20,7 +20,7 @@ import { money } from '../lib/travel';
 import { activeWorkplaces, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { beforeTracking } from '../lib/trackingStart';
@@ -275,10 +275,9 @@ const makeStyles = (colors: AppColors) =>
     day: {
       backgroundColor: colors.surface,
       borderRadius: radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
       padding: spacing.md,
       gap: spacing.xs,
+      ...cardShadow,
     },
     dayTitle: { fontSize: 15, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },

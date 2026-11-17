@@ -1,6 +1,6 @@
 /** סגנונות אשף הדיווח — משותפים למסך ולכל השלבים (components/report). */
 import { StyleSheet } from 'react-native';
-import { radius, spacing, type AppColors } from '../../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../../theme/colors';
 import { TEXT_RIGHT } from '../../theme/align';
 
 export const makeReportStyles = (colors: AppColors) =>
@@ -131,11 +131,10 @@ export const makeReportStyles = (colors: AppColors) =>
   },
   dayCourses: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
     gap: spacing.xs,
+    ...cardShadow,
   },
   dayCoursesTitle: {
     fontSize: 14,
@@ -187,6 +186,19 @@ export const makeReportStyles = (colors: AppColors) =>
     color: colors.textMuted,
     textAlign: TEXT_RIGHT,
   },
+  // סיכום נטו בשלב השעות — כרטיס כהה, כמו בעיצוב.
+  netCard: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    backgroundColor: colors.text,
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+  },
+  netCol: { flexGrow: 1, gap: 2 },
+  netLabel: { fontSize: 13, color: colors.border, textAlign: TEXT_RIGHT },
+  netValue: { fontSize: 24, fontWeight: '700', letterSpacing: -0.3, color: colors.surface, textAlign: TEXT_RIGHT },
   error: {
     fontSize: 13,
     color: colors.danger,
@@ -197,11 +209,10 @@ export const makeReportStyles = (colors: AppColors) =>
   },
   courseCard: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
     gap: 2,
+    ...cardShadow,
   },
   courseTop: {
     flexDirection: 'row',
@@ -382,9 +393,8 @@ export const makeReportStyles = (colors: AppColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
+    ...cardShadow,
   },
   breakRemoveText: {
     fontSize: 16,

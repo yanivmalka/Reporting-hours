@@ -9,7 +9,7 @@ import { EnterChevron } from './Chevrons';
 import { useTheme } from '../theme/ThemeContext';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
-import { radius, spacing } from '../theme/colors';
+import { cardShadow, radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
 // ───────────────────────── אריח מדד ─────────────────────────
@@ -225,15 +225,14 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       flexGrow: 1,
       flexBasis: '46%',
       backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
-      borderRadius: radius.md,
+      ...cardShadow,
+      borderRadius: radius.md + 4,
       padding: spacing.md,
       gap: 2,
     },
+    // אריח מודגש — כהה, כמו כרטיס "סכום החודש" בעיצוב.
     tileAccent: {
-      backgroundColor: c.brand,
-      borderColor: c.brand,
+      backgroundColor: c.text,
     },
     tileArrow: { position: 'absolute', top: 8, end: 8 },
     tileLabelWithArrow: { paddingEnd: 18 },
@@ -255,11 +254,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       textAlign: layout.textStart,
     },
     onAccent: {
-      color: c.textOnBrand,
+      color: c.surface,
     },
     onAccentMuted: {
-      color: c.textOnBrand,
-      opacity: 0.85,
+      color: c.border,
     },
     chart: {
       gap: spacing.sm,
@@ -364,11 +362,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     },
     panel: {
       backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.md,
+      ...cardShadow,
     },
     panelHead: {
       gap: 2,
