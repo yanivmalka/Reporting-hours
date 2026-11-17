@@ -80,8 +80,8 @@ export function Button({
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
     base: {
-      minHeight: 48,
-      borderRadius: radius.md,
+      minHeight: 52,
+      borderRadius: 18,
       paddingHorizontal: spacing.lg,
       alignItems: 'center',
       justifyContent: 'center',
