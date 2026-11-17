@@ -1,9 +1,10 @@
 /**
  * עדכוני אפליקציה (אנדרואיד).
  *
- * - <UpdateProvider> — עוטף את האפליקציה; בפתיחה בודק בשקט אם פורסמה גרסה
- *   חדשה ב־GitHub Releases, ואם כן מציג חלון "עדכון זמין". ההורדה מתבצעת
- *   בתוך האפליקציה עם פס התקדמות, ובסיומה נפתח מתקין החבילות של אנדרואיד.
+ * - <UpdateProvider> — עוטף את האפליקציה (מעל SyncedTree, כדי שמשיכה מהענן לא תסגור אותו); בפתיחה
+ *   בודק בשקט אם פורסמה גרסה חדשה ב־GitHub Releases, ואם כן מציג חלון "עדכון זמין". ההורדה מתבצעת
+ *   בתוך האפליקציה עם פס התקדמות (lib/update.ts: יציאה מהאפליקציה משהה וחזרה ממשיכה מאותה נקודה),
+ *   אפשר להמשיך אותה ברקע, ובסיומה נפתח מתקין החבילות של אנדרואיד.
  * - <UpdateSection /> — אזור בתפריט הצד: הגרסה המותקנת + כפתור "בדיקת עדכונים".
  *
  * ב־web אין צורך — האתר נפרס מחדש אוטומטית — ולכן רק הגרסה מוצגת.
@@ -51,7 +52,13 @@ const UpdateContext = createContext<UpdateContextValue>({ offer: () => {} });
 
 export function UpdateProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
-  const offer = useCallback((info: UpdateInfo) => setPhase({ kind: 'available', info }), []);
+  /** "להמשיך ברקע": החלון מוסתר בזמן ההורדה, וחוזר כשהיא מסתיימת (או נכשלת). */
+  const [hidden, setHidden] = useState(false);
+  const offer = useCallback((info: UpdateInfo) => {
+    setHidden(false);
+    // הורדה של אותה גרסה כבר רצה — החלון חוזר אליה (ההתקדמות תתעדכן בדיווח הבא).
+    setPhase((p) => (p.kind === 'downloading' && p.info.latestBuild === info.latestBuild ? p : { kind: 'available', info }));
+  }, []);
   const value = useMemo(() => ({ offer }), [offer]);
 
   // בדיקה אוטומטית אחת בעליית האפליקציה. לא מציג דבר אם אין עדכון או אין רשת.
@@ -71,7 +78,7 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   return (
     <UpdateContext.Provider value={value}>
       {children}
-      <UpdateDialog phase={phase} setPhase={setPhase} />
+      <UpdateDialog phase={phase} setPhase={setPhase} hidden={hidden} setHidden={setHidden} />
     </UpdateContext.Provider>
   );
 }
@@ -79,15 +86,20 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
 function UpdateDialog({
   phase,
   setPhase,
+  hidden,
+  setHidden,
 }: {
   phase: Phase;
   setPhase: (p: Phase) => void;
+  hidden: boolean;
+  setHidden: (h: boolean) => void;
 }) {
   const { t } = useI18n();
   const styles = useStyles(makeStyles);
   if (phase.kind === 'idle') return null;
+  if (hidden && phase.kind === 'downloading') return null;
   const { info } = phase;
-  const close = () => setPhase({ kind: 'idle' });
+  const close = () => (phase.kind === 'downloading' ? setHidden(true) : setPhase({ kind: 'idle' }));
 
   async function install(fileUri: string) {
     try {
@@ -103,9 +115,11 @@ function UpdateDialog({
       const fileUri = await downloadApk(info, (progress) =>
         setPhase({ kind: 'downloading', info, progress }),
       );
+      setHidden(false);
       setPhase({ kind: 'ready', info, fileUri });
       await install(fileUri);
     } catch {
+      setHidden(false);
       setPhase({ kind: 'error', info });
     }
   }
@@ -139,6 +153,13 @@ function UpdateDialog({
               <View style={styles.track}>
                 <View style={[styles.fill, { width: `${percent}%` }]} />
               </View>
+            </>
+          ) : null}
+
+          {phase.kind === 'downloading' ? (
+            <>
+              <Text style={styles.hint}>{t('update.pausedHint')}</Text>
+              <Button label={t('update.background')} variant="secondary" onPress={() => setHidden(true)} />
             </>
           ) : null}
 

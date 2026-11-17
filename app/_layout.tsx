@@ -23,18 +23,21 @@ export default function RootLayout() {
   return (
     <I18nProvider>
       <ThemeProvider>
-        <SyncProvider>
-          <SyncedTree>
-            <PayBasisProvider>
-              <SafeAreaProvider>
-                <ToastProvider>
-                  <Chrome />
-                  <WheelOverlayHost />
-                </ToastProvider>
-              </SafeAreaProvider>
-            </PayBasisProvider>
-          </SyncedTree>
-        </SyncProvider>
+        {/* מעל SyncedTree: טעינה מחדש של המסכים (משיכה מהענן) לא סוגרת את חלון העדכון באמצע הורדה */}
+        <UpdateProvider>
+          <SyncProvider>
+            <SyncedTree>
+              <PayBasisProvider>
+                <SafeAreaProvider>
+                  <ToastProvider>
+                    <Chrome />
+                    <WheelOverlayHost />
+                  </ToastProvider>
+                </SafeAreaProvider>
+              </PayBasisProvider>
+            </SyncedTree>
+          </SyncProvider>
+        </UpdateProvider>
       </ThemeProvider>
     </I18nProvider>
   );
@@ -56,65 +59,63 @@ function Chrome() {
   const wide = useWideLayout();
 
   return (
-    <UpdateProvider>
-      <DrawerProvider>
-        <StatusBar style="dark" />
-        <DemoSeeder />
-        <BackupScheduler />
-        <MailSync />
-        <ExitGuard />
-        <BlockedWriteNotice />
-        {/* במסך רחב: תפריט קבוע בצד ההתחלה (ימין בעברית) והניווט לצדו */}
-        <View style={{ flex: 1, flexDirection: 'row' }}>
-          {wide ? <SideNav /> : null}
-          <View style={{ flex: 1 }}>
-            <Stack
-              screenOptions={{
-                headerStyle: { backgroundColor: barBg },
-                headerTintColor: barFg,
-                headerTitleStyle: { fontWeight: '700', fontSize: 20 },
-                headerShadowVisible: false,
-                headerBackTitle: t('common.back'),
-                contentStyle: { backgroundColor: colors.background },
-                // דפוס אנדרואיד/Google בעברית: headerLeft מוצג מימין — ☰ במסך הראשי,
-                // חץ חזרה במסכים פנימיים; headerRight מוצג משמאל — ⋮ במסכים פנימיים.
-                headerLeft: (props) => (
-                  <HeaderStart canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
-                ),
-                headerBackVisible: false,
-                headerRight: (props) => (
-                  <HeaderEnd canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
-                ),
-              }}
-            >
-              <Stack.Screen name="index" options={{ title: t('nav.home') }} />
-              <Stack.Screen name="dashboard" options={{ title: t('nav.dashboard') }} />
-              <Stack.Screen name="report" options={{ title: t('nav.report') }} />
-              <Stack.Screen name="reports" options={{ title: t('nav.reports') }} />
-              <Stack.Screen name="report-view" options={{ title: 'דיווח' }} />
-              <Stack.Screen name="workplaces" options={{ title: t('nav.workplaces') }} />
-              <Stack.Screen name="workplace" options={{ title: t('nav.workplaceForm') }} />
-              <Stack.Screen
-                name="workplace-form"
-                options={{ title: t('nav.workplaceForm') }}
-              />
-              <Stack.Screen name="payments" options={{ title: t('nav.payments') }} />
-              <Stack.Screen name="tax" options={{ title: t('nav.tax') }} />
-              <Stack.Screen name="profile" options={{ title: t('nav.profile') }} />
-              <Stack.Screen name="payroll" options={{ title: t('nav.payroll') }} />
-              <Stack.Screen name="payroll-report" options={{ title: 'דוח שכר' }} />
-              <Stack.Screen name="course-form" options={{ title: 'קורס' }} />
-              <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
-              <Stack.Screen name="archive" options={{ title: t('nav.archive') }} />
-              <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
-              <Stack.Screen name="holidays" options={{ title: t('nav.holidays') }} />
-              <Stack.Screen name="data" options={{ title: t('nav.data') }} />
-              <Stack.Screen name="sharing" options={{ title: t('nav.sharing') }} />
-              <Stack.Screen name="mail-report" options={{ title: t('nav.mailReport') }} />
-            </Stack>
-          </View>
+    <DrawerProvider>
+      <StatusBar style="dark" />
+      <DemoSeeder />
+      <BackupScheduler />
+      <MailSync />
+      <ExitGuard />
+      <BlockedWriteNotice />
+      {/* במסך רחב: תפריט קבוע בצד ההתחלה (ימין בעברית) והניווט לצדו */}
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        {wide ? <SideNav /> : null}
+        <View style={{ flex: 1 }}>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: barBg },
+              headerTintColor: barFg,
+              headerTitleStyle: { fontWeight: '700', fontSize: 20 },
+              headerShadowVisible: false,
+              headerBackTitle: t('common.back'),
+              contentStyle: { backgroundColor: colors.background },
+              // דפוס אנדרואיד/Google בעברית: headerLeft מוצג מימין — ☰ במסך הראשי,
+              // חץ חזרה במסכים פנימיים; headerRight מוצג משמאל — ⋮ במסכים פנימיים.
+              headerLeft: (props) => (
+                <HeaderStart canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
+              ),
+              headerBackVisible: false,
+              headerRight: (props) => (
+                <HeaderEnd canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
+              ),
+            }}
+          >
+            <Stack.Screen name="index" options={{ title: t('nav.home') }} />
+            <Stack.Screen name="dashboard" options={{ title: t('nav.dashboard') }} />
+            <Stack.Screen name="report" options={{ title: t('nav.report') }} />
+            <Stack.Screen name="reports" options={{ title: t('nav.reports') }} />
+            <Stack.Screen name="report-view" options={{ title: 'דיווח' }} />
+            <Stack.Screen name="workplaces" options={{ title: t('nav.workplaces') }} />
+            <Stack.Screen name="workplace" options={{ title: t('nav.workplaceForm') }} />
+            <Stack.Screen
+              name="workplace-form"
+              options={{ title: t('nav.workplaceForm') }}
+            />
+            <Stack.Screen name="payments" options={{ title: t('nav.payments') }} />
+            <Stack.Screen name="tax" options={{ title: t('nav.tax') }} />
+            <Stack.Screen name="profile" options={{ title: t('nav.profile') }} />
+            <Stack.Screen name="payroll" options={{ title: t('nav.payroll') }} />
+            <Stack.Screen name="payroll-report" options={{ title: 'דוח שכר' }} />
+            <Stack.Screen name="course-form" options={{ title: 'קורס' }} />
+            <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
+            <Stack.Screen name="archive" options={{ title: t('nav.archive') }} />
+            <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
+            <Stack.Screen name="holidays" options={{ title: t('nav.holidays') }} />
+            <Stack.Screen name="data" options={{ title: t('nav.data') }} />
+            <Stack.Screen name="sharing" options={{ title: t('nav.sharing') }} />
+            <Stack.Screen name="mail-report" options={{ title: t('nav.mailReport') }} />
+          </Stack>
         </View>
-      </DrawerProvider>
-    </UpdateProvider>
+      </View>
+    </DrawerProvider>
   );
 }
