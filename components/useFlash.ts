@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated } from 'react-native';
+import { Animated, Easing } from 'react-native';
 
 /**
  * אפקט חזותי מינימלי למעבר תקופה / עמוד: הבהוב (שקיפות) והחלקה קצרה
@@ -41,4 +41,28 @@ export function useFade(key: unknown, duration = 120) {
     Animated.timing(v, { toValue: 1, duration, useNativeDriver: true }).start();
   }, [key, v, duration]);
   return { opacity: v };
+}
+
+/**
+ * מעבר רך בין ימים בלו״ז הבית: התוכן החדש נכנס בהחלקה קצרה מכיוון המעבר, עם עמעום הדרגתי
+ * והאטה בסוף (במקום הבהוב). לא פועל בטעינה הראשונה.
+ * @param key  משתנה כשהתוכן מתחלף (היום שנבחר)
+ * @param dir  1 = קדימה (יום מאוחר יותר), -1 = אחורה
+ */
+export function useSlideFade(key: unknown, dir: 1 | -1 = 1, duration = 260) {
+  const v = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    v.setValue(0);
+    Animated.timing(v, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [key, v, duration]);
+  return {
+    opacity: v,
+    // RTL: היום הבא נמצא משמאל — התוכן החדש מגיע משמאל.
+    transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [dir * -28, 0] }) }],
+  };
 }

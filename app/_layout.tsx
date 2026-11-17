@@ -10,6 +10,7 @@ import { ExitGuard } from '../components/ExitGuard';
 import { ToastProvider } from '../components/Toast';
 import { WheelOverlayHost } from '../components/WheelOverlay';
 import { UpdateProvider } from '../components/UpdateChecker';
+import { AppLockScreen } from '../components/AppLock';
 import { DemoSeeder } from '../components/DemoSeeder';
 import { BackupScheduler } from '../components/BackupScheduler';
 import { MailSync } from '../components/MailSync';
@@ -38,6 +39,7 @@ export default function RootLayout() {
             </SyncedTree>
           </SyncProvider>
         </UpdateProvider>
+        <AppLockScreen />
       </ThemeProvider>
     </I18nProvider>
   );

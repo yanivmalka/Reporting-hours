@@ -32,6 +32,12 @@
       "expo-router",
       "expo-localization",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "האפליקציה משתמשת בזיהוי פנים כדי לפתוח את הנעילה."
+        }
+      ],
+      [
         "expo-contacts",
         {
           "contactsPermission": "האפליקציה ניגשת לאנשי הקשר כדי לבחור מספר טלפון להזמנת מונית."

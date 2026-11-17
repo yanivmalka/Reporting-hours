@@ -34,6 +34,7 @@ import { useI18n } from '../lib/i18n';
 import type { Lang } from '../lib/strings';
 import { useTheme } from '../theme/ThemeContext';
 import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
+import { AppLockSetting } from './AppLock';
 import { setTrackingStart, useTrackingStart } from '../lib/trackingStart';
 import { todayISO } from '../lib/time';
 import { DateField } from './DatePicker';
@@ -514,6 +515,8 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
               <Text style={drawerStyles.navItemText}>הצגת תאריך עברי</Text>
             </Pressable>
           </View>
+
+          <AppLockSetting />
 
           <View style={drawerStyles.section}>
             <SectionLabel icon="calendar-start" text="תחילת עבודה עם המערכת" />
