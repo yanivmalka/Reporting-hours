@@ -50,6 +50,7 @@ const REGISTRY = {
   demoAuto: def('reporting-hours/demo-auto/v1', 'device'),
   mailSeen: def('reporting-hours/mail-seen/v1', 'device'),
   updateDownload: def('reporting-hours/update-download/v1', 'device'),
+  appLock: def('reporting-hours/app-lock/v1', 'device'),
 } as const;
 
 type Registry = typeof REGISTRY;

@@ -12,7 +12,7 @@ import { Pressable } from '../components/Pressable';
 import { Icon } from '../components/Icon';
 import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
-import { useFade } from '../components/useFlash';
+import { useSlideFade } from '../components/useFlash';
 import { useSessionCancel } from '../components/SessionCancelDialog';
 import { useSessionSheet } from '../components/SessionSheet';
 import { FLAG_ICON, loadSessionNotes, noteFor, type SessionNote } from '../lib/sessionNotes';
@@ -103,6 +103,7 @@ export default function HomeScreen() {
   const [dismissed, setDismissed] = useState<string[]>([]);
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
   const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
+  const [dayDir, setDayDir] = useState<1 | -1>(1);
   const sessionDialog = useSessionCancel();
   const sessionSheet = useSessionSheet();
   // התראות מוסתרות שהוצגו שוב ("הצג") — עד שסוגרים שוב
@@ -179,13 +180,14 @@ export default function HomeScreen() {
 
   function pickDay(i: number) {
     if (i < 0 || i >= days.length || i === dayIdx) return;
+    setDayDir(i > dayIdx ? 1 : -1);
     setDayIdx(i);
   }
   const swipe = useSwipe(
     () => pickDay(dayIdx + 1),
     () => pickDay(dayIdx - 1),
   );
-  const flash = useFade(dayIdx);
+  const flash = useSlideFade(dayIdx, dayDir);
 
   function openCancel(item: AgendaItem) {
     sessionDialog.open({
