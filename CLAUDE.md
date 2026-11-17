@@ -5,6 +5,7 @@
 ## תהליך עבודה
 
 - כל שינוי בענף חדש מ־`main` ← PR ← **מיזוג אוטומטי** אחרי שעוברים `npm run check` (טיפוסים + בדיקות יחידה) ו־`npx expo export --platform web`. אין צורך לחכות לאישור. אותן בדיקות רצות ב־CI על כל PR (`.github/workflows/check.yml`).
+- **מסך גדול** מפוצל לתיקייה ב־`components/` (ראו `components/report/`, `components/workplaceForm/`, `components/journal/`): hook של מצב ופעולות, פונקציית נגזרות אחרי הטעינה, רכיב לכל חלק שמקבל `w`, `styles.ts` ו־`shared.ts`. שינוי במסך כזה נעשה ברכיב או ב־hook, לא בקובץ ב־`app/`.
 - **בדיקות** (`test/`, Vitest): שינוי בחישוב ב־`lib/` (שכר, שעות, חגים, ביטולים, גיבוי) מגיע עם בדיקה. סקירת הארכיטקטורה והמלצות ההמשך ב־[docs/architecture.md](./docs/architecture.md).
 - מיזוג ל־`main` מפרסם את האתר ב־GitHub Pages **ובונה APK** (GitHub Release ‏`v0.1.<מספר בנייה>`) — בכל מיזוג, גם בשינויי JS בלבד. כך כל שינוי מגיע לאפליקציה בטלפון.
 - תיאורי commit ו־PR בעברית.

@@ -1,0 +1,171 @@
+/** סגנונות טופס מקום העבודה — משותפים למסך ולכל הקבוצות (components/workplaceForm). */
+import { StyleSheet } from 'react-native';
+import { radius, spacing, type AppColors } from '../../theme/colors';
+import { TEXT_RIGHT } from '../../theme/align';
+
+export const makeWorkplaceFormStyles = (colors: AppColors) =>
+  StyleSheet.create({
+    swatches: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    swatch: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 3,
+      borderColor: 'transparent',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    swatchCheck: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  courses: {
+    gap: spacing.sm,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  linkRowText: { flex: 1, fontSize: 14, color: colors.text, textAlign: TEXT_RIGHT },
+  linkRowChevron: { fontSize: 20, color: colors.textMuted },
+  deleteNote: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: TEXT_RIGHT,
+  },
+  course: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: 2,
+  },
+  courseName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: TEXT_RIGHT,
+  },
+  courseMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: TEXT_RIGHT,
+  },
+  contacts: {
+    gap: spacing.sm,
+  },
+  contactCard: {
+    gap: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  removeBtn: {
+    width: 44,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeText: {
+    fontSize: 18,
+    color: colors.textMuted,
+  },
+  contactError: {
+    fontSize: 13,
+    color: colors.danger,
+    textAlign: TEXT_RIGHT,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  contactBtn: {
+    height: 48,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: 2,
+  },
+  termsChip: {
+    minWidth: 40,
+    height: 36,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  termsChipOn: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  termsChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  termsChipTextOn: {
+    color: colors.textOnBrand,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actions: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  group: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
+  groupTexts: { flex: 1, minWidth: 0, gap: 2 },
+  groupTitle: { fontSize: 16, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
+  groupTitleBig: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
+  groupSummary: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
+  groupBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.md },
+  highlight: { gap: spacing.md, borderRadius: radius.md, margin: -6, padding: 6 },
+  stepper: { flexDirection: 'row', justifyContent: 'space-between' },
+  stepItem: { flex: 1, alignItems: 'center', gap: 4 },
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  stepDotOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  stepNum: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+  stepNumOn: { color: colors.textOnBrand },
+  stepLabel: { fontSize: 11, color: colors.textMuted, textAlign: 'center' },
+  stepLabelOn: { color: colors.brand, fontWeight: '800' },
+});
