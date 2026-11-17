@@ -44,7 +44,7 @@ export function basisFor(w: { payBasis?: PayBasis } | null | undefined, fallback
 
 const STORAGE_KEY = KEYS.payBasis;
 
-function isPayBasis(value: unknown): value is PayBasis {
+export function isPayBasis(value: unknown): value is PayBasis {
   return value === 'academic' || value === 'regular';
 }
 

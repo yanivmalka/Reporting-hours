@@ -32,6 +32,7 @@ import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { EnterChevron } from '../components/Chevrons';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { ViaEmail } from '../components/ViaEmail';
 
 const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -175,6 +176,8 @@ export default function ReportViewScreen() {
           );
         })}
       </View>
+
+      {report.viaEmail ? <ViaEmail via={report.viaEmail} /> : null}
 
       {lockedStart && workplace ? (
         <>

@@ -12,6 +12,7 @@ import { WheelOverlayHost } from '../components/WheelOverlay';
 import { UpdateProvider } from '../components/UpdateChecker';
 import { DemoSeeder } from '../components/DemoSeeder';
 import { BackupScheduler } from '../components/BackupScheduler';
+import { MailSync } from '../components/MailSync';
 import { SyncProvider, useCloudSync } from '../components/CloudSync';
 import { BlockedWriteNotice } from '../components/Access';
 import { I18nProvider, useI18n } from '../lib/i18n';
@@ -60,6 +61,7 @@ function Chrome() {
         <StatusBar style="dark" />
         <DemoSeeder />
         <BackupScheduler />
+        <MailSync />
         <ExitGuard />
         <BlockedWriteNotice />
         {/* במסך רחב: תפריט קבוע בצד ההתחלה (ימין בעברית) והניווט לצדו */}
@@ -108,6 +110,7 @@ function Chrome() {
               <Stack.Screen name="holidays" options={{ title: t('nav.holidays') }} />
               <Stack.Screen name="data" options={{ title: t('nav.data') }} />
               <Stack.Screen name="sharing" options={{ title: t('nav.sharing') }} />
+              <Stack.Screen name="mail-report" options={{ title: t('nav.mailReport') }} />
             </Stack>
           </View>
         </View>

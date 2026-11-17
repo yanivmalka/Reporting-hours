@@ -56,6 +56,8 @@ export type WorkReport = {
    * `courseId`. נספר בקורס ובדוח השכר, ואינו "מכסה" מפגש מתוכנן.
    */
   extraKind?: ExtraSessionKind;
+  /** דיווח שהתקבל בתשובה למייל (lib/mailReport.ts): הטקסט שנכתב ומתי התקבל */
+  viaEmail?: { text: string; receivedAt: number };
   /** דיווח שנוצר כנתוני הדגמה (lib/demo.ts) — נמחק ב"איפוס נתוני הדגמה" */
   demo?: boolean;
   /** חותמת יצירה (מילישניות) — לסידור דיווחים באותו תאריך */
