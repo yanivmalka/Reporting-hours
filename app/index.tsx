@@ -28,12 +28,15 @@ import { loadReports } from '../lib/reports';
 import { loadDismissedRecommendations } from '../lib/recommend';
 import { readJSON, writeJSON } from '../lib/storage';
 import { isTaxi, loadWorkplaces, type Workplace } from '../lib/workplaces';
-import { isoDate } from '../lib/dashboard';
+import { currentPayPeriod, isoDate, monthName, periodMonthKey } from '../lib/dashboard';
+import { periodForecast } from '../lib/forecast';
+import { formatShekels } from '../lib/travel';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useWorkplaceColor } from '../theme/workplaceColors';
+import { mix } from '../theme/shades';
 import { KEYS } from '../lib/keys';
 import { useScreenData } from '../components/useScreenData';
 
@@ -54,7 +57,33 @@ type Data = {
   next: NextRelevant;
   courses: Course[];
   workplaces: Workplace[];
+  /** סכום החודש (תקופת השכר הנוכחית) בכל המקומות הפעילים: דווח מול צפי */
+  month: { reported: number; forecast: number; label: string } | null;
 };
+
+/** סכום תקופת השכר הנוכחית בכל מקומות העבודה הפעילים — לאריח לוח הבקרה. */
+function monthSummary(
+  workplaces: Workplace[],
+  reports: Parameters<typeof periodForecast>[2],
+  courses: Course[],
+  payroll: Parameters<typeof periodForecast>[4],
+  basis: Parameters<typeof periodForecast>[5],
+  at: Date,
+): Data['month'] {
+  const active = workplaces.filter((w) => !w.archivedAt && !w.deletedAt);
+  if (!active.length) return null;
+  let reported = 0;
+  let forecast = 0;
+  let label = '';
+  for (const w of active) {
+    const period = currentPayPeriod(w.payday, at);
+    const f = periodForecast(w, period, reports, courses, payroll, basis, at);
+    reported += f.reported;
+    forecast += f.forecast;
+    if (!label) label = monthName(periodMonthKey(period)).split(' ')[0];
+  }
+  return { reported, forecast, label };
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -105,6 +134,7 @@ export default function HomeScreen() {
         next: nextRelevantDay(courses, workplaces, reports, at),
         courses,
         workplaces,
+        month: monthSummary(workplaces, reports, courses, payroll, basis, at),
       });
     },
   );
@@ -196,49 +226,88 @@ export default function HomeScreen() {
         ) : null}
       </View>
 
-      <View style={styles.topRow}>
-        {canReport ? (
+      {canReport ? (
         <Pressable
           onPress={() => router.push(reportHref)}
           accessibilityRole="button"
           accessibilityLabel={missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}
-          style={({ pressed }) => [styles.reportBtn, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.hero, pressed && styles.pressed]}
         >
-          <View style={styles.reportIcon}>
-            <Icon name={missingMode ? 'clipboard-plus-outline' : 'plus'} size={26} color={colors.textOnBrand} />
-          </View>
-          <View style={styles.reportTexts}>
-            <Text style={styles.reportTitle} numberOfLines={1}>
-              {missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}
-            </Text>
-            {next?.course ? (
-              <>
-                <Text style={styles.reportSub} numberOfLines={1} ellipsizeMode="tail">
-                  {next.course.name}
-                </Text>
-                <Text style={styles.reportSub} numberOfLines={1}>
-                  {next.kind === 'today' ? 'היום' : shortWeekday(next.date)} ·{' '}
-                  {timeRange(next.course.start, next.course.end)}
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.reportSub} numberOfLines={2}>
-                בחירת קורס או מקום עבודה, שעות והפסקות
+          <View style={styles.heroTop}>
+            <View style={styles.heroChip}>
+              <Text style={styles.heroChipText}>
+                {missingMode ? 'דיווח חסר' : next?.kind === 'today' ? 'ממתין לדיווח' : 'דיווח חדש'}
               </Text>
-            )}
+            </View>
+            {next?.course ? (
+              <Text style={styles.heroWhen} numberOfLines={1}>
+                {next.kind === 'today' ? 'היום' : shortWeekday(next.date)} · {timeRange(next.course.start, next.course.end)}
+              </Text>
+            ) : null}
+          </View>
+          {next?.course ? (
+            <View style={styles.heroTexts}>
+              <Text style={styles.heroTitle} numberOfLines={2}>
+                {next.course.name}
+              </Text>
+              <Text style={styles.heroSub} numberOfLines={1}>
+                {data?.workplaces.find((w) => w.id === next.course?.workplaceId)?.name ?? ''}
+                {next.count > 1 ? ` · ועוד ${next.count - 1}` : ''}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.heroTexts}>
+              <Text style={styles.heroTitle}>אין מפגש שממתין לדיווח</Text>
+              <Text style={styles.heroSub}>בחירת קורס או מקום עבודה, שעות והפסקות</Text>
+            </View>
+          )}
+          <View style={styles.heroBtn}>
+            <Icon name={missingMode ? 'clipboard-plus-outline' : 'plus'} size={22} color={colors.text} />
+            <Text style={styles.heroBtnText}>{missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}</Text>
           </View>
         </Pressable>
-        ) : null}
-        <Pressable
-          onPress={() => router.push('/dashboard')}
-          accessibilityRole="link"
-          accessibilityLabel="לוח בקרה"
-          style={({ pressed }) => [styles.dashTile, pressed && styles.pressed]}
-        >
-          <Icon name="view-dashboard-outline" size={28} color={colors.brand} />
-          <Text style={styles.dashTileText}>לוח בקרה</Text>
-        </Pressable>
-      </View>
+      ) : null}
+
+      <Pressable
+        onPress={() => router.push('/dashboard')}
+        accessibilityRole="link"
+        accessibilityLabel="לוח בקרה"
+        style={({ pressed }) => [styles.monthTile, pressed && styles.pressed]}
+      >
+        <View style={styles.monthHead}>
+          <Text style={styles.monthLabel}>לוח בקרה{data?.month ? ` · ${data.month.label}` : ''}</Text>
+          <View style={styles.monthHeadEnd}>
+            {data?.month && data.month.forecast > 0 ? (
+              <Text style={styles.monthLabel}>צפי {formatShekels(Math.round(data.month.forecast))}</Text>
+            ) : null}
+            <EnterChevron size={16} />
+          </View>
+        </View>
+        {data?.month ? (
+          <>
+            <View style={styles.monthRow}>
+              <Text style={styles.monthValue}>{formatShekels(Math.round(data.month.reported))}</Text>
+              {data.month.forecast > 0 ? (
+                <Text style={styles.monthLabel}>
+                  {Math.round((data.month.reported / data.month.forecast) * 100)}% מהצפי
+                </Text>
+              ) : null}
+            </View>
+            {data.month.forecast > 0 ? (
+              <View style={styles.monthTrack}>
+                <View
+                  style={[
+                    styles.monthFill,
+                    { width: `${Math.min(100, Math.round((data.month.reported / data.month.forecast) * 100))}%` },
+                  ]}
+                />
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <Text style={styles.monthValue}>—</Text>
+        )}
+      </Pressable>
 
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>הלו״ז שלי</Text>
@@ -266,10 +335,10 @@ export default function HomeScreen() {
               accessibilityLabel={`${d.label}, ${d.dayLabel}${dot ? `, ${dot.label}` : ''}`}
               style={({ pressed }) => [styles.dayTab, active && styles.dayTabActive, pressed && styles.pressed]}
             >
-              <Text style={[styles.dayTabLabel, active && styles.dayTabTextActive]} numberOfLines={1}>
+              <Text style={[styles.dayTabLabel, active && styles.dayTabLabelActive]} numberOfLines={1}>
                 {d.label}
               </Text>
-              <Text style={[styles.dayTabDate, active && styles.dayTabTextActive]}>{shortDay(d.date)}</Text>
+              <Text style={[styles.dayTabNum, active && styles.dayTabTextActive]}>{Number(d.date.slice(8))}</Text>
               <View
                 style={[
                   styles.dayTabDot,
@@ -430,20 +499,15 @@ function shortWeekday(iso: string): string {
   return `${WEEKDAY_SHORT[new Date(y, m - 1, d).getDay()]} ${d}.${m}`;
 }
 
-/** "3.11" */
-const shortDay = (iso: string) => {
-  const [, m, d] = iso.split('-').map(Number);
-  return `${d}.${m}`;
-};
 
 function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void }) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const tone =
     item.status === 'reported'
-      ? { bg: colors.brandLight, fg: colors.success }
+      ? { bg: mix(colors.success, colors.surface, 0.88), fg: colors.success }
       : item.status === 'pending'
-        ? { bg: colors.background, fg: colors.warning }
+        ? { bg: mix(colors.warning, colors.surface, 0.86), fg: colors.warning }
         : item.status === 'now'
           ? { bg: colors.brand, fg: colors.textOnBrand }
           : item.status === 'canceled'
@@ -502,9 +566,13 @@ function AlertCard({
       disabled={!alert.action}
       accessibilityRole={alert.action ? 'button' : undefined}
       accessibilityLabel={alert.action ? `${alert.title} — ${alert.action.label}` : undefined}
-      style={({ pressed }) => [styles.alert, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.alert,
+        alert.tone === 'warn' || alert.tone === 'danger' ? { backgroundColor: mix(fg, colors.surface, 0.93) } : null,
+        pressed && styles.pressed,
+      ]}
     >
-      <View style={[styles.alertIcon, { borderColor: fg }]}>
+      <View style={[styles.alertIcon, { backgroundColor: mix(fg, colors.surface, 0.82) }]}>
         <Icon name={alert.icon} size={20} color={fg} />
       </View>
       <View style={styles.alertTexts}>
@@ -538,45 +606,45 @@ const makeStyles = (colors: AppColors) =>
     date: { fontSize: 15, color: colors.textMuted, textAlign: TEXT_RIGHT },
     context: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
 
-    topRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
-    reportBtn: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      minHeight: 104,
-      paddingHorizontal: 18,
-      paddingVertical: 14,
-      borderRadius: 28,
+    // כרטיס הדיווח הבא — כמו בעיצוב: צ׳יפ מצב, שם הקורס בגדול וכפתור לבן.
+    hero: {
       backgroundColor: colors.brand,
+      borderRadius: 28,
+      padding: 20,
+      gap: 14,
       elevation: 4,
       shadowColor: colors.brandDark,
       shadowOpacity: 0.25,
       shadowRadius: 14,
       shadowOffset: { width: 0, height: 6 },
     },
-    reportIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 16,
-      backgroundColor: 'rgba(255,255,255,0.2)',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    reportTexts: { flex: 1, minWidth: 0, gap: 2 },
-    reportTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.2, color: colors.textOnBrand, textAlign: TEXT_RIGHT },
-    dashTile: {
-      width: 96,
-      minHeight: 104,
-      borderRadius: 28,
+    heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+    heroChip: { backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 },
+    heroChipText: { fontSize: 13, fontWeight: '700', color: colors.text },
+    heroWhen: { flexShrink: 1, fontSize: 14, fontWeight: '700', color: colors.textOnBrand },
+    heroTexts: { gap: 2 },
+    heroTitle: { fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.3, color: colors.textOnBrand, textAlign: TEXT_RIGHT },
+    heroSub: { fontSize: 15, lineHeight: 22, color: colors.textOnBrand, opacity: 0.92, textAlign: TEXT_RIGHT },
+    heroBtn: {
+      height: 54,
+      borderRadius: 18,
       backgroundColor: colors.surface,
-      ...cardShadow,
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
+      gap: spacing.sm,
     },
-    dashTileText: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center' },
-    reportSub: { fontSize: 14, color: colors.textOnBrand, opacity: 0.9, textAlign: TEXT_RIGHT },
+    heroBtnText: { fontSize: 17, fontWeight: '700', color: colors.text },
+
+    // אריח לוח הבקרה — סכום החודש מול הצפי, עם פס התקדמות.
+    monthTile: { backgroundColor: colors.surface, borderRadius: 22, padding: 16, gap: 10, ...cardShadow },
+    monthHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+    monthHeadEnd: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+    monthLabel: { fontSize: 13, color: colors.textMuted },
+    monthRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+    monthValue: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5, color: colors.text, textAlign: TEXT_RIGHT },
+    monthTrack: { height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden', flexDirection: 'row' },
+    monthFill: { height: 8, borderRadius: 4, backgroundColor: colors.brand },
 
     sectionHead: {
       flexDirection: 'row',
@@ -600,8 +668,9 @@ const makeStyles = (colors: AppColors) =>
       ...cardShadow,
     },
     dayTabActive: { backgroundColor: colors.text },
-    dayTabLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
-    dayTabDate: { fontSize: 12, color: colors.textMuted },
+    dayTabLabel: { fontSize: 12, color: colors.textMuted },
+    dayTabLabelActive: { color: colors.border },
+    dayTabNum: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.text },
     dayTabTextActive: { color: colors.textOnBrand },
     dayTabDot: {
       width: 9,
@@ -612,27 +681,23 @@ const makeStyles = (colors: AppColors) =>
       borderColor: 'transparent',
       backgroundColor: 'transparent',
     },
-    dayCard: {
-      backgroundColor: colors.surface,
-      borderRadius: radius.lg,
-      ...cardShadow,
-      padding: spacing.md,
-      gap: spacing.sm,
-    },
-    dayHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+    dayCard: { gap: spacing.sm },
+    dayHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, paddingHorizontal: 2 },
     dayLabel: { fontSize: 17, fontWeight: '800', color: colors.text },
     dayDate: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
     session: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.sm,
-      paddingTop: 10,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-      minHeight: 52,
+      gap: 12,
+      minHeight: 64,
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      ...cardShadow,
     },
     sessionTexts: { flex: 1, gap: 2 },
-    sessionBar: { width: 6, alignSelf: 'stretch', borderRadius: 3, marginBottom: 2 },
+    sessionBar: { width: 6, height: 40, borderRadius: 3 },
     sessionBarCanceled: { opacity: 0.35 },
     sessionName: { fontSize: 16, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     sessionCanceled: { textDecorationLine: 'line-through', color: colors.textMuted },
@@ -651,17 +716,24 @@ const makeStyles = (colors: AppColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      minHeight: 44,
+      minHeight: 52,
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      ...cardShadow,
     },
     nextCourseText: { flex: 1, fontSize: 14, color: colors.text, textAlign: TEXT_RIGHT },
     emptyDay: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      paddingTop: 10,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-      minHeight: 52,
+      minHeight: 56,
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      ...cardShadow,
     },
     emptyText: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
 
@@ -688,8 +760,7 @@ const makeStyles = (colors: AppColors) =>
     alertIcon: {
       width: 40,
       height: 40,
-      borderRadius: 14,
-      borderWidth: 1.5,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
     },

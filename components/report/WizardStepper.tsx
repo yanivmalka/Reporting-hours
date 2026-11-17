@@ -14,24 +14,10 @@ export function WizardStepper({ w }: { w: ReportWizard }) {
         const isCurrent = i === stepIndex;
         return (
           <View key={x.label} style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepDot,
-                (isDone || step === 'done') && styles.stepDotDone,
-                isCurrent && styles.stepDotCurrent,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.stepNum,
-                  (isDone || isCurrent || step === 'done') && styles.stepNumOn,
-                ]}
-              >
-                {isDone || step === 'done' ? '✓' : i + 1}
-              </Text>
-            </View>
-            <Text style={[styles.stepLabel, isCurrent && styles.stepLabelCurrent]}>
-              {x.label}
+            {/* פס התקדמות לכל שלב — מלא בשלב שהושלם ובשלב הנוכחי */}
+            <View style={[styles.stepBar, (isDone || isCurrent || step === 'done') && styles.stepBarOn]} />
+            <Text style={[styles.stepLabel, isCurrent && styles.stepLabelCurrent]} numberOfLines={1}>
+              {i + 1} · {x.label}
             </Text>
           </View>
         );

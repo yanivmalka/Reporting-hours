@@ -450,11 +450,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       justifyContent: 'center',
     },
     dayToday: {
-      borderWidth: 1.5,
-      borderColor: c.brand,
+      backgroundColor: c.border,
     },
     daySelected: {
-      backgroundColor: c.brand,
+      backgroundColor: c.text,
     },
     dayText: {
       fontSize: 15,

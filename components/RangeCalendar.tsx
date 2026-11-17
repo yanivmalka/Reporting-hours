@@ -314,11 +314,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       backgroundColor: c.brandLight,
     },
     dayEdge: {
-      backgroundColor: c.brand,
+      backgroundColor: c.text,
     },
     dayToday: {
-      borderWidth: 1.5,
-      borderColor: c.brand,
+      backgroundColor: c.border,
     },
     dayText: {
       fontSize: 15,
