@@ -14,7 +14,7 @@ import { loadLeftoverMode } from '../../lib/leftover';
 import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../../lib/accumulated';
 import { usePayBasis } from '../../lib/payBasis';
 import { addReport, deleteReport, loadReports, makeBreakId, updateReport, type ExtraSessionKind, type WorkReport } from '../../lib/reports';
-import { courseReported, coursesOn, loadCourses, timeRange, type Course } from '../../lib/courses';
+import { courseReported, canceledOn, coursesOn, loadCourses, timeRange, type Course } from '../../lib/courses';
 import { currentPayPeriod } from '../../lib/dashboard';
 import { isLocked, loadPayrollStatus, statusKey } from '../../lib/payroll';
 import { isValidISODate, todayISO } from '../../lib/time';
@@ -488,6 +488,10 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
   const activeCourses = coursesOn(courses, date).filter(
     (c) => pickable.some((w) => w.id === c.workplaceId) && (!lockWp || c.workplaceId === lockWp),
   );
+  // מפגשים שתוכננו לתאריך ולא מתקיימים (בוטל / הועבר / חג) — מוצגים עם הסיבה, במקום "אין קורסים".
+  const canceledCourses = canceledOn(courses, date).filter(
+    (x) => pickable.some((w) => w.id === x.course.workplaceId) && (!lockWp || x.course.workplaceId === lockWp),
+  );
 
   /**
    * בחירת קורס. כשהשעות כבר הוזנו ונבחר קורס מתוך כמה שחופפים לטווח —
@@ -710,6 +714,7 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
     lockWp,
     pickable,
     activeCourses,
+    canceledCourses,
     nextMissingAll,
     nextMissing,
     reportedCourse,

@@ -136,6 +136,15 @@ export const makeReportStyles = (colors: AppColors) =>
   markTodo: {
     color: colors.warning,
   },
+  markCanceled: {
+    color: colors.textMuted,
+  },
+  dayCourseCanceled: {
+    opacity: 0.7,
+  },
+  strike: {
+    textDecorationLine: 'line-through',
+  },
   dayCourseTexts: {
     flex: 1,
     gap: 1,
@@ -174,6 +183,9 @@ export const makeReportStyles = (colors: AppColors) =>
   netCol: { flexGrow: 1, flexBasis: '40%', gap: 2 },
   netLabel: { fontSize: 13, color: colors.border, textAlign: TEXT_RIGHT },
   netValue: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3, color: colors.surface, textAlign: TEXT_RIGHT },
+  netLeftover: { flexBasis: '100%', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 18 },
+  netLeftoverText: { flexShrink: 1, fontSize: 12, color: colors.border, opacity: 0.85, textAlign: TEXT_RIGHT },
+  netLeftoverLink: { fontSize: 12, color: colors.surface, textDecorationLine: 'underline' },
   error: {
     fontSize: 13,
     color: colors.danger,
@@ -328,20 +340,6 @@ export const makeReportStyles = (colors: AppColors) =>
     color: colors.textMuted,
     textAlign: TEXT_RIGHT,
     marginTop: -spacing.sm,
-  },
-  leftoverRow: {
-    gap: 2,
-  },
-  leftoverText: {
-    fontSize: 14,
-    color: colors.text,
-    textAlign: TEXT_RIGHT,
-  },
-  leftoverLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 2,
   },
   timesRow: {
     flexDirection: 'row',

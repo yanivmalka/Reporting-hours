@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, StyleSheet, View, type ScrollView } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
@@ -83,6 +83,7 @@ export default function DashboardScreen() {
   const [navDir, setNavDir] = useState<1 | -1>(1);
   /** עמוד בלוח הבקרה: 0 — צפי ותשלומים · 1 — סיכום וניתוח (התקופה לפי שכר, פילוחים ומגמות) */
   const [page, setPage] = useState<0 | 1>(0);
+  const scrollRef = useRef<ScrollView>(null);
   const [pageDir, setPageDir] = useState<1 | -1>(1);
   const pageFlash = useFlash(page, pageDir);
   const listFlash = useFlash(`${res}|${anchor.year}-${anchor.month0}|${selMonth}|${selWp}`, navDir);
@@ -349,13 +350,15 @@ export default function DashboardScreen() {
   const maxWeekday = Math.max(...view.weekdays.map((w) => w.avgAcademicHours), 1);
   const r = view.rounding;
   const roundingTotal = r.exact + r.withLeftover || 1;
+  // מעבר עמוד (בלשונית או בכפתור שבתחתית) — העמוד החדש נפתח מראשו.
   const goPage = (p: 0 | 1) => {
     setPageDir(p > page ? 1 : -1);
     setPage(p);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
   };
 
   return (
-    <Screen>
+    <Screen scrollRef={scrollRef}>
       <View style={styles.pager} accessibilityRole="tablist">
         {(['צפי ותשלומים', 'סיכום וניתוח'] as const).map((label, i) => (
           <Pressable

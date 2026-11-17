@@ -182,6 +182,22 @@ export function coursesOn(
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 
+/**
+ * מפגשים שתוכננו לתאריך ולא מתקיימים (בוטל, הועבר, חג, חופשה) — לתצוגה בשלב התאריך,
+ * במקום "אין קורסים". מפגש שנמחק מהתכנון (`removed`) לא מוצג.
+ */
+export function canceledOn(
+  courses: readonly Course[],
+  date: string,
+  cancel: CancelIndex = currentCancel(),
+): { course: Course; cancel: Cancellation }[] {
+  return courses
+    .filter((c) => occursOn(c, date))
+    .map((c) => ({ course: c, cancel: sessionCancel(c, date, cancel) }))
+    .filter((x): x is { course: Course; cancel: Cancellation } => x.cancel != null && x.cancel.kind !== 'removed')
+    .sort((a, b) => a.course.start.localeCompare(b.course.start));
+}
+
 /** תאריכי המפגשים שמתקיימים בטווח [start, end] (כולל) — בלי מבוטלים, כולל נוספים ומועברים. */
 export function occurrences(
   course: Course,

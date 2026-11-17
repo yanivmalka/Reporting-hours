@@ -3,13 +3,28 @@ import { Text } from '../Text';
 import { Pressable } from '../Pressable';
 import { DatePicker } from '../DatePicker';
 import { FormField } from '../FormField';
-import { timeRange } from '../../lib/courses';
+import { timeRange, WEEKDAY_SHORT } from '../../lib/courses';
+import { dateFromIso } from '../../lib/dates';
+import type { Cancellation } from '../../lib/sessions';
 import { todayISO } from '../../lib/time';
 import type { ReportWizard } from './useReportWizard';
 
+/** "ג׳ 18.11" */
+function dayShort(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${WEEKDAY_SHORT[dateFromIso(iso).getDay()]} ${d}.${m}`;
+}
+
+/** סטטוס מפגש שלא מתקיים: "הועבר ל־ג׳ 18.11" · "בוטל · מחלה" · "לא מתקיים · חנוכה". */
+function cancelLabel(c: Cancellation): string {
+  if (c.kind === 'moved' && c.movedTo) return `הועבר ל־${dayShort(c.movedTo)}`;
+  const base = c.kind === 'canceled' ? 'בוטל' : 'לא מתקיים';
+  return c.reason ? `${base} · ${c.reason}` : base;
+}
+
 /** שלב 1: בחירת התאריך. */
 export function DateStep({ w }: { w: ReportWizard }) {
-  const { styles, colorOf, workplaces, step, date, errors, openOnDate, changeDate, workedDates, activeCourses, nextMissing, reportedCourse, workplaceName } = w;
+  const { styles, colorOf, workplaces, step, date, errors, openOnDate, changeDate, workedDates, activeCourses, canceledCourses, nextMissing, reportedCourse, workplaceName } = w;
   return (
     <>
     {/* ── 1. תאריך ── */}
@@ -41,16 +56,23 @@ export function DateStep({ w }: { w: ReportWizard }) {
             </View>
           </View>
         ) : null}
-        {activeCourses.length > 0 ? (
+        {activeCourses.length > 0 || canceledCourses.length > 0 ? (
           <View style={styles.dayCourses}>
-            <Text style={styles.dayCoursesTitle}>
-              {activeCourses.length === 1 ? 'קורס אחד' : `${activeCourses.length} קורסים`} ביום זה
-              {' · '}
-              {activeCourses.filter(reportedCourse).length} דווחו
-              {activeCourses.some((c) => !reportedCourse(c))
-                ? ` · ${activeCourses.filter((c) => !reportedCourse(c)).length} נדרש דיווח`
-                : ' — הכול דווח ✓'}
-            </Text>
+            {activeCourses.length > 0 ? (
+              <Text style={styles.dayCoursesTitle}>
+                {activeCourses.length === 1 ? 'קורס אחד' : `${activeCourses.length} קורסים`} ביום זה
+                {' · '}
+                {activeCourses.filter(reportedCourse).length} דווחו
+                {activeCourses.some((c) => !reportedCourse(c))
+                  ? ` · ${activeCourses.filter((c) => !reportedCourse(c)).length} נדרש דיווח`
+                  : ' — הכול דווח ✓'}
+              </Text>
+            ) : (
+              <Text style={styles.dayCoursesTitle}>
+                {canceledCourses.length === 1 ? 'המפגש ביום זה בוטל או הועבר' : 'המפגשים ביום זה בוטלו או הועברו'}
+                {' — אפשר לדווח בכל זאת'}
+              </Text>
+            )}
             <ScrollView style={styles.dayCoursesList} nestedScrollEnabled>
               {activeCourses.map((c) => {
                 const done = reportedCourse(c);
@@ -76,6 +98,34 @@ export function DateStep({ w }: { w: ReportWizard }) {
                   </View>
                 );
               })}
+              {canceledCourses.map(({ course: c, cancel }) => (
+                <View
+                  key={`x-${c.id}`}
+                  style={[
+                    styles.dayCourseRow,
+                    styles.dayCourseCanceled,
+                    { borderStartWidth: 3, borderStartColor: colorOf(workplaces.find((w) => w.id === c.workplaceId)), paddingStart: 6 },
+                  ]}
+                >
+                  <Text style={[styles.dayCourseMark, styles.markCanceled]}>–</Text>
+                  <View style={styles.dayCourseTexts}>
+                    <Text style={[styles.dayCourseName, styles.strike]}>
+                      {timeRange(c.start, c.end)} · {c.name}
+                    </Text>
+                    {cancel.kind === 'moved' && cancel.movedTo ? (
+                      <Pressable onPress={() => openOnDate(cancel.movedTo!)} accessibilityRole="link" hitSlop={6}>
+                        <Text style={styles.dayCourseSub}>
+                          {workplaceName(c.workplaceId)} · <Text style={styles.linkText}>{cancelLabel(cancel)}</Text>
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.dayCourseSub}>
+                        {workplaceName(c.workplaceId)} · {cancelLabel(cancel)}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))}
             </ScrollView>
           </View>
         ) : (
