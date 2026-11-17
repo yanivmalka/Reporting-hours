@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useLeftoverMode } from '../lib/leftover';
 import { EnterChevron } from '../components/Chevrons';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -11,23 +11,10 @@ import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { ProgressBar } from '../components/Charts';
-import {
-  accumulatedTotal,
-  entryOf,
-  loadAccumulated,
-  redeemedAcademicHours,
-  resetAccumulated,
-  type AccumulatedState,
-} from '../lib/accumulated';
+import { accumulatedTotal, entryOf, loadAccumulated, redeemedAcademicHours, resetAccumulated, type AccumulatedState } from '../lib/accumulated';
 import { formatHours } from '../lib/pay';
 import { loadPayrollStatus, periodTitle, type StatusMap } from '../lib/payroll';
-import {
-  minutesLabel,
-  planRedeem,
-  redeemIntoPayroll,
-  redeemTarget,
-  useRedeemMode,
-} from '../lib/redeem';
+import { minutesLabel, planRedeem, redeemIntoPayroll, redeemTarget, useRedeemMode } from '../lib/redeem';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
@@ -39,6 +26,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { useScreenData } from '../components/useScreenData';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 
 export default function SettingsScreen() {
@@ -58,22 +47,15 @@ export default function SettingsScreen() {
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const confirm = useConfirm();
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([loadAccumulated(), loadWorkplaces(), loadReports(), loadPayrollStatus()]).then(
-        ([next, list, reps, st]) => {
-          if (!active) return;
-          setState(next);
-          setWorkplaces(list);
-          setReports(reps);
-          setStatuses(st);
-        },
-      );
-      return () => {
-        active = false;
-      };
-    }, []),
+  useScreenData(
+    () => Promise.all([loadAccumulated(), loadWorkplaces(), loadReports(), loadPayrollStatus()]),
+    [],
+    ([next, list, reps, st]) => {
+      setState(next);
+      setWorkplaces(list);
+      setReports(reps);
+      setStatuses(st);
+    },
   );
 
   const nameOf = (id: string) => workplaces.find((w) => w.id === id)?.name ?? 'מקום עבודה שנמחק';
@@ -126,13 +108,7 @@ export default function SettingsScreen() {
 
 
   if (state === null) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   const total = accumulatedTotal(state);

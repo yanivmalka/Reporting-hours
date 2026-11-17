@@ -4,9 +4,9 @@
  * דיווח בחודש שהדוח שלו כבר נשלח לשכר — נעול; במקום עריכה יש מעבר לדוח.
  */
 import { useAccess } from '../components/Access';
-import { useCallback, useRef, useState } from 'react';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { Pressable } from '../components/Pressable';
@@ -30,6 +30,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { EnterChevron } from '../components/Chevrons';
+import { useScreenData } from '../components/useScreenData';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -48,62 +50,50 @@ export default function ReportViewScreen() {
     /** הקורס שהדיווח מכסה (אם יש) — לסימון "השיעור לא התקיים" */
     course?: Course;
   } | null>(null);
-  const [reloadTick] = useState(0);
   /** הדיווח כבר הוצג — אם נעלם בחזרה מהעריכה, הוא נמחק */
   const hadReport = useRef(false);
   const confirm = useConfirm();
   const { canReport } = useAccess();
 
   // נטען מחדש בכל חזרה למסך — כדי לשקף עריכה שנשמרה באשף.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus(), loadCourses()]).then(([reports, wps, st, crs]) => {
-        if (!active) return;
-        const report = reports.find((r) => r.id === id) ?? null;
-        const workplace = report ? wps.find((w) => w.id === report.workplaceId) : undefined;
-        let lockedStart: string | null = null;
-        let paid = false;
-        if (report && workplace) {
-          const [y, m, d] = report.date.split('-').map(Number);
-          const p = currentPayPeriod(workplace.payday, new Date(y, m - 1, d));
-          const status = st[statusKey(workplace.id, p.start)];
-          if (isLocked(status)) lockedStart = p.start;
-          paid = isPaid(status);
-        }
-        // דיווח ששומר `courseId` מזוהה לפי המזהה, גם אם הקורס כבר לא מתקיים
-        // בתאריך הזה (נערך, קוצר או הסתיים). דיווח ישן בלי מזהה — לפי הקורסים
-        // של אותו יום, בשם או בחפיפת שעות.
-        const course = !report
-          ? undefined
-          : report.courseId
-            ? crs.find((c) => c.id === report.courseId)
-            : coursesOn(crs, report.date, report.workplaceId, NO_CANCEL).find((c) =>
-                courseReport(c, report.date, [report]),
-              );
-        // הדיווח נמחק בעריכה (מחיקה או "סימון כבוטל") — חוזרים למקום המוצא.
-        if (!report && hadReport.current) {
-          hadReport.current = false;
-          router.back();
-          return;
-        }
-        hadReport.current = Boolean(report);
-        setData({ report, workplace, lockedStart, paid, course });
-      });
-      return () => {
-        active = false;
-      };
-    }, [id, reloadTick]),
+  useScreenData(
+    () => Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus(), loadCourses()]),
+    [id],
+    ([reports, wps, st, crs]) => {
+      const report = reports.find((r) => r.id === id) ?? null;
+      const workplace = report ? wps.find((w) => w.id === report.workplaceId) : undefined;
+      let lockedStart: string | null = null;
+      let paid = false;
+      if (report && workplace) {
+        const [y, m, d] = report.date.split('-').map(Number);
+        const p = currentPayPeriod(workplace.payday, new Date(y, m - 1, d));
+        const status = st[statusKey(workplace.id, p.start)];
+        if (isLocked(status)) lockedStart = p.start;
+        paid = isPaid(status);
+      }
+      // דיווח ששומר `courseId` מזוהה לפי המזהה, גם אם הקורס כבר לא מתקיים
+      // בתאריך הזה (נערך, קוצר או הסתיים). דיווח ישן בלי מזהה — לפי הקורסים
+      // של אותו יום, בשם או בחפיפת שעות.
+      const course = !report
+        ? undefined
+        : report.courseId
+          ? crs.find((c) => c.id === report.courseId)
+          : coursesOn(crs, report.date, report.workplaceId, NO_CANCEL).find((c) =>
+              courseReport(c, report.date, [report]),
+            );
+      // הדיווח נמחק בעריכה (מחיקה או "סימון כבוטל") — חוזרים למקום המוצא.
+      if (!report && hadReport.current) {
+        hadReport.current = false;
+        router.back();
+        return;
+      }
+      hadReport.current = Boolean(report);
+      setData({ report, workplace, lockedStart, paid, course });
+    },
   );
 
   if (!data) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   const { report, workplace, lockedStart, paid, course } = data;

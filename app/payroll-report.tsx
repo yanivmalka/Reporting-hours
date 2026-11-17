@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Linking, Modal, Share, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Linking, Modal, Share, StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
@@ -16,23 +16,7 @@ import { useToast } from '../components/Toast';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { loadCourses } from '../lib/courses';
 import { dateRange, deadlineRelative, shortDate } from '../lib/dashboard';
-import {
-  buildPayrollReport,
-  canceledByReason,
-  expectedPayment,
-  grossAmount,
-  netAmount,
-  loadPayrollStatus,
-  payrollBody,
-  payrollMailto,
-  payrollSubject,
-  periodStartingAt,
-  periodTitle,
-  statusKey,
-  updatePayrollStatus,
-  type PayrollReport,
-  type PayrollStatus,
-} from '../lib/payroll';
+import { buildPayrollReport, canceledByReason, expectedPayment, grossAmount, netAmount, loadPayrollStatus, payrollBody, payrollMailto, payrollSubject, periodStartingAt, periodTitle, statusKey, updatePayrollStatus, type PayrollReport, type PayrollStatus } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
 import { formatShekels, hasTravelCost } from '../lib/travel';
 import { formatISODate } from '../lib/time';
@@ -43,6 +27,8 @@ import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { useScreenData } from '../components/useScreenData';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 const academic = (m: number) => Math.round((m / ACADEMIC_HOUR_MINUTES) * 100) / 100;
 const hm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
@@ -69,34 +55,27 @@ export default function PayrollReportScreen() {
   const [cancelReason, setCancelReason] = useState('');
   const [payOpen, setPayOpen] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([
+  useScreenData(
+    () => Promise.all([
         loadWorkplaces(),
         loadReports(),
         loadCourses(),
         loadPayrollStatus(),
         loadProfile(),
-      ]).then(
-        ([workplaces, reports, courses, st, prof]) => {
-          if (!active) return;
-          setProfile(prof);
-          const w = workplaces.find((x) => x.id === params.wp);
-          if (!w || !params.start) {
-            setMissing(true);
-            return;
-          }
-          const period = periodStartingAt(w, params.start);
-          const own = st[statusKey(w.id, period.start)] ?? {};
-          setReport(buildPayrollReport(w, period, reports, courses, basis, own.redeemedMinutes ?? 0));
-          setStatus(own);
-        },
-      );
-      return () => {
-        active = false;
-      };
-    }, [params.wp, params.start, basis]),
+      ]),
+    [params.wp, params.start, basis],
+    ([workplaces, reports, courses, st, prof]) => {
+      setProfile(prof);
+      const w = workplaces.find((x) => x.id === params.wp);
+      if (!w || !params.start) {
+        setMissing(true);
+        return;
+      }
+      const period = periodStartingAt(w, params.start);
+      const own = st[statusKey(w.id, period.start)] ?? {};
+      setReport(buildPayrollReport(w, period, reports, courses, basis, own.redeemedMinutes ?? 0));
+      setStatus(own);
+    },
   );
 
   if (missing) {
@@ -107,13 +86,7 @@ export default function PayrollReportScreen() {
     );
   }
   if (!report) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   const { workplace, period } = report;

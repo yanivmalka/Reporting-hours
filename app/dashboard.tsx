@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { Animated, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
@@ -14,30 +14,9 @@ import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { accumulatedTotal, loadAccumulated, redeemableHours, type AccumulatedEntry } from '../lib/accumulated';
-import {
-  currentPeriods,
-  dateRange,
-  monthName,
-  periodMonthKey,
-  monthlyTrend,
-  roundingStats,
-  shortDate,
-  sumTotals,
-  weekdayProfile,
-  workplaceShares,
-} from '../lib/dashboard';
+import { currentPeriods, dateRange, monthName, periodMonthKey, monthlyTrend, roundingStats, shortDate, sumTotals, weekdayProfile, workplaceShares } from '../lib/dashboard';
 import { loadCourses, type Course } from '../lib/courses';
-import {
-  forecastMonths,
-  monthsInView,
-  semesterOf,
-  shiftAnchor,
-  STATUS_LABEL,
-  type ChartResolution,
-  type ForecastMode,
-  type MonthRef,
-  type PeriodStatus,
-} from '../lib/forecast';
+import { forecastMonths, monthsInView, semesterOf, shiftAnchor, STATUS_LABEL, type ChartResolution, type ForecastMode, type MonthRef, type PeriodStatus } from '../lib/forecast';
 import { hebrewMonthNames, hebrewYearSpan } from '../lib/hebrewDate';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { usePayBasis } from '../lib/payBasis';
@@ -50,6 +29,8 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { workplaceColor } from '../theme/workplaceColors';
 import { TEXT_RIGHT } from '../theme/align';
+import { useScreenData } from '../components/useScreenData';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 type PeriodChoice = 'current' | 'previous';
 
@@ -139,26 +120,19 @@ export default function DashboardScreen() {
       },
     });
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([loadReports(), loadWorkplaces(), loadAccumulated(), loadCourses(), loadPayrollStatus()]).then(
-        ([reports, workplaces, accumulated, courses, statuses]) => {
-          if (!active) return;
-          setData({
-            reports,
-            workplaces,
-            courses,
-            statuses,
-            accumulated: accumulatedTotal(accumulated),
-            redeemable: Object.values(accumulated.byWorkplace).reduce((n, e) => n + redeemableHours(e), 0),
-          });
-        },
-      );
-      return () => {
-        active = false;
-      };
-    }, []),
+  useScreenData(
+    () => Promise.all([loadReports(), loadWorkplaces(), loadAccumulated(), loadCourses(), loadPayrollStatus()]),
+    [],
+    ([reports, workplaces, accumulated, courses, statuses]) => {
+      setData({
+        reports,
+        workplaces,
+        courses,
+        statuses,
+        accumulated: accumulatedTotal(accumulated),
+        redeemable: Object.values(accumulated.byWorkplace).reduce((n, e) => n + redeemableHours(e), 0),
+      });
+    },
   );
 
   const view = useMemo(() => {
@@ -208,13 +182,7 @@ export default function DashboardScreen() {
   );
 
   if (!data || !view) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   if (data.reports.length === 0 && data.courses.length === 0) {

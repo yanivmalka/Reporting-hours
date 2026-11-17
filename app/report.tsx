@@ -1,6 +1,6 @@
 import { RequireAccess } from '../components/Access';
 import { Stack } from 'expo-router';
-import { ActivityIndicator, Animated, View } from 'react-native';
+import { Animated, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
@@ -15,6 +15,7 @@ import { SummaryStep } from '../components/report/SummaryStep';
 import { DoneStep } from '../components/report/DoneStep';
 import { WizardNav } from '../components/report/WizardNav';
 import { LeaveDialog } from '../components/report/LeaveDialog';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 /**
  * אשף דיווח יום עבודה. הלוגיקה ב־components/report/useReportWizard.tsx, וכל שלב
@@ -26,13 +27,7 @@ function ReportScreenInner() {
   const { workplaces, editing, lockedStart, styles, colors, router } = core;
 
   if (workplaces === null) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   if (editing && lockedStart) {

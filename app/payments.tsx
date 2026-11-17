@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
@@ -9,18 +9,7 @@ import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { loadCourses, type Course } from '../lib/courses';
 import { usePayBasis } from '../lib/payBasis';
-import {
-  buildPayrollReport,
-  expectedPayment,
-  grossAmount,
-  loadPayrollStatus,
-  netAmount,
-  payrollItems,
-  periodTitle,
-  updatePayrollStatus,
-  type PayrollItem,
-  type PayrollReport,
-} from '../lib/payroll';
+import { buildPayrollReport, expectedPayment, grossAmount, loadPayrollStatus, netAmount, payrollItems, periodTitle, updatePayrollStatus, type PayrollItem, type PayrollReport } from '../lib/payroll';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { todayISO } from '../lib/time';
 import { formatShekels } from '../lib/travel';
@@ -31,6 +20,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { FoldChevron } from '../components/Chevrons';
+import { useScreenData } from '../components/useScreenData';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 type Row = { item: PayrollItem; report: PayrollReport; expected: string };
 
@@ -72,20 +63,10 @@ export default function PaymentsScreen() {
     );
   }, [basis]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
-  );
+  useScreenData(load, [load]);
 
   if (!rows) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   const today = todayISO();

@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { useRouter } from 'expo-router';
 import { EnterChevron } from '../components/Chevrons';
 import { StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
@@ -14,6 +14,7 @@ import { TEXT_RIGHT } from '../theme/align';
 import { useI18n } from '../lib/i18n';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+import { useScreenData } from '../components/useScreenData';
 
 /**
  * תיאום מס לשנה לועזית: לכל מקום עבודה — האם נכלל בתיאום שנשלח השנה, ומתי.
@@ -28,11 +29,7 @@ export default function TaxScreen() {
   const [editing, setEditing] = useState<string | null>(null);
   const [date, setDate] = useState(todayISO());
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadWorkplaces().then(setList);
-    }, []),
-  );
+  useScreenData(loadWorkplaces, [], setList);
 
   const done = list.filter((w) => w.taxCoordination?.[year]);
   const missing = list.filter((w) => !w.taxCoordination?.[year]);

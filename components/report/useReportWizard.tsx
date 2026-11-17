@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { Keyboard, PanResponder } from 'react-native';
 import { useConfirm } from '../ConfirmDialog';
@@ -25,6 +25,7 @@ import { useWorkplaceColor } from '../../theme/workplaceColors';
 import { buildReportDraft, reportPreview, validateReportForm } from '../../lib/reportForm';
 import { BreakRow, DEFAULT_BREAK_MINUTES, Step, LeftoverChoice, Errors, AUTO_RETURN_SECONDS } from './shared';
 import { makeReportStyles as makeStyles } from './styles';
+import { useScreenData } from '../useScreenData';
 
 /**
  * הלוגיקה של אשף הדיווח (app/report.tsx): מצב, טעינה, אפקטים ופעולות.
@@ -158,86 +159,81 @@ export function useReportWizard() {
   }
 
   // נטען מחדש בכל כניסה למסך כדי לשקף מקומות עבודה שנוספו בינתיים.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([loadWorkplaces(), loadReports(), loadCourses(), loadPayrollStatus()]).then(([list, reports, crs, st]) => {
-        if (!active) return;
-        setCourses(crs);
-        setWorkplaces(list);
-        setExisting(reports);
-        // דיווח חדש — הדקות העודפות לפי ההגדרה הכללית (נטען מחדש גם בחזרה
-        // מהמסך שבו משנים אותה). דיווח קיים שומר את מה שנקבע בו.
-        if (!editId) loadLeftoverMode().then((m) => active && setLeftoverChoice(m));
-        // מצב עריכה — טעינת הדיווח פעם אחת ומילוי הטופס.
-        if (editId && !editing) {
-          const r = reports.find((x) => x.id === editId);
-          if (r) {
-            const w = list.find((x) => x.id === r.workplaceId);
-            if (w) {
-              const [y, m, d] = r.date.split('-').map(Number);
-              const p = currentPayPeriod(w.payday, new Date(y, m - 1, d));
-              if (isLocked(st[statusKey(w.id, p.start)])) setLockedStart(p.start);
-            }
-            setEditing(r);
-            setWorkplaceId(r.workplaceId);
-            setDate(r.date);
-            setStart(r.start);
-            setEnd(r.end);
-            setBreaks(r.breaks.map((b) => ({ id: b.id, minutes: String(b.minutes) })));
-            setNote(r.note ?? '');
-            setLeftoverChoice(r.carriedMinutes > 0 ? 'carry' : 'include');
-            const c =
-              (r.courseId ? crs.find((x) => x.id === r.courseId) : undefined) ??
-              crs.find((x) => x.workplaceId === r.workplaceId && x.name === r.note);
-            setCourseId(c?.id ?? null);
-            setExtraKind(c && r.extraKind ? r.extraKind : null);
-            // מפגש נוסף נערך דרך שדה השיוך לקורס, ולא כקורס מהמערכת השבועית.
-            setViaCourse(Boolean(c) && !r.extraKind);
-            setStep('times');
+  useScreenData(
+    () => Promise.all([loadWorkplaces(), loadReports(), loadCourses(), loadPayrollStatus()]),
+    [editId, editing, presetCourse, presetDate],
+    ([list, reports, crs, st]) => {
+      setCourses(crs);
+      setWorkplaces(list);
+      setExisting(reports);
+      // דיווח חדש — הדקות העודפות לפי ההגדרה הכללית (נטען מחדש גם בחזרה
+      // מהמסך שבו משנים אותה). דיווח קיים שומר את מה שנקבע בו.
+      if (!editId) loadLeftoverMode().then((m) => setLeftoverChoice(m));
+      // מצב עריכה — טעינת הדיווח פעם אחת ומילוי הטופס.
+      if (editId && !editing) {
+        const r = reports.find((x) => x.id === editId);
+        if (r) {
+          const w = list.find((x) => x.id === r.workplaceId);
+          if (w) {
+            const [y, m, d] = r.date.split('-').map(Number);
+            const p = currentPayPeriod(w.payday, new Date(y, m - 1, d));
+            if (isLocked(st[statusKey(w.id, p.start)])) setLockedStart(p.start);
           }
-          return;
+          setEditing(r);
+          setWorkplaceId(r.workplaceId);
+          setDate(r.date);
+          setStart(r.start);
+          setEnd(r.end);
+          setBreaks(r.breaks.map((b) => ({ id: b.id, minutes: String(b.minutes) })));
+          setNote(r.note ?? '');
+          setLeftoverChoice(r.carriedMinutes > 0 ? 'carry' : 'include');
+          const c =
+            (r.courseId ? crs.find((x) => x.id === r.courseId) : undefined) ??
+            crs.find((x) => x.workplaceId === r.workplaceId && x.name === r.note);
+          setCourseId(c?.id ?? null);
+          setExtraKind(c && r.extraKind ? r.extraKind : null);
+          // מפגש נוסף נערך דרך שדה השיוך לקורס, ולא כקורס מהמערכת השבועית.
+          setViaCourse(Boolean(c) && !r.extraKind);
+          setStep('times');
         }
-        if (!presetApplied.current) {
-          presetApplied.current = true;
-          // קורס שנבחר מראש (מסך הבית): ממלאים הכול ומדלגים ישר לשעות.
-          const pc = presetCourse ? crs.find((c) => c.id === presetCourse) : undefined;
-          if (pc && list.some((w) => w.id === pc.workplaceId)) {
-            const breakMin = pc.breakMinutes > 0 ? pc.breakMinutes : 0;
-            if (presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)) setDate(presetDate);
-            setCourseId(pc.id);
-            setWorkplaceId(pc.workplaceId);
-            setNote(pc.name);
-            setStart(pc.start);
-            setEnd(pc.end);
-            setBreaks(breakMin ? [{ id: makeBreakId(), minutes: String(breakMin) }] : []);
-            setBaseline({ start: pc.start, end: pc.end, note: pc.name, breaks: breakMin ? 1 : 0 });
-            setViaCourse(true);
-            setStep('times');
-            return;
-          }
-          if (presetWp && list.some((w) => w.id === presetWp)) setWorkplaceId(presetWp);
+        return;
+      }
+      if (!presetApplied.current) {
+        presetApplied.current = true;
+        // קורס שנבחר מראש (מסך הבית): ממלאים הכול ומדלגים ישר לשעות.
+        const pc = presetCourse ? crs.find((c) => c.id === presetCourse) : undefined;
+        if (pc && list.some((w) => w.id === pc.workplaceId)) {
+          const breakMin = pc.breakMinutes > 0 ? pc.breakMinutes : 0;
           if (presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)) setDate(presetDate);
-          if (presetWp && list.some((w) => w.id === presetWp)) return;
-          // כניסה מלאה (הכפתור בדף הבית): נפתח על היום הרלוונטי הבא, ואם יש
-          // בו מפגש אחד בלבד שטרם דווח — ישר לשלב השעות.
-          const target =
-            presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)
-              ? presetDate
-              : nextRelevantDay(crs, list, reports).date;
-          openOnDate(target, crs, list, reports);
+          setCourseId(pc.id);
+          setWorkplaceId(pc.workplaceId);
+          setNote(pc.name);
+          setStart(pc.start);
+          setEnd(pc.end);
+          setBreaks(breakMin ? [{ id: makeBreakId(), minutes: String(breakMin) }] : []);
+          setBaseline({ start: pc.start, end: pc.end, note: pc.name, breaks: breakMin ? 1 : 0 });
+          setViaCourse(true);
+          setStep('times');
           return;
         }
-        setWorkplaceId((current) => {
-          if (current && list.some((w) => w.id === current)) return current;
-          const open = activeWorkplaces(list);
-          return open.length === 1 ? open[0].id : null;
-        });
+        if (presetWp && list.some((w) => w.id === presetWp)) setWorkplaceId(presetWp);
+        if (presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)) setDate(presetDate);
+        if (presetWp && list.some((w) => w.id === presetWp)) return;
+        // כניסה מלאה (הכפתור בדף הבית): נפתח על היום הרלוונטי הבא, ואם יש
+        // בו מפגש אחד בלבד שטרם דווח — ישר לשלב השעות.
+        const target =
+          presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)
+            ? presetDate
+            : nextRelevantDay(crs, list, reports).date;
+        openOnDate(target, crs, list, reports);
+        return;
+      }
+      setWorkplaceId((current) => {
+        if (current && list.some((w) => w.id === current)) return current;
+        const open = activeWorkplaces(list);
+        return open.length === 1 ? open[0].id : null;
       });
-      return () => {
-        active = false;
-      };
-    }, [editId, editing, presetCourse, presetDate]),
+    },
   );
 
   // האם הוזן משהו שעדיין לא נשמר.

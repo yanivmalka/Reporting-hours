@@ -2,7 +2,7 @@ import { RequireAccess, useAccess } from '../components/Access';
 import { useEffect, useRef, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import { ActivityIndicator, Keyboard, Platform, StyleSheet, View } from 'react-native';
+import { Keyboard, Platform, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
@@ -16,15 +16,7 @@ import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
 import { VacationsCard } from '../components/Vacations';
 import { SessionDots, SessionDotsByMonth, SessionDotsLegend, dotDescription, sessionDots, type SessionDot } from '../components/SessionDots';
 import { removeCanceledFromPotential, removeFromPlan, returnToPlan } from '../lib/sessions';
-import {
-  WEEKDAY_NAMES,
-  courseScheduleLabel,
-  loadCourses,
-  occurrences,
-  periodPresets,
-  sessionAcademicHours,
-  upsertCourse,
-} from '../lib/courses';
+import { WEEKDAY_NAMES, courseScheduleLabel, loadCourses, occurrences, periodPresets, sessionAcademicHours, upsertCourse } from '../lib/courses';
 import { dateRange } from '../lib/dashboard';
 import { formatHours } from '../lib/pay';
 import { formatISODate, parseTime, todayISO } from '../lib/time';
@@ -39,6 +31,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { beforeTracking } from '../lib/trackingStart';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 type Form = {
   name: string;
@@ -175,13 +168,7 @@ function CourseFormScreenInner() {
   };
 
   if (!form || !hydrated) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   function validate(f: Form): Errors {
