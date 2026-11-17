@@ -1,15 +1,21 @@
 /**
  * דיווח במייל (lib/mailReport.ts): שומר בשרת את המפגשים הקרובים שעוד לא דווחו, ומייבא
- * תשובות שנקלטו במייל. רץ זמן קצר אחרי פתיחת האפליקציה, בכל חזרה אליה, כל 10 דקות כשהיא
- * פתוחה, ואחרי כל שינוי מקומי בדיווחים, בקורסים, בסימוני המפגשים או בהגדרות. לא מצייר דבר.
+ * תשובות שנקלטו במייל. רץ אחרי כל משיכה מהענן (פתיחה, חזרה לאפליקציה, מעבר חשבון), כל 10 דקות
+ * כשהיא פתוחה, ואחרי כל שינוי מקומי בדיווחים, בקורסים, בסימוני המפגשים או בהגדרות.
+ * כשיובאו דיווחים — המסכים הפתוחים נטענים מחדש ומוצגת הודעה קופצת.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
-import { importMailInbox, loadMailSettings, pushMailPlan } from '../lib/mailReport';
+import { importMailInbox, pushMailPlan } from '../lib/mailReport';
 import { onLocalWrite } from '../lib/storage';
 import { KEYS } from '../lib/keys';
+import { onAccessChange, onSyncStatus } from '../lib/sync';
+import { notifyDataChanged } from '../lib/demo';
+import { useToast } from './Toast';
 
-const START_DELAY_MS = 25_000;
+/** גיבוי למקרה שאין משיכה מהענן (למשל בלי חיבור) — לא מחכים לה יותר מזה. */
+const START_DELAY_MS = 8_000;
+const SYNCED_GAP_MS = 60_000;
 const EVERY_MS = 10 * 60 * 1000;
 const DEBOUNCE_MS = 5_000;
 const WATCHED = new Set<string>([
@@ -24,21 +30,52 @@ const WATCHED = new Set<string>([
 ]);
 
 export function MailSync() {
+  const { showToast } = useToast();
+  const toastRef = useRef(showToast);
+  toastRef.current = showToast;
   useEffect(() => {
     let busy = false;
+    let again = false;
     const run = async () => {
-      if (busy) return;
+      if (busy) {
+        again = true; // הגיע אירוע בזמן ריצה (למשל משיכה שהסתיימה) — רצים שוב בסופה
+        return;
+      }
       busy = true;
       try {
-        const s = await loadMailSettings();
-        if (s.enabled) await importMailInbox();
+        // הייבוא לא תלוי בהגדרה "מופעל": תשובה שכבר נקלטה בשרת נכנסת גם אם כובה בינתיים.
+        try {
+          const n = await importMailInbox();
+          if (n > 0) {
+            notifyDataChanged();
+            toastRef.current(n === 1 ? 'נקלט דיווח מהמייל' : `נקלטו ${n} דיווחים מהמייל`);
+          }
+        } catch (e) {
+          console.warn('[mail] import failed', e);
+        }
         await pushMailPlan();
       } catch (e) {
-        console.warn('[mail] sync failed', e);
+        console.warn('[mail] plan failed', e);
       } finally {
         busy = false;
+        if (again) {
+          again = false;
+          void run();
+        }
       }
     };
+    // אחרי משיכה מהענן הנתונים המקומיים עדכניים והמשתמש מחובר — זה הרגע לייבא.
+    // ("synced" מגיע גם אחרי כל דחיפה — לכן לכל היותר פעם בדקה מהמקור הזה.)
+    let lastSynced = 0;
+    const offStatus = onSyncStatus((st) => {
+      if (st !== 'synced' || Date.now() - lastSynced < SYNCED_GAP_MS) return;
+      lastSynced = Date.now();
+      void run();
+    });
+    // מעבר לחשבון ששותף (או חזרה לשלך) — מייבאים לחשבון החדש מיד אחרי המשיכה שלו.
+    const offAccess = onAccessChange(() => {
+      lastSynced = 0;
+    });
     const first = setTimeout(run, START_DELAY_MS);
     const every = setInterval(run, EVERY_MS);
     let debounce: ReturnType<typeof setTimeout> | null = null;
@@ -61,6 +98,8 @@ export function MailSync() {
       clearInterval(every);
       if (debounce) clearTimeout(debounce);
       offWrite();
+      offStatus();
+      offAccess();
       off();
     };
   }, []);
