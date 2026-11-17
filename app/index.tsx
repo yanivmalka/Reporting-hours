@@ -75,7 +75,9 @@ export default function HomeScreen() {
   const [dismissed, setDismissed] = useState<string[]>([]);
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
   const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
-  const daySlide = useSlideFade(dayIdx);
+  /** הלשונית המסומנת — מתעדכנת מיד בלחיצה; התוכן (`dayIdx`) מתחלף בסוף היציאה. */
+  const [tabIdx, setTabIdx] = useState(AGENDA_TODAY_INDEX);
+  const daySlide = useSlideFade();
   const sessionDialog = useSessionCancel();
   const sessionSheet = useSessionSheet();
   // התראות מוסתרות שהוצגו שוב ("הצג") — עד שסוגרים שוב
@@ -150,13 +152,14 @@ export default function HomeScreen() {
       : null;
 
   function pickDay(i: number) {
-    if (i < 0 || i >= days.length || i === dayIdx) return;
-    daySlide.prime(i > dayIdx ? 1 : -1); // מסתיר לפני ההחלפה — בלי הבהוב
-    setDayIdx(i);
+    if (i < 0 || i >= days.length || i === tabIdx) return;
+    setTabIdx(i);
+    // היום מתחלף רק כשהתוכן הנוכחי כבר שקוף לגמרי (useSlideFade) — בלי הבהוב.
+    daySlide.go(i > tabIdx ? 1 : -1, () => setDayIdx(i));
   }
   const swipe = useSwipe(
-    () => pickDay(dayIdx + 1),
-    () => pickDay(dayIdx - 1),
+    () => pickDay(tabIdx + 1),
+    () => pickDay(tabIdx - 1),
   );
 
   function openCancel(item: AgendaItem) {
@@ -218,47 +221,38 @@ export default function HomeScreen() {
 
       {/* לוח הבקרה — מעבר בלבד, בלי סכומים: מידע כספי לא נחשף במסך הבית (צנעת הפרט) */}
       <View style={styles.topRow}>
-      {canReport ? (
+        {canReport ? (
         <Pressable
           onPress={() => router.push(reportHref)}
           accessibilityRole="button"
           accessibilityLabel={missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}
-          style={({ pressed }) => [styles.hero, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.reportBtn, pressed && styles.pressed]}
         >
-          <View style={styles.heroTop}>
-            <View style={styles.heroChip}>
-              <Text style={styles.heroChipText}>
-                {missingMode ? 'דיווח חסר' : next?.kind === 'today' ? 'ממתין לדיווח' : 'דיווח חדש'}
-              </Text>
-            </View>
-            {next?.course ? (
-              <Text style={styles.heroWhen} numberOfLines={1}>
-                {next.kind === 'today' ? 'היום' : shortWeekday(next.date)} · {timeRange(next.course.start, next.course.end)}
-              </Text>
-            ) : null}
+          <View style={styles.reportIcon}>
+            <Icon name={missingMode ? 'clipboard-plus-outline' : 'plus'} size={26} color={colors.textOnBrand} />
           </View>
-          {next?.course ? (
-            <View style={styles.heroTexts}>
-              <Text style={styles.heroTitle} numberOfLines={2}>
-                {next.course.name}
+          <View style={styles.reportTexts}>
+            <Text style={styles.reportTitle} numberOfLines={1}>
+              {missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}
+            </Text>
+            {next?.course ? (
+              <>
+                <Text style={styles.reportSub} numberOfLines={1} ellipsizeMode="tail">
+                  {next.course.name}
+                </Text>
+                <Text style={styles.reportSub} numberOfLines={1}>
+                  {next.kind === 'today' ? 'היום' : shortWeekday(next.date)} ·{' '}
+                  {timeRange(next.course.start, next.course.end)}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.reportSub} numberOfLines={2}>
+                בחירת קורס או מקום עבודה, שעות והפסקות
               </Text>
-              <Text style={styles.heroSub} numberOfLines={1}>
-                {data?.workplaces.find((w) => w.id === next.course?.workplaceId)?.name ?? ''}
-                {next.count > 1 ? ` · ועוד ${next.count - 1}` : ''}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.heroTexts}>
-              <Text style={styles.heroTitle}>אין מפגש שממתין לדיווח</Text>
-              <Text style={styles.heroSub}>בחירת קורס או מקום עבודה, שעות והפסקות</Text>
-            </View>
-          )}
-          <View style={styles.heroBtn}>
-            <Icon name={missingMode ? 'clipboard-plus-outline' : 'plus'} size={22} color={colors.text} />
-            <Text style={styles.heroBtnText}>{missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}</Text>
+            )}
           </View>
         </Pressable>
-      ) : null}
+        ) : null}
         <Pressable
           onPress={() => router.push('/dashboard')}
           accessibilityRole="link"
@@ -285,7 +279,7 @@ export default function HomeScreen() {
       </View>
       <View style={styles.dayTabs} accessibilityRole="tablist">
         {days.map((d, i) => {
-          const active = i === dayIdx;
+          const active = i === tabIdx;
           const dot = dayDot(d, colors);
           return (
             <Pressable
@@ -577,38 +571,34 @@ const makeStyles = (colors: AppColors) =>
     context: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
 
     // כרטיס הדיווח הבא — כמו בעיצוב: צ׳יפ מצב, שם הקורס בגדול וכפתור לבן.
-    hero: {
+
+    topRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
+    reportBtn: {
       flex: 1,
-      minWidth: 0,
-      backgroundColor: colors.brand,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: 104,
+      paddingHorizontal: 18,
+      paddingVertical: 14,
       borderRadius: 28,
-      padding: 20,
-      gap: 14,
+      backgroundColor: colors.brand,
       elevation: 4,
       shadowColor: colors.brandDark,
       shadowOpacity: 0.25,
       shadowRadius: 14,
       shadowOffset: { width: 0, height: 6 },
     },
-    heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-    heroChip: { backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 5 },
-    heroChipText: { fontSize: 13, fontWeight: '700', color: colors.text },
-    heroWhen: { flexShrink: 1, fontSize: 14, fontWeight: '700', color: colors.textOnBrand },
-    heroTexts: { gap: 2 },
-    heroTitle: { fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.3, color: colors.textOnBrand, textAlign: TEXT_RIGHT },
-    heroSub: { fontSize: 15, lineHeight: 22, color: colors.textOnBrand, opacity: 0.92, textAlign: TEXT_RIGHT },
-    heroBtn: {
-      height: 54,
-      borderRadius: 18,
-      backgroundColor: colors.surface,
-      flexDirection: 'row',
+    reportIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255,255,255,0.2)',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.sm,
     },
-    heroBtnText: { fontSize: 17, fontWeight: '700', color: colors.text },
-
-    topRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
+    reportTexts: { flex: 1, minWidth: 0, gap: 2 },
+    reportTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.2, color: colors.textOnBrand, textAlign: TEXT_RIGHT },
     dashTile: {
       width: 96,
       minHeight: 104,
@@ -619,8 +609,9 @@ const makeStyles = (colors: AppColors) =>
       justifyContent: 'center',
       gap: 6,
     },
-    dashTileWide: { flex: 1, flexDirection: 'row', width: undefined, minHeight: 64 },
     dashTileText: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center' },
+    reportSub: { fontSize: 14, color: colors.textOnBrand, opacity: 0.9, textAlign: TEXT_RIGHT },
+    dashTileWide: { flex: 1, flexDirection: 'row', width: undefined },
 
     sectionHead: {
       flexDirection: 'row',
