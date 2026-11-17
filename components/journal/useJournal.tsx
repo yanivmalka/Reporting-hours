@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ScrollView } from 'react-native';
+import { ScrollView, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { type DateRangeValue } from '../RangeCalendar';
 import { useDayStatus } from '../DayDot';
 import { monthOfWeek, shiftWeek, weekStartOf } from '../WeekStrip';
@@ -19,7 +19,8 @@ import { activeWorkplaces, isArchived, loadWorkplaces, type Workplace } from '..
 import { useTheme } from '../../theme/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import { workplaceColor } from '../../theme/workplaceColors';
-import { CalMode, CAL_PIN_KEY, byNewest } from './shared';
+import { CalMode, CAL_PIN_KEY, byNewest, monthEnd, shiftMonth } from './shared';
+import { getTrackingStart } from '../../lib/trackingStart';
 import { makeJournalStyles as makeStyles } from './styles';
 import { useScreenData } from '../useScreenData';
 
@@ -58,6 +59,23 @@ export function useJournal() {
   const [wpFilter, setWpFilter] = useState<string | null>(params.wp || null);
   /** החודש המוצג בלוח השנה, "YYYY-MM" — ברירת מחדל: החודש הנוכחי */
   const [calMonth, setCalMonth] = useState(() => todayISO().slice(0, 7));
+  /**
+   * חלון הרשימה הרציפה (חודשים "YYYY-MM", כולל): מתחיל בחודש שבתאריכון ומתרחב
+   * בגלילה לסוף הרשימה, או בקישור בראשה. `epoch` גדל כשמיקומי הימים משתנים כולם
+   * (איפוס או הוספה בראש) — כדי למדוד אותם מחדש.
+   */
+  const [win, setWin] = useState(() => {
+    const m = todayISO().slice(0, 7);
+    return { from: m, to: m, epoch: 0 };
+  });
+  // חודש שמחוץ לחלון (מעבר חודש, קפיצה ליום / לשבוע) — החלון מתאפס אליו.
+  useEffect(() => {
+    setWin((w) => (calMonth < w.from || calMonth > w.to ? { from: calMonth, to: calMonth, epoch: w.epoch + 1 } : w));
+  }, [calMonth]);
+  /** מעבר חודש מפורש בתאריכון — הרשימה מתחילה מחדש מאותו חודש. */
+  function resetWindow(m: string) {
+    setWin((w) => ({ from: m, to: m, epoch: w.epoch + 1 }));
+  }
   /** טווח שנבחר בלוח (רק במצב "בחירת טווח"); null = כל החודש */
   const [range, setRange] = useState<DateRangeValue>(null);
   /** מצב "בחירת טווח" — רק כשהתיבה מסומנת לחיצה על ימים בוחרת טווח ומסננת */
@@ -163,6 +181,9 @@ export function useJournal() {
     if (top !== scrollDay) setScrollDay(top);
     const ws = weekStartOf(top);
     if (ws !== weekStart) setWeekStart(ws);
+    // ברשימה הרציפה — התאריכון עובר לחודש שבראש הרשימה (בתוך החלון, בלי איפוס).
+    const mm = monthOfWeek(ws);
+    if (!range && mm !== calMonth && mm >= win.from && mm <= win.to) setCalMonth(mm);
   }
 
   /** מבקש גלילה — מתבצעת אחרי שהרשימה (אולי של חודש אחר) נמדדה. */
@@ -177,14 +198,23 @@ export function useJournal() {
     resolveTimer.current = setTimeout(resolveScroll, 120);
   }
 
-  /** מדידת יום ברשימה — המופע העליון של כל תאריך. */
-  function onDayLayout(date: string, y: number, height: number) {
-    const map = dayPos.current.map;
-    const prev = map.get(date);
-    map.set(date, {
-      y: prev == null ? y : Math.min(prev.y, y),
-      bottom: prev == null ? y + height : Math.max(prev.bottom, y + height),
-    });
+  /** מיקום כל פריט ברשימה (לפי מזהה) — ממנו נגזר המופע העליון של כל תאריך. */
+  const itemPos = useRef<{ key: string; map: Map<string, { date: string; y: number; bottom: number }> }>({
+    key: '',
+    map: new Map(),
+  });
+  /** מדידת פריט ברשימה (`id` — ברירת מחדל התאריך); מעדכן את המופע העליון של התאריך. */
+  function onDayLayout(date: string, y: number, height: number, id: string = date) {
+    if (itemPos.current.key !== dayPos.current.key) itemPos.current = { key: dayPos.current.key, map: new Map() };
+    itemPos.current.map.set(id, { date, y, bottom: y + height });
+    let top = Infinity;
+    let bottom = -Infinity;
+    for (const p of itemPos.current.map.values()) {
+      if (p.date !== date) continue;
+      top = Math.min(top, p.y);
+      bottom = Math.max(bottom, p.bottom);
+    }
+    dayPos.current.map.set(date, { y: top, bottom });
     scheduleResolve();
   }
 
@@ -273,9 +303,54 @@ export function useJournal() {
         return r.date >= p.start && r.date <= p.end;
       }
       if (range) return r.date >= range.from && r.date <= range.to;
-      return r.date.startsWith(calMonth);
+      return r.date >= `${win.from}-01` && r.date <= monthEnd(win.to);
     });
-  }, [byWorkplace, workplaces, periodMode, range, calMonth]);
+  }, [byWorkplace, workplaces, periodMode, range, win]);
+
+  // ── הרחבת החלון: עד היכן יש מה להציג ──
+  const today0 = todayISO();
+  const thisMonth = today0.slice(0, 7);
+  const trackMonth = getTrackingStart()?.slice(0, 7) ?? null;
+  const firstReportMonth = byWorkplace.length ? byWorkplace[byWorkplace.length - 1].date.slice(0, 7) : null;
+  const firstCourseMonth = courses.length ? courses.map((c) => c.from).sort()[0].slice(0, 7) : null;
+  const lastCourseMonth = courses.length ? courses.map((c) => c.to).sort().slice(-1)[0].slice(0, 7) : null;
+  const prevMonth = shiftMonth(win.from, -1);
+  const nextMonth = shiftMonth(win.to, 1);
+  const canEarlier =
+    tab === 'plan'
+      ? (firstReportMonth != null && firstReportMonth <= prevMonth) ||
+        (firstCourseMonth != null && firstCourseMonth <= prevMonth && (trackMonth == null || trackMonth <= prevMonth))
+      : (firstReportMonth != null && firstReportMonth <= prevMonth) ||
+        (trackMonth != null && trackMonth <= prevMonth && firstCourseMonth != null && firstCourseMonth <= prevMonth);
+  const canLater = tab === 'plan' ? lastCourseMonth != null && nextMonth <= lastCourseMonth : nextMonth <= thisMonth;
+  /** הוספת חודש בראש הרשימה (בתכנון — הקודם; בדיווחים, שממוינים מהחדש — הבא), וגלילה אליו. */
+  function extendTop() {
+    if (tab === 'plan') {
+      if (!canEarlier) return;
+      setWin((w) => ({ ...w, from: prevMonth, epoch: w.epoch + 1 }));
+      requestScroll('day', `${prevMonth}-01`);
+    } else {
+      if (!canLater) return;
+      setWin((w) => ({ ...w, to: nextMonth, epoch: w.epoch + 1 }));
+      setCalMonth(nextMonth);
+    }
+  }
+  const extendLock = useRef('');
+  /** גלילה לסוף הרשימה מוסיפה את החודש הבא בתורו (בתכנון — הבא; בדיווחים — הקודם). */
+  function maybeExtend(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (range || periodMode) return;
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    if (contentSize.height - contentOffset.y - layoutMeasurement.height > 400) return;
+    const key = `${tab}|${win.from}|${win.to}`;
+    if (extendLock.current === key) return;
+    extendLock.current = key;
+    extendBottom();
+  }
+  /** הוספת חודש בסוף הרשימה (גם בקישור — כשהרשימה קצרה מכדי לגלול). */
+  function extendBottom() {
+    if (tab === 'plan' ? !canLater : !canEarlier) return;
+    setWin((w) => (tab === 'plan' ? { ...w, to: nextMonth } : { ...w, from: prevMonth }));
+  }
 
   // מספר הדיווחים לכל יום — לסימון בלוח השנה (לפי סינון מקום העבודה).
   const counts = useMemo(() => {
@@ -378,6 +453,15 @@ export function useJournal() {
     focusOn,
     changeWeek,
     goToday,
+    win,
+    resetWindow,
+    canEarlier,
+    canLater,
+    prevMonth,
+    nextMonth,
+    extendTop,
+    extendBottom,
+    maybeExtend,
   };
 }
 
@@ -385,7 +469,7 @@ export type JournalCore = ReturnType<typeof useJournal>;
 
 /** נגזרות אחרי הטעינה — נקרא רק כשהדיווחים נטענו. */
 export function journalView(core: JournalCore & { reports: WorkReport[] }) {
-  const { colors, basis, reports, workplaces, tab, courses, reloadTick, statuses, wpFilter, calMonth, range, rangeMode, focusDay, periodMode, pinned, scrollDay, dayPos, pending, filtered, focusOn } = core;
+  const { colors, basis, reports, workplaces, tab, courses, reloadTick, statuses, wpFilter, calMonth, win, range, rangeMode, focusDay, periodMode, pinned, scrollDay, dayPos, pending, filtered, focusOn } = core;
   const workplaceOf = (id: string) => workplaces.find((w) => w.id === id);
   const nameOf = (id: string) => workplaceOf(id)?.name ?? 'מקום עבודה שנמחק';
   // שכר לכל דיווח (שלב 4): מספר ₪ למקום שעתי, null לחודשי, undefined כשמקום
@@ -434,10 +518,12 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     return isLocked(statuses[statusKey(w.id, p.start)]) ? p.start : null;
   };
 
-  // חלון התכנון: הטווח שנבחר, או החודש שבתאריכון.
+  // חלון התכנון: הטווח שנבחר, או חלון החודשים של הרשימה הרציפה.
   const [cy, cm] = calMonth.split('-').map(Number);
-  const planFrom = range ? range.from : `${calMonth}-01`;
-  const planTo = range ? range.to : `${calMonth}-${String(new Date(cy, cm, 0).getDate()).padStart(2, '0')}`;
+  const planFrom = range ? range.from : `${win.from}-01`;
+  const planTo = range ? range.to : monthEnd(win.to);
+  /** פסי חודש ברשימה — כשהיא רציפה (לא טווח ולא תקופת שכר) */
+  const continuous = !range && !periodMode;
 
   // "דיווחים": גם מפגשים שעוד לא דווחו — של היום ("ממתין") ושעברו ("חסר").
   // מפגשים עתידיים שייכים ל"תכנון" ולא מוצגים כאן.
@@ -479,10 +565,13 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
       ? range.from === range.to
         ? longDate(range.from)
         : dateRange(range.from, range.to, true)
-      : monthName(calMonth);
+      : win.from === win.to
+        ? monthName(win.from)
+        : `${monthName(win.from)} – ${monthName(win.to)}`;
 
   // מיקומי הימים שנמדדו שייכים לרשימה מסוימת — בכל שינוי שלה מתחילים מחדש.
-  const listKey = `${tab}|${planFrom}|${planTo}|${wpFilter}|${periodMode}|${reloadTick}|${reports.length}`;
+  // הוספת חודש בסוף הרשימה לא מזיזה את הימים שכבר נמדדו — לכן המפתח לא כולל את סוף החלון.
+  const listKey = `${tab}|${range ? `${range.from}-${range.to}` : win.epoch}|${wpFilter}|${periodMode}|${reloadTick}|${reports.length}`;
   if (dayPos.current.key !== listKey) dayPos.current = { key: listKey, map: new Map() };
 
   /** הסימון בתאריכון: הטווח (במצב טווח) או היום שאליו גוללים */
@@ -521,6 +610,7 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     shownRange,
     dayPress,
     showCalendar,
+    continuous,
   };
 }
 

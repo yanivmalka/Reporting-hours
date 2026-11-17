@@ -11,6 +11,7 @@ import { JournalWeekStrip } from '../components/journal/JournalWeekStrip';
 import { PinnedStrip } from '../components/journal/PinnedStrip';
 import { ReportsTab } from '../components/journal/ReportsTab';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { MonthLink } from '../components/journal/MonthLinks';
 
 /**
  * "יומן": תכנון ודיווחים בדף אחד, עם בורר "תכנון · דיווחים". התאריכון, השורה
@@ -26,7 +27,7 @@ export default function ReportsScreen() {
   }
 
   const w: Journal = { ...core, ...journalView({ ...core, reports }) };
-  const { router, basis, workplaces, params, tab, setTab, courses, setReloadTick, wpFilter, setWpFilter, periodMode, calTop, setCalTop, calHeight, setCalHeight, pinned, setPinned, calMode, calPin, setScrollDay, weekStripHeight, scrollRef, listTop, followScroll, onDayLayout, wpOptions, planFrom, planTo, shownRange, showCalendar } = w;
+  const { router, basis, workplaces, params, tab, setTab, courses, setReloadTick, wpFilter, setWpFilter, periodMode, calTop, setCalTop, calHeight, setCalHeight, pinned, setPinned, calMode, calPin, setScrollDay, weekStripHeight, scrollRef, listTop, followScroll, maybeExtend, onDayLayout, wpOptions, planFrom, planTo, shownRange, showCalendar, continuous } = w;
 
   return (
     <Screen
@@ -44,6 +45,7 @@ export default function ReportsScreen() {
           if (!next) setScrollDay(null);
         }
         if (next) followScroll(y);
+        maybeExtend(e);
       }}
     >
       <SegmentedControl<'plan' | 'reports'>
@@ -92,6 +94,9 @@ export default function ReportsScreen() {
           wpFilter={wpFilter}
           basis={basis}
           onChanged={() => setReloadTick((n) => n + 1)}
+          monthDividers={continuous}
+          before={<MonthLink w={w} at="top" />}
+          after={<MonthLink w={w} at="bottom" />}
         />
         </View>
       ) : (
