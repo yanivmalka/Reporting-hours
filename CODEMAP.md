@@ -116,5 +116,6 @@
 - ניווט וכותרות: `AppDrawer`, `Screen`, `ExitGuard`.
 - תשתית: `CloudSync` (סנכרון), `BackupScheduler` / `BackupSection`, `UpdateChecker`, `DemoSeeder`.
 - תצוגה: `Charts`, `ForecastChart`, `WorkplaceTile`, `ReportCard`, `RangeCalendar`, `WeekStrip`, `TrashList`, `PlanList`.
+- טעינה: `useScreenData` (טעינת נתוני מסך: פוקוס, תוצאה ישנה, רענון אחרי החלפת נתונים, `reload`), `LoadingScreen`.
 - משותפים: `Checkbox`, `FoldSection` (קבוצה מתקפלת), `MonthSlide` (החלקת חודש בתאריכון), `DateText` (לועזי + עברי בלי שבירה), `Chevrons` (חץ כניסה ‹ וחץ קיפול ⌄/⌃), `DayDot` (נקודות מצב יום ומקרא, לפי `lib/dayStatus.ts`), `useFlash` / `useFade` (הבהוב / עמעום קצר).
 - קלט: `TimeInput`, `DatePicker`, `SelectField`, `TextField`. את `Text` ו־`TextInput` מייבאים תמיד מ־`components/Text`.

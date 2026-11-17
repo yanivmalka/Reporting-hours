@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { useRouter } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { Icon } from '../components/Icon';
@@ -15,6 +15,8 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
+import { useScreenData } from '../components/useScreenData';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
@@ -27,30 +29,19 @@ export default function WorkplacesScreen() {
   const [showArchive, setShowArchive] = useState(false);
 
   // נטען מחדש בכל כניסה למסך כדי לשקף שינויים שנעשו בטופס ובדיווחים.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([loadWorkplaces(), loadCourses()]).then(([list, c]) => {
-        if (!active) return;
-        setCourses(c);
-        setWorkplaces(list);
-      });
-      return () => {
-        active = false;
-      };
-    }, []),
+  useScreenData(
+    () => Promise.all([loadWorkplaces(), loadCourses()]),
+    [],
+    ([list, c]) => {
+      setCourses(c);
+      setWorkplaces(list);
+    },
   );
 
 
 
   if (workplaces === null) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   const today = todayISO();

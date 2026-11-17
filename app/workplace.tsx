@@ -4,10 +4,10 @@
  * ודוחות השכר האחרונים — כל אחד עם שלבי דיווח → שליחה → תשלום ועם רשימת
  * הדיווחים (ומפגשים שעוד לא דווחו).
  */
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { VacationsCard } from '../components/Vacations';
-import { Redirect, Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { money } from '../components/ForecastChart';
@@ -16,19 +16,7 @@ import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { academicOf, loadReports, type WorkReport } from '../lib/reports';
-import {
-  courseReported,
-  courseScheduleLabel,
-  courseStatus,
-  COURSE_STATUS_LABELS,
-  lastSessionDate,
-  reportsOfCourse,
-  type CourseStatus,
-  loadCourses,
-  occurrences,
-  timeRange,
-  type Course,
-} from '../lib/courses';
+import { courseReported, courseScheduleLabel, courseStatus, COURSE_STATUS_LABELS, lastSessionDate, reportsOfCourse, type CourseStatus, loadCourses, occurrences, timeRange, type Course } from '../lib/courses';
 import { isoDate, monthName, periodMonthKey, shortDate } from '../lib/dashboard';
 import { hebrewRange } from '../lib/hebrewDate';
 import { unbreakable } from '../components/DateText';
@@ -41,22 +29,15 @@ import { reportPay } from '../lib/pay';
 import { basisFor, usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { parseTime } from '../lib/time';
-import {
-  ARRIVAL_MODE_LABELS,
-  deadlineLabel,
-  isArchived,
-  loadWorkplaces,
-  setWorkplaceArchived,
-  paymentTermsLabel,
-  taxPercentOf,
-  type Workplace,
-} from '../lib/workplaces';
+import { ARRIVAL_MODE_LABELS, deadlineLabel, isArchived, loadWorkplaces, setWorkplaceArchived, paymentTermsLabel, taxPercentOf, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { beforeTracking } from '../lib/trackingStart';
+import { useScreenData } from '../components/useScreenData';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
@@ -73,43 +54,29 @@ export default function WorkplaceDetailScreen() {
   const [data, setData] = useState<Loaded | null | undefined>(undefined);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [courseTab, setCourseTab] = useState<CourseStatus | null>(null);
-  const [reloadTick, setReloadTick] = useState(0);
   const { showToast } = useToast();
   const showHeb = useShowHebrewDates();
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([loadWorkplaces(), loadReports(), loadCourses(), loadPayrollStatus()]).then(
-        ([list, reports, courses, statuses]) => {
-          if (!active) return;
-          const workplace = list.find((w) => w.id === id);
-          setData(
-            workplace
-              ? {
-                  workplace,
-                  reports: reports.filter((r) => r.workplaceId === workplace.id),
-                  courses: courses.filter((c) => c.workplaceId === workplace.id),
-                  statuses,
-                }
-              : null,
-          );
-        },
+  const { reload } = useScreenData(
+    () => Promise.all([loadWorkplaces(), loadReports(), loadCourses(), loadPayrollStatus()]),
+    [id],
+    ([list, reports, courses, statuses]) => {
+      const workplace = list.find((w) => w.id === id);
+      setData(
+        workplace
+          ? {
+              workplace,
+              reports: reports.filter((r) => r.workplaceId === workplace.id),
+              courses: courses.filter((c) => c.workplaceId === workplace.id),
+              statuses,
+            }
+          : null,
       );
-      return () => {
-        active = false;
-      };
-    }, [id, reloadTick]),
+    },
   );
 
   if (data === undefined) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
   if (data === null) {
     // מקום עבודה שנמחק או הועבר לאשפה — לא משאירים מסך ריק, חוזרים לרשימה.
@@ -161,7 +128,7 @@ export default function WorkplaceDetailScreen() {
   async function toggleArchive() {
     await setWorkplaceArchived(w.id, !archived);
     showToast(archived ? 'מקום העבודה הוחזר לפעילים' : 'מקום העבודה הועבר לארכיון');
-    setReloadTick((n) => n + 1);
+    reload();
   }
 
   // כל התקופות מקופלות כברירת מחדל.

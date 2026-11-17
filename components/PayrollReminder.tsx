@@ -5,12 +5,11 @@
  *  - מקומות עבודה שלא נכללו בתיאום המס של השנה הלועזית.
  * כל באנר מוביל למסך המתאים. לא מוצג דבר כשאין מה להזכיר.
  */
-import { useCallback, useState } from 'react';
-import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useState } from 'react';
+import { useRouter, type Href } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
-import { onDataChanged } from '../lib/demo';
 import { loadPayrollStatus, overduePayments, payrollItems, pendingPayroll } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
 import { loadWorkplaces, missingTaxCoordination } from '../lib/workplaces';
@@ -19,6 +18,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { EnterChevron } from './Chevrons';
+import { useScreenData } from './useScreenData';
 
 type Alert = { key: string; icon: string; title: string; sub: string; href: Href; tone: 'warn' | 'danger' };
 
@@ -33,61 +33,52 @@ export function PayrollReminder() {
   const { colors } = useTheme();
   const [alerts, setAlerts] = useState<Alert[]>([]);
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      const load = () =>
-        Promise.all([loadWorkplaces(), loadReports(), loadPayrollStatus()]).then(([w, r, st]) => {
-          if (!active) return;
-          const items = payrollItems(w, r, st);
-          const pending = pendingPayroll(items);
-          const overdue = overduePayments(items);
-          const year = String(new Date().getFullYear());
-          const noTax = missingTaxCoordination(w, year);
-          const next: Alert[] = [];
-          if (overdue.length) {
-            next.push({
-              key: 'overdue',
-              icon: '💰',
-              title:
-                overdue.length === 1
-                  ? 'תשלום אחד באיחור — טרם סומן כשולם'
-                  : `${overdue.length} תשלומים באיחור — טרם סומנו כשולמו`,
-              sub: names(overdue.map((o) => o.workplace.name)),
-              href: '/payments',
-              tone: 'danger',
-            });
-          }
-          if (pending.length) {
-            next.push({
-              key: 'pending',
-              icon: '📨',
-              title:
-                pending.length === 1 ? 'דוח שכר אחד ממתין לשליחה' : `${pending.length} דוחות שכר ממתינים לשליחה`,
-              sub: names(pending.map((p) => p.workplace.name)),
-              href: '/payroll',
-              tone: 'warn',
-            });
-          }
-          if (noTax.length) {
-            next.push({
-              key: 'tax',
-              icon: '🧾',
-              title: `תיאום מס ${year}: ${noTax.length === 1 ? 'מקום עבודה אחד לא נכלל' : `${noTax.length} מקומות עבודה לא נכללו`}`,
-              sub: names(noTax.map((x) => x.name)),
-              href: '/tax',
-              tone: 'warn',
-            });
-          }
-          setAlerts(next);
+  useScreenData(
+    () => Promise.all([loadWorkplaces(), loadReports(), loadPayrollStatus()]),
+    [],
+    ([w, r, st]) => {
+      const items = payrollItems(w, r, st);
+      const pending = pendingPayroll(items);
+      const overdue = overduePayments(items);
+      const year = String(new Date().getFullYear());
+      const noTax = missingTaxCoordination(w, year);
+      const next: Alert[] = [];
+      if (overdue.length) {
+        next.push({
+          key: 'overdue',
+          icon: '💰',
+          title:
+            overdue.length === 1
+              ? 'תשלום אחד באיחור — טרם סומן כשולם'
+              : `${overdue.length} תשלומים באיחור — טרם סומנו כשולמו`,
+          sub: names(overdue.map((o) => o.workplace.name)),
+          href: '/payments',
+          tone: 'danger',
         });
-      void load();
-      const off = onDataChanged(() => void load());
-      return () => {
-        active = false;
-        off();
-      };
-    }, []),
+      }
+      if (pending.length) {
+        next.push({
+          key: 'pending',
+          icon: '📨',
+          title:
+            pending.length === 1 ? 'דוח שכר אחד ממתין לשליחה' : `${pending.length} דוחות שכר ממתינים לשליחה`,
+          sub: names(pending.map((p) => p.workplace.name)),
+          href: '/payroll',
+          tone: 'warn',
+        });
+      }
+      if (noTax.length) {
+        next.push({
+          key: 'tax',
+          icon: '🧾',
+          title: `תיאום מס ${year}: ${noTax.length === 1 ? 'מקום עבודה אחד לא נכלל' : `${noTax.length} מקומות עבודה לא נכללו`}`,
+          sub: names(noTax.map((x) => x.name)),
+          href: '/tax',
+          tone: 'warn',
+        });
+      }
+      setAlerts(next);
+    },
   );
 
   if (alerts.length === 0) return null;

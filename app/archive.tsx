@@ -5,7 +5,7 @@
  *   - אשפה: מקומות עבודה שנמחקו, עם שחזור ומחיקה לצמיתות (components/TrashList).
  */
 import { useCallback, useState } from 'react';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
@@ -17,13 +17,7 @@ import { useToast } from '../components/Toast';
 import { courseScheduleLabel, loadCourses, reportsOfCourse, type Course } from '../lib/courses';
 import { dateRange, shortDate } from '../lib/dashboard';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
-import {
-  IDLE_DAYS,
-  dismissRecommendation,
-  loadDismissedRecommendations,
-  recommendations,
-  type Recommendation,
-} from '../lib/recommend';
+import { IDLE_DAYS, dismissRecommendation, loadDismissedRecommendations, recommendations, type Recommendation } from '../lib/recommend';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { todayISO } from '../lib/time';
 import { deleteOrEndCourse, trashWorkplaceWithData } from '../lib/trash';
@@ -32,6 +26,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { useScreenData } from '../components/useScreenData';
 
 type Tab = 'archive' | 'trash';
 
@@ -64,11 +59,7 @@ export default function ArchiveScreen() {
     setData({ workplaces, courses, reports, statuses, dismissed });
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
-  );
+  useScreenData(load, [load]);
 
   const today = todayISO();
   const recs = data

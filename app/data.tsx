@@ -1,6 +1,5 @@
 import { RequireAccess } from '../components/Access';
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { BackupSection } from '../components/BackupSection';
@@ -18,6 +17,7 @@ import { DEFAULT_PALETTE_ID } from '../theme/palettes';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { useScreenData } from '../components/useScreenData';
 
 type Action = 'load' | 'removeDemo' | 'resetAll';
 
@@ -50,11 +50,7 @@ function DataScreenInner() {
     });
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh]),
-  );
+  useScreenData(refresh, [refresh]);
 
   const CONFIRM: Record<Action, { title: string; message: string; confirmLabel: string; destructive: boolean }> = {
     load: {

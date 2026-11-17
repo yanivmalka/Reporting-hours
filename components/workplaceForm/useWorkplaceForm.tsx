@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Animated, Platform, ScrollView } from 'react-native';
 import { usePayBasis } from '../../lib/payBasis';
 import { useCancelReasons } from '../../lib/cancelReasons';
@@ -17,6 +17,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import { ContactRow, FormState, Errors, GroupKey, NEW_STEPS, ERROR_GROUP, groupsWithErrors, draftToForm, formToReminder, isEmail, splitEmails, parseNum } from './shared';
 import { makeWorkplaceFormStyles as makeStyles } from './styles';
+import { useScreenData } from '../useScreenData';
 
 /**
  * הלוגיקה של טופס מקום העבודה (app/workplace-form.tsx): טעינה, מצב הטופס,
@@ -69,17 +70,13 @@ export function useWorkplaceForm() {
   const focusDone = useRef(false);
 
   // הקורסים של מקום העבודה — נטען מחדש בחזרה מטופס הקורס.
-  useFocusEffect(
-    useCallback(() => {
-      if (!id) return;
-      let active = true;
-      loadCourses().then((all) => {
-        if (active) setCourses(all.filter((c) => c.workplaceId === id).sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start)));
-      });
-      return () => {
-        active = false;
-      };
-    }, [id]),
+  // הקורסים של המקום — רק בעריכה (במקום חדש אין עדיין קורסים).
+  useScreenData(
+    () => (id ? loadCourses() : Promise.resolve(null)),
+    [id],
+    (all) => {
+      if (all) setCourses(all.filter((c) => c.workplaceId === id).sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start)));
+    },
   );
 
   // מקום חדש: הצבע הפנוי הבא (המשתמש יכול לבחור אחר).

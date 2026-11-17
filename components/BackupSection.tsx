@@ -4,18 +4,9 @@
  * בלחיצה, ותוכן הגיבוי רק כשבוחרים תאריך.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
-import {
-  BACKUP_RETENTION_DAYS,
-  createBackup,
-  lastBackup,
-  listBackups,
-  onBackupChange,
-  restoreBackup,
-  type BackupMeta,
-} from '../lib/backup';
+import { BACKUP_RETENTION_DAYS, createBackup, lastBackup, listBackups, onBackupChange, restoreBackup, type BackupMeta } from '../lib/backup';
 import { hebrewDate } from '../lib/hebrewDate';
 import { useHydrated } from '../lib/useHydrated';
 import { useTheme } from '../theme/ThemeContext';
@@ -29,6 +20,7 @@ import { Icon } from './Icon';
 import { Pressable } from './Pressable';
 import { useToast } from './Toast';
 import { isoDate } from '../lib/dates';
+import { useScreenData } from './useScreenData';
 
 const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -83,11 +75,7 @@ export function BackupSection() {
     }
   }, [user]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh]),
-  );
+  useScreenData(refresh, [refresh]);
   useEffect(
     () =>
       onBackupChange(() => {

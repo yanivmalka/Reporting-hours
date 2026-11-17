@@ -1,7 +1,6 @@
 import { RequireAccess } from '../components/Access';
 import React from 'react';
 import { Stack } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
 import { VacationsCard } from '../components/Vacations';
 import { Screen } from '../components/Screen';
 import { useWorkplaceForm, workplaceFormView, type WorkplaceFormModel } from '../components/workplaceForm/useWorkplaceForm';
@@ -14,6 +13,7 @@ import { CancelSection } from '../components/workplaceForm/CancelSection';
 import { CoursesSection } from '../components/workplaceForm/CoursesSection';
 import { ManageSection } from '../components/workplaceForm/ManageSection';
 import { FormGroups } from '../components/workplaceForm/FormGroups';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 /**
  * מקום עבודה: יצירה (וויזארד) ועריכה (קבוצות מתקפלות). הלוגיקה ב־
@@ -24,14 +24,7 @@ function WorkplaceFormScreenInner() {
   const { form, hydrated, title, styles, colors, id, scrollRef, confirm } = core;
 
   if (!form || !hydrated) {
-    return (
-      <Screen scroll={false}>
-        <Stack.Screen options={{ title }} />
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen title={title} />;
   }
 
   const w: WorkplaceFormModel = { ...core, ...workplaceFormView({ ...core, form }) };

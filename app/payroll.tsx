@@ -1,18 +1,12 @@
-import { useCallback, useState } from 'react';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { useRouter } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { dateRange, deadlineRelative } from '../lib/dashboard';
-import {
-  loadPayrollStatus,
-  payrollItems,
-  pendingPayroll,
-  periodTitle,
-  type PayrollItem,
-} from '../lib/payroll';
+import { loadPayrollStatus, payrollItems, pendingPayroll, periodTitle, type PayrollItem } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
 import { loadWorkplaces } from '../lib/workplaces';
 import { TEXT_RIGHT } from '../theme/align';
@@ -21,6 +15,8 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { FoldChevron } from '../components/Chevrons';
+import { useScreenData } from '../components/useScreenData';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 /** מסך דוחות שכר: ממתינים לשליחה, החודש הנוכחי (בהכנה), ודוחות שנשלחו. */
 export default function PayrollScreen() {
@@ -32,26 +28,16 @@ export default function PayrollScreen() {
   const [open, setOpen] = useState({ pending: true, current: true, sent: false });
   const toggle = (k: keyof typeof open) => setOpen((o) => ({ ...o, [k]: !o[k] }));
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([loadWorkplaces(), loadReports(), loadPayrollStatus()]).then(([w, r, st]) => {
-        if (active) setItems(payrollItems(w, r, st));
-      });
-      return () => {
-        active = false;
-      };
-    }, []),
+  useScreenData(
+    () => Promise.all([loadWorkplaces(), loadReports(), loadPayrollStatus()]),
+    [],
+    ([w, r, st]) => {
+      setItems(payrollItems(w, r, st));
+    },
   );
 
   if (!items) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   const pending = pendingPayroll(items);

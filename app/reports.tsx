@@ -1,4 +1,4 @@
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { SelectField } from '../components/SelectField';
 import { Button } from '../components/Button';
 import { PlanList } from '../components/PlanList';
@@ -10,6 +10,7 @@ import { CalendarActions } from '../components/journal/CalendarActions';
 import { JournalWeekStrip } from '../components/journal/JournalWeekStrip';
 import { PinnedStrip } from '../components/journal/PinnedStrip';
 import { ReportsTab } from '../components/journal/ReportsTab';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 /**
  * "יומן": תכנון ודיווחים בדף אחד, עם בורר "תכנון · דיווחים". התאריכון, השורה
@@ -21,13 +22,7 @@ export default function ReportsScreen() {
   const { reports, styles, colors } = core;
 
   if (reports === null) {
-    return (
-      <Screen scroll={false}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.brand} />
-        </View>
-      </Screen>
-    );
+    return <LoadingScreen />;
   }
 
   const w: Journal = { ...core, ...journalView({ ...core, reports }) };

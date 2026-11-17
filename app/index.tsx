@@ -4,8 +4,8 @@
  * משלשום עד מחרתיים (בחירת יום בשורת ימים או בהחלקה); התראות ותזכורות,
  * עם אפשרות להציג שוב התראות שהוסתרו.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { useRouter, type Href } from 'expo-router';
 import { Animated, Linking, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
@@ -19,22 +19,8 @@ import { useCloudSync } from '../components/CloudSync';
 import { useAccess } from '../components/Access';
 import { loadAccumulated } from '../lib/accumulated';
 import { loadCourses, timeRange, type Course } from '../lib/courses';
-import { onDataChanged } from '../lib/demo';
 import { hebrewDate } from '../lib/hebrewDate';
-import {
-  AGENDA_TODAY_INDEX,
-  agenda,
-  firstName,
-  greetingFor,
-  homeAlerts,
-  nextRelevantDay,
-  type NextRelevant,
-  type AgendaDay,
-  type AgendaItem,
-  type HomeAlert,
-  type SessionStatus,
-  nextSessionAfter,
-} from '../lib/home';
+import { AGENDA_TODAY_INDEX, agenda, firstName, greetingFor, homeAlerts, nextRelevantDay, type NextRelevant, type AgendaDay, type AgendaItem, type HomeAlert, type SessionStatus, nextSessionAfter } from '../lib/home';
 import { usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus } from '../lib/payroll';
 import { loadProfile } from '../lib/profile';
@@ -49,6 +35,7 @@ import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useWorkplaceColor } from '../theme/workplaceColors';
 import { KEYS } from '../lib/keys';
+import { useScreenData } from '../components/useScreenData';
 
 /** התראות שנסגרו — לפי המפתח שלהן (שכולל תאריך כשהן תלויות יום). */
 const DISMISSED_KEY = KEYS.homeDismissed;
@@ -83,8 +70,6 @@ export default function HomeScreen() {
   const [dismissed, setDismissed] = useState<string[]>([]);
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
   const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
-  // טעינה מחדש אחרי ביטול / החזרה של מפגש
-  const [reloadTick, setReloadTick] = useState(0);
   const sessionDialog = useSessionCancel();
   // התראות מוסתרות שהוצגו שוב ("הצג") — עד שסוגרים שוב
   const [revealed, setRevealed] = useState<string[]>([]);
@@ -96,40 +81,32 @@ export default function HomeScreen() {
     return () => clearInterval(id);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      const load = () =>
-        Promise.all([
-          loadWorkplaces(),
-          loadReports(),
-          loadCourses(),
-          loadAccumulated(),
-          loadPayrollStatus(),
-          loadProfile(),
-          readJSON<string[]>(DISMISSED_KEY, []),
-          loadDismissedRecommendations(),
-        ]).then(([workplaces, reports, courses, accumulated, payroll, profile, gone, recommendDismissed]) => {
-          if (!active) return;
-          const at = new Date();
-          setNow(at);
-          setDismissed(gone);
-          setData({
-            days: agenda(courses, workplaces, reports, at),
-            alerts: homeAlerts({ workplaces, courses, reports, accumulated, payroll, basis, recommendDismissed, now: at }),
-            name: firstName(profile.fullName),
-            next: nextRelevantDay(courses, workplaces, reports, at),
-            courses,
-            workplaces,
-          });
-        });
-      void load();
-      const off = onDataChanged(() => void load());
-      return () => {
-        active = false;
-        off();
-      };
-    }, [basis, reloadTick]),
+  const { reload } = useScreenData(
+    () =>
+      Promise.all([
+        loadWorkplaces(),
+        loadReports(),
+        loadCourses(),
+        loadAccumulated(),
+        loadPayrollStatus(),
+        loadProfile(),
+        readJSON<string[]>(DISMISSED_KEY, []),
+        loadDismissedRecommendations(),
+      ]),
+    [basis],
+    ([workplaces, reports, courses, accumulated, payroll, profile, gone, recommendDismissed]) => {
+      const at = new Date();
+      setNow(at);
+      setDismissed(gone);
+      setData({
+        days: agenda(courses, workplaces, reports, at),
+        alerts: homeAlerts({ workplaces, courses, reports, accumulated, payroll, basis, recommendDismissed, now: at }),
+        name: firstName(profile.fullName),
+        next: nextRelevantDay(courses, workplaces, reports, at),
+        courses,
+        workplaces,
+      });
+    },
   );
 
   function dismiss(a: HomeAlert) {
@@ -178,7 +155,7 @@ export default function HomeScreen() {
       course: item.course,
       date: item.date,
       cancel: item.cancel,
-      onDone: () => setReloadTick((n) => n + 1),
+      onDone: () => reload(),
       // "המפגש התקיים" על מפגש שבוטל — ישר לדיווח המפגש.
       onHeld:
         item.status === 'canceled'

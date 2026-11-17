@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScrollView } from 'react-native';
 import { type DateRangeValue } from '../RangeCalendar';
 import { useDayStatus } from '../DayDot';
@@ -21,6 +21,7 @@ import { useThemedStyles } from '../../theme/useThemedStyles';
 import { workplaceColor } from '../../theme/workplaceColors';
 import { CalMode, CAL_PIN_KEY, byNewest } from './shared';
 import { makeJournalStyles as makeStyles } from './styles';
+import { useScreenData } from '../useScreenData';
 
 /**
  * הלוגיקה של היומן (app/reports.tsx): טעינה, סינון, מצב התאריכון (מלא / פס שבוע /
@@ -297,20 +298,15 @@ export function useJournal() {
   );
   const filteredStatus = useDayStatus(statusInput);
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus(), loadCourses()]).then(([r, w, st, crs]) => {
-        if (!active) return;
-        setCourses(crs);
-        setStatuses(st);
-        setReports([...r].sort(byNewest));
-        setWorkplaces(w);
-      });
-      return () => {
-        active = false;
-      };
-    }, [reloadTick]),
+  useScreenData(
+    () => Promise.all([loadReports(), loadWorkplaces(), loadPayrollStatus(), loadCourses()]),
+    [reloadTick],
+    ([r, w, st, crs]) => {
+      setCourses(crs);
+      setStatuses(st);
+      setReports([...r].sort(byNewest));
+      setWorkplaces(w);
+    },
   );
 
   return {

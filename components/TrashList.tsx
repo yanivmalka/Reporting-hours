@@ -1,21 +1,16 @@
-import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { DateText } from './DateText';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { useConfirm } from './ConfirmDialog';
-import {
-  TRASH_RETENTION_DAYS,
-  loadDeletedWorkplaces,
-  trashDaysLeft,
-  type Workplace,
-} from '../lib/workplaces';
+import { TRASH_RETENTION_DAYS, loadDeletedWorkplaces, trashDaysLeft, type Workplace } from '../lib/workplaces';
 import { deleteWorkplaceForever, deletionSummary, restoreWorkplaceWithData } from '../lib/trash';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { useScreenData } from './useScreenData';
 
 function deletedDateISO(deletedAt: number): string {
   const d = new Date(deletedAt);
@@ -30,16 +25,12 @@ export function TrashList() {
   const [items, setItems] = useState<Workplace[] | null>(null);
   const confirm = useConfirm();
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      loadDeletedWorkplaces().then((list) => {
-        if (active) setItems(list);
-      });
-      return () => {
-        active = false;
-      };
-    }, []),
+  useScreenData(
+    () => loadDeletedWorkplaces(),
+    [],
+    (list) => {
+      setItems(list);
+    },
   );
 
   /** מה נמחק יחד עם המקום ("2 קורסים ו־14 דיווחים") */
