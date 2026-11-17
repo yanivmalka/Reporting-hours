@@ -9,6 +9,7 @@
 - `app/` — מסכים (expo-router, קובץ = נתיב).
 - `lib/` — מודלים, אחסון וחישובים טהורים. אין בו רכיבי מסך, חוץ מ־`i18n.tsx` ו־`payBasis.tsx` שהם Providers.
 - `components/` — רכיבי UI ודיאלוגים משותפים.
+  - מסך גדול מפוצל לתיקייה משלו: `components/report/` (אשף הדיווח), `components/workplaceForm/` (טופס מקום עבודה), `components/journal/` (היומן). בכל אחת: `use….tsx` (hook של מצב ופעולות + פונקציית נגזרות אחרי הטעינה), רכיב לכל חלק שמקבל את הכול כ־`w`, `styles.ts` ו־`shared.ts`. קובץ המסך ב־`app/` רק מרכיב.
 - `theme/` — צבעים, גופן, יישור RTL (`align.ts`), גוונים לגרפים (`shades.ts`), צבע לכל מקום עבודה (`workplaceColors.ts`).
 
 ## מודל הנתונים ומפתחות האחסון
@@ -86,10 +87,10 @@
 |---|---|
 | `_layout.tsx` | Stack, כותרות (☰ / חזרה מימין, ⋮ משמאל), Providers |
 | `index.tsx` | בית: ברכה; שורה עליונה — כפתור דיווח ("היום הרלוונטי הבא", `nextRelevantDay`) ואריח לוח בקרה; לו״ז עם קישור "ליומן"; התראות (כולל מוסתרות) |
-| `report.tsx` | אשף דיווח: כניסה ישירה (`?course&date` — מסך אחד "דיווח מפגש") או מלאה (פס שלבים); עריכה ומחיקה |
+| `report.tsx` | אשף דיווח: כניסה ישירה (`?course&date` — מסך אחד "דיווח מפגש") או מלאה (פס שלבים); עריכה ומחיקה. הלוגיקה ב־`components/report/useReportWizard.tsx`, וכל שלב ברכיב משלו (`DateStep`, `CourseStep`, `WorkplaceStep`, `TimesStep`, `SummaryStep`, `DoneStep`, `WizardNav`) |
 | `report-view.tsx` | תצוגת דיווח (קריאה בלבד), עריכה ומחיקה; נסגר לבד כשהדיווח נמחק בעריכה |
-| `reports.tsx` | "יומן": בורר תכנון (`components/PlanList.tsx`) · דיווחים (`?tab=reports`); תאריכון, שורה מוצמדת (`WeekStrip`) וסינון משותפים |
-| `workplaces.tsx` / `workplace.tsx` / `workplace-form.tsx` | רשימת מקומות / פירוט מקום / עריכת מקום — קבוצות מתקפלות; מקום חדש בוויזארד; `?focus=payroll` פותח את "דוחות שכר" ומדגיש |
+| `reports.tsx` | "יומן": בורר תכנון (`components/PlanList.tsx`) · דיווחים (`?tab=reports`); תאריכון, שורה מוצמדת (`WeekStrip`) וסינון משותפים. הלוגיקה ב־`components/journal/useJournal.tsx`; התאריכון, פס השבוע, השכבה המוצמדת ולשונית הדיווחים — רכיבים ב־`components/journal/` |
+| `workplaces.tsx` / `workplace.tsx` / `workplace-form.tsx` | רשימת מקומות / פירוט מקום / עריכת מקום — קבוצות מתקפלות; מקום חדש בוויזארד; `?focus=payroll` פותח את "דוחות שכר" ומדגיש. הטופס: הלוגיקה ב־`components/workplaceForm/useWorkplaceForm.tsx`, כל קבוצה ברכיב `*Section`, והסידור (וויזארד / קבוצות) ב־`FormGroups` |
 | `course-form.tsx` | קורס מחזורי |
 | `dashboard.tsx` | לוח בקרה (חישובים ב־`lib/dashboard.ts`, `lib/forecast.ts`) |
 | `payroll.tsx` / `payroll-report.tsx` | דוחות שכר / דוח בודד, מייל, סימון נשלח |
