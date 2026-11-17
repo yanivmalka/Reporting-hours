@@ -6,13 +6,12 @@
  */
 import { useEffect, useState } from 'react';
 import { useRouter, type Href } from 'expo-router';
-import { Animated, Linking, StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Pressable } from '../components/Pressable';
 import { Icon } from '../components/Icon';
 import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
-import { useSlideFade } from '../components/useFlash';
 import { useSessionCancel } from '../components/SessionCancelDialog';
 import { useSessionSheet } from '../components/SessionSheet';
 import { FLAG_ICON, loadSessionNotes, noteFor, type SessionNote } from '../lib/sessionNotes';
@@ -73,11 +72,8 @@ export default function HomeScreen() {
   const [now, setNow] = useState<Date | null>(null);
   const [data, setData] = useState<Data | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
-  // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
-  const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
-  /** הלשונית המסומנת — מתעדכנת מיד בלחיצה; התוכן (`dayIdx`) מתחלף בסוף היציאה. */
+  // היום שנבחר בלו״ז (אינדקס ברשימת הימים)
   const [tabIdx, setTabIdx] = useState(AGENDA_TODAY_INDEX);
-  const daySlide = useSlideFade();
   const sessionDialog = useSessionCancel();
   const sessionSheet = useSessionSheet();
   // התראות מוסתרות שהוצגו שוב ("הצג") — עד שסוגרים שוב
@@ -135,7 +131,6 @@ export default function HomeScreen() {
   const name = data?.name || firstName(user?.name);
   const days = data?.days ?? [];
   const today = days[AGENDA_TODAY_INDEX];
-  const day = days[dayIdx];
   const next = data?.next ?? null;
   const reportHref: Href = next ? { pathname: '/report', params: { date: next.date } } : '/report';
   const missingMode = next?.kind === 'missing';
@@ -145,17 +140,16 @@ export default function HomeScreen() {
   const hiddenAlerts = allAlerts.filter(isHidden);
   const hiddenCount = hiddenAlerts.filter((a) => !revealed.includes(a.key)).length;
   const todayIso = now ? isoDate(now) : '';
-  // אין קורס ביום שנבחר — הקורס הבא אחריו.
-  const nextAfter =
-    data && day && day.items.length === 0 && data.courses.length
-      ? nextSessionAfter(data.courses, data.workplaces, day.date)
+  // אין קורס ביום — הקורס הבא אחריו.
+  const nextAfterFor = (d: AgendaDay) =>
+    data && d.items.length === 0 && data.courses.length
+      ? nextSessionAfter(data.courses, data.workplaces, d.date)
       : null;
 
   function pickDay(i: number) {
     if (i < 0 || i >= days.length || i === tabIdx) return;
+    // מעבר מיידי, בלי אפקט.
     setTabIdx(i);
-    // היום מתחלף רק כשהתוכן הנוכחי כבר שקוף לגמרי (useSlideFade) — בלי הבהוב.
-    daySlide.go(i > tabIdx ? 1 : -1, () => setDayIdx(i));
   }
   const swipe = useSwipe(
     () => pickDay(tabIdx + 1),
@@ -307,74 +301,90 @@ export default function HomeScreen() {
           );
         })}
       </View>
-      {day ? (
-        <Animated.View style={[styles.dayCard, daySlide.style]} {...swipe}>
-          <View style={styles.dayHead}>
-            <Text style={styles.dayLabel}>{day.label}</Text>
-            <Text style={styles.dayDate}>{day.dayLabel}</Text>
-          </View>
-          {day.items.length === 0 && nextAfter ? (
-            <View style={styles.emptyDay}>
-              <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
-              <Text style={styles.emptyText}>אין קורסים ביום זה.</Text>
-            </View>
-          ) : day.items.length === 0 ? (
-            <Pressable
-              onPress={() => router.push('/workplaces')}
-              style={({ pressed }) => [styles.emptyDay, pressed && styles.pressed]}
-              accessibilityRole="button"
-            >
-              <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
-              <Text style={styles.emptyText}>אין קורסים מתוכננים. קורסים מגדירים במקום העבודה ←</Text>
-            </Pressable>
-          ) : null}
-          {day.items.length === 0 && nextAfter ? (
-            <Pressable
-              onPress={() => {
-                // המפגש הבא בתוך ימי הלו״ז — מעבר ליום שלו; אחרת — ליומן, על התאריך.
-                const i = days.findIndex((d) => d.date === nextAfter.date);
-                if (i >= 0) pickDay(i);
-                else router.push({ pathname: '/reports', params: { tab: 'plan', day: nextAfter.date } });
-              }}
-              accessibilityRole="link"
-              style={({ pressed }) => [styles.nextCourse, pressed && styles.pressed]}
-            >
-              <Icon name="calendar-arrow-left" size={20} color={colors.brand} />
-              <Text style={styles.nextCourseText}>
-                הקורס הבא: {nextAfter.course.name} · {nextDateLabel(nextAfter.date)}{' '}
-                <Text style={styles.showLink}>
-                  {days.some((d) => d.date === nextAfter.date) ? 'מעבר ליום' : 'ביומן'}
-                </Text>
-              </Text>
-              <EnterChevron size={18} color={colors.brand} />
-            </Pressable>
-          ) : null}
-          {day.items.length === 0 ? null : (
-            day.items.map((item) => (
-              <SessionRow
-                key={item.course.id}
-                item={item}
-                note={data ? noteFor(data.notes, item.course.id, item.date) : undefined}
-                onPress={
-                  item.reportId
-                    ? // מפגש שדווח — תצוגת הדיווח (עריכה בכפתור, "חזרה" חוזרת לכאן)
-                      () => router.push({ pathname: '/report-view', params: { id: item.reportId } })
-                    : item.status === 'canceled'
-                      ? // מבוטל — הסיבה והחזרה
-                        () => openCancel(item)
-                      : item.status === 'upcoming'
-                        ? // עתידי — פרטי המפגש (ומשם ביטול)
-                          () => openSheet(item)
-                        : () =>
-                          router.push({
-                            pathname: '/report',
-                            params: { course: item.course.id, date: item.date },
-                          })
-                }
-              />
-            ))
-          )}
-        </Animated.View>
+      {days.length ? (
+        // כל הימים מרונדרים זה על גבי זה, וגובה האזור הוא של היום הגבוה —
+        // כך מעבר בין ימים לא מזיז את מה שמתחת. מוצג רק היום שנבחר.
+        <View style={styles.dayStack} {...swipe}>
+          {days.map((d, i) => {
+            const shown = i === tabIdx;
+            const nextAfter = nextAfterFor(d);
+            return (
+              <View
+                key={d.key}
+                style={[styles.dayCard, i > 0 && styles.dayLayer, !shown && styles.dayHidden]}
+                pointerEvents={shown ? 'auto' : 'none'}
+                aria-hidden={!shown}
+                importantForAccessibility={shown ? 'auto' : 'no-hide-descendants'}
+              >
+                <View style={styles.dayHead}>
+                  <Text style={styles.dayLabel}>{d.label}</Text>
+                  <Text style={styles.dayDate}>{d.dayLabel}</Text>
+                </View>
+                {d.items.length === 0 && nextAfter ? (
+                  <View style={styles.emptyDay}>
+                    <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
+                    <Text style={styles.emptyText}>אין קורסים ביום זה.</Text>
+                  </View>
+                ) : d.items.length === 0 ? (
+                  <Pressable
+                    onPress={() => router.push('/workplaces')}
+                    style={({ pressed }) => [styles.emptyDay, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                  >
+                    <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
+                    <Text style={styles.emptyText}>אין קורסים מתוכננים. קורסים מגדירים במקום העבודה ←</Text>
+                  </Pressable>
+                ) : null}
+                {d.items.length === 0 && nextAfter ? (
+                  <Pressable
+                    onPress={() => {
+                      // המפגש הבא בתוך ימי הלו״ז — מעבר ליום שלו; אחרת — ליומן, על התאריך.
+                      const i = days.findIndex((x) => x.date === nextAfter.date);
+                      if (i >= 0) pickDay(i);
+                      else router.push({ pathname: '/reports', params: { tab: 'plan', day: nextAfter.date } });
+                    }}
+                    accessibilityRole="link"
+                    style={({ pressed }) => [styles.nextCourse, pressed && styles.pressed]}
+                  >
+                    <Icon name="calendar-arrow-left" size={20} color={colors.brand} />
+                    <Text style={styles.nextCourseText}>
+                      הקורס הבא: {nextAfter.course.name} · {nextDateLabel(nextAfter.date)}{' '}
+                      <Text style={styles.showLink}>
+                        {days.some((x) => x.date === nextAfter.date) ? 'מעבר ליום' : 'ביומן'}
+                      </Text>
+                    </Text>
+                    <EnterChevron size={18} color={colors.brand} />
+                  </Pressable>
+                ) : null}
+                {d.items.length === 0 ? null : (
+                  d.items.map((item) => (
+                    <SessionRow
+                      key={item.course.id}
+                      item={item}
+                      note={data ? noteFor(data.notes, item.course.id, item.date) : undefined}
+                      onPress={
+                        item.reportId
+                          ? // מפגש שדווח — תצוגת הדיווח (עריכה בכפתור, "חזרה" חוזרת לכאן)
+                            () => router.push({ pathname: '/report-view', params: { id: item.reportId } })
+                          : item.status === 'canceled'
+                            ? // מבוטל — הסיבה והחזרה
+                              () => openCancel(item)
+                            : item.status === 'upcoming'
+                              ? // עתידי — פרטי המפגש (ומשם ביטול)
+                                () => openSheet(item)
+                              : () =>
+                                router.push({
+                                  pathname: '/report',
+                                  params: { course: item.course.id, date: item.date },
+                                })
+                      }
+                    />
+                  ))
+                )}
+              </View>
+            );
+          })}
+        </View>
       ) : null}
       {sessionDialog.dialog}
       {sessionSheet.dialog}
@@ -648,7 +658,11 @@ const makeStyles = (colors: AppColors) =>
       borderColor: 'transparent',
       backgroundColor: 'transparent',
     },
-    dayCard: { gap: spacing.sm },
+    dayStack: { flexDirection: 'row', alignItems: 'flex-start' },
+    dayCard: { gap: spacing.sm, width: '100%', flexShrink: 0 },
+    // שכבה מעל היום הראשון (באותו מקום) — לא תופסת רוחב משלה
+    dayLayer: { marginStart: '-100%' },
+    dayHidden: { opacity: 0 },
     dayHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, paddingHorizontal: 2 },
     dayLabel: { fontSize: 17, fontWeight: '800', color: colors.text },
     dayDate: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
