@@ -17,9 +17,20 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 20,
+  sm: 10,
+  md: 16,
+  lg: 24,
+} as const;
+
+/**
+ * צל רך לכרטיסים ולאריחים — במקום מסגרת דקה. כרטיס לבן "צף" מעל רקע אפור־ירקרק.
+ */
+export const cardShadow = {
+  elevation: 1,
+  shadowColor: '#0F172A',
+  shadowOpacity: 0.08,
+  shadowRadius: 3,
+  shadowOffset: { width: 0, height: 1 },
 } as const;
 
 export type AppColors = ColorScheme;

@@ -56,9 +56,9 @@ const STATUS_LIGHT = {
 
 /** ניטרליים משותפים — אפור־כחלחל (slate) קריר. */
 const NEUTRAL_LIGHT = {
-  background: '#F6F8FA',
+  background: '#F3F5F4',
   surface: '#FFFFFF',
-  border: '#E2E8F0',
+  border: '#E4EAE8',
   text: '#0F172A',
   textMuted: '#526070',
   textOnBrand: '#FFFFFF',

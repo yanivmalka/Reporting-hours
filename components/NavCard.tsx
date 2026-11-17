@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { EnterChevron } from './Chevrons';
 
@@ -42,9 +42,8 @@ const makeStyles = (colors: AppColors) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.md,
+      borderRadius: radius.md + 4,
+      ...cardShadow,
       padding: spacing.md,
       gap: spacing.md,
     },
