@@ -1,4 +1,3 @@
-import { EnterChevron } from '../Chevrons';
 import { Keyboard, View } from 'react-native';
 import { Text } from '../Text';
 import { Pressable } from '../Pressable';
@@ -114,27 +113,6 @@ export function TimesStep({ w }: { w: ReportWizard }) {
           </View>
         </FormField>
 
-        {shown.leftover > 0 ? (
-          <View style={styles.leftoverRow}>
-            <Text style={styles.leftoverText}>
-              דקות עודפות ({shown.leftover} דק׳):{' '}
-              {leftoverChoice === 'carry' ? 'למונה המצטבר' : 'נכללות בדיווח כשבר שעה'}
-              {editing ? ' · כפי שנקבע בדיווח' : ''}
-            </Text>
-            {editing ? null : (
-              <Pressable
-                onPress={() => router.push({ pathname: '/settings', params: { focus: 'settings' } })}
-                accessibilityRole="link"
-                hitSlop={8}
-                style={styles.leftoverLink}
-              >
-                <Text style={styles.linkText}>שינוי בהגדרות</Text>
-                <EnterChevron size={16} />
-              </Pressable>
-            )}
-          </View>
-        ) : null}
-
         {shown.net != null ? (
           <View style={styles.netCard}>
             <View style={styles.netCol}>
@@ -151,6 +129,24 @@ export function TimesStep({ w }: { w: ReportWizard }) {
                 <Text style={styles.netValue}>{formatShekels(shown.money)}</Text>
               </View>
             ) : null}
+            {/* דקות עודפות — שורה קבועה בתחתית הסיכום (תמיד תופסת מקום), כדי שהפקדים לא יזוזו. */}
+            <View style={styles.netLeftover}>
+              <Text style={styles.netLeftoverText} numberOfLines={1}>
+                {shown.leftover > 0
+                  ? `+${shown.leftover} דק׳ עודפות · ${leftoverChoice === 'carry' ? 'למונה המצטבר' : 'בשבר שעה'}${editing ? ' · כפי שנקבע בדיווח' : ''}`
+                  : ' '}
+              </Text>
+              {shown.leftover > 0 && !editing ? (
+                <Pressable
+                  onPress={() => router.push({ pathname: '/settings', params: { focus: 'settings' } })}
+                  accessibilityRole="link"
+                  accessibilityLabel="שינוי אופן הדקות העודפות בהגדרות"
+                  hitSlop={8}
+                >
+                  <Text style={styles.netLeftoverLink}>שינוי</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         ) : null}
       </>

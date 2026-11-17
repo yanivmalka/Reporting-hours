@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coursesOn, occurrences, plannedMinutes, type Course } from '../lib/courses';
+import { canceledOn, coursesOn, occurrences, plannedMinutes, type Course } from '../lib/courses';
 import { cancelIndex, DEFAULT_HOLIDAY_SETTINGS } from '../lib/sessions';
 
 const course: Course = {
@@ -37,5 +37,23 @@ describe('מפגשי קורס', () => {
     );
     expect(idx('c1', '2026-10-04')?.reason).toBe('מחלה');
     expect(idx('c1', '2026-09-13')).toBeNull();
+  });
+});
+
+describe('מפגשים שלא מתקיימים בתאריך (שלב התאריך באשף)', () => {
+  it('מפגש שהועבר או בוטל מוצג עם הסיבה; נמחק מהתכנון — לא', () => {
+    const idx = cancelIndex(
+      [
+        { courseId: 'c1', date: '2026-10-04', status: 'moved', movedTo: '2026-10-06', at: 1 },
+        { courseId: 'c1', date: '2026-10-11', status: 'canceled', reason: 'מחלה', at: 1 },
+        { courseId: 'c1', date: '2026-10-18', status: 'removed', at: 1 },
+      ],
+      { yomTov: false, eve: false, cholHamoed: false, tishaBav: false },
+    );
+    expect(coursesOn([course], '2026-10-04', undefined, idx)).toHaveLength(0);
+    expect(canceledOn([course], '2026-10-04', idx)[0]?.cancel).toMatchObject({ kind: 'moved', movedTo: '2026-10-06' });
+    expect(canceledOn([course], '2026-10-11', idx)[0]?.cancel.reason).toBe('מחלה');
+    expect(canceledOn([course], '2026-10-18', idx)).toHaveLength(0);
+    expect(canceledOn([course], '2026-10-25', idx)).toHaveLength(0);
   });
 });
