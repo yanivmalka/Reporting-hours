@@ -7,6 +7,7 @@ import { useWorkplaceForm, workplaceFormView, type WorkplaceFormModel } from '..
 import type { GroupKey } from '../components/workplaceForm/shared';
 import { GeneralSection } from '../components/workplaceForm/GeneralSection';
 import { PaySection } from '../components/workplaceForm/PaySection';
+import { FinanceSection } from '../components/AppLock';
 import { ArrivalSection } from '../components/workplaceForm/ArrivalSection';
 import { PayrollSection } from '../components/workplaceForm/PayrollSection';
 import { CancelSection } from '../components/workplaceForm/CancelSection';
@@ -30,10 +31,18 @@ function WorkplaceFormScreenInner() {
   const w: WorkplaceFormModel = { ...core, ...workplaceFormView({ ...core, form }) };
   const sections: Record<GroupKey, React.ReactNode> = {
     general: <GeneralSection w={w} />,
-    pay: <PaySection w={w} />,
+    pay: (
+      <FinanceSection>
+        <PaySection w={w} />
+      </FinanceSection>
+    ),
     arrival: <ArrivalSection w={w} />,
     payroll: <PayrollSection w={w} />,
-    cancel: <CancelSection w={w} />,
+    cancel: (
+      <FinanceSection>
+        <CancelSection w={w} />
+      </FinanceSection>
+    ),
     vacations: id ? <VacationsCard target={{ kind: 'workplace', id }} editable bare /> : null,
     courses: <CoursesSection w={w} />,
     manage: <ManageSection w={w} />,

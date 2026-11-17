@@ -29,6 +29,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { FinanceGate } from '../components/AppLock';
 
 const academic = (m: number) => Math.round((m / ACADEMIC_HOUR_MINUTES) * 100) / 100;
 const hm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
@@ -39,7 +40,16 @@ const weekday = (iso: string) => {
 };
 
 /** דוח שכר חודשי למקום עבודה: תצוגה מקדימה, יצירת מייל, שיתוף וסימון כנשלח. */
-export default function PayrollReportScreen() {
+/** מסך כספי — נעול כשנעילת המידע הכספי מופעלת (lib/appLock.ts). */
+export default function PayrollReportScreenGated() {
+  return (
+    <FinanceGate>
+      <PayrollReportScreen />
+    </FinanceGate>
+  );
+}
+
+function PayrollReportScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();

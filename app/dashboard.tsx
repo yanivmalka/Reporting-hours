@@ -31,6 +31,7 @@ import { workplaceColor } from '../theme/workplaceColors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { FinanceGate } from '../components/AppLock';
 
 type PeriodChoice = 'current' | 'previous';
 
@@ -49,7 +50,16 @@ const academicHours = (minutes: number) => minutes / ACADEMIC_HOUR_MINUTES;
 const regularHours = (minutes: number) => minutes / 60;
 
 
-export default function DashboardScreen() {
+/** מסך כספי — נעול כשנעילת המידע הכספי מופעלת (lib/appLock.ts). */
+export default function DashboardScreenGated() {
+  return (
+    <FinanceGate>
+      <DashboardScreen />
+    </FinanceGate>
+  );
+}
+
+function DashboardScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();

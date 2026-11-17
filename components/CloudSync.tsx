@@ -21,7 +21,7 @@ import { Text } from './Text';
 import { Button } from './Button';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
-import { ROLE_LABELS, leaveShare, listSharedWithMe } from '../lib/sharing';
+import { ROLE_LABELS, listSharedWithMe } from '../lib/sharing';
 import { useI18n } from '../lib/i18n';
 import { cloudSupported, signInWithGoogle, signOutCloud, watchUser, type CloudUser } from '../lib/firebase';
 import {
@@ -332,25 +332,6 @@ export function AccountSwitcher({ onSwitched }: { onSwitched?: () => void }) {
               </Text>
             ) : null}
           </View>
-          {r.a ? (
-            <Pressable
-              hitSlop={8}
-              onPress={() => {
-                const owner = r.a!;
-                void (async () => {
-                  try {
-                    if (access?.ownerUid === owner.ownerUid) await switchAccount(null);
-                    await leaveShare(owner.ownerUid);
-                    setList((l) => l.filter((x) => x.ownerUid !== owner.ownerUid));
-                  } catch {
-                    setError('העזיבה נכשלה. נסו שוב.');
-                  }
-                })();
-              }}
-            >
-              <Text style={styles.leave}>עזיבה</Text>
-            </Pressable>
-          ) : null}
         </Pressable>
       ))}
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -383,7 +364,6 @@ function makeSwitcherStyles(c: ColorScheme, layout: StyleLayout) {
     off: { color: c.textMuted },
     name: { fontSize: 15, color: c.text, textAlign: layout.textStart },
     sub: { fontSize: 12, color: c.textMuted, textAlign: layout.textStart },
-    leave: { fontSize: 13, color: c.dangerText },
     error: { fontSize: 13, color: c.danger, textAlign: layout.textStart, paddingHorizontal: spacing.md },
   };
 }

@@ -22,6 +22,7 @@ import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { FoldChevron } from '../components/Chevrons';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { FinanceGate } from '../components/AppLock';
 
 type Row = { item: PayrollItem; report: PayrollReport; expected: string };
 
@@ -29,7 +30,16 @@ type Row = { item: PayrollItem; report: PayrollReport; expected: string };
  * מעקב תשלומים: לכל דוח שכר שנשלח — מתי צפוי התשלום (לפי "שוטף +"),
  * האם שולם, מתי ובאיזה סכום. דוחות שמועד התשלום שלהם עבר — מודגשים.
  */
-export default function PaymentsScreen() {
+/** מסך כספי — נעול כשנעילת המידע הכספי מופעלת (lib/appLock.ts). */
+export default function PaymentsScreenGated() {
+  return (
+    <FinanceGate>
+      <PaymentsScreen />
+    </FinanceGate>
+  );
+}
+
+function PaymentsScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
