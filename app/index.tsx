@@ -14,6 +14,8 @@ import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
 import { useFade } from '../components/useFlash';
 import { useSessionCancel } from '../components/SessionCancelDialog';
+import { useSessionSheet } from '../components/SessionSheet';
+import { FLAG_ICON, loadSessionNotes, noteFor, type SessionNote } from '../lib/sessionNotes';
 import { useSwipe } from '../components/useSwipe';
 import { useCloudSync } from '../components/CloudSync';
 import { useAccess } from '../components/Access';
@@ -57,6 +59,8 @@ type Data = {
   next: NextRelevant;
   courses: Course[];
   workplaces: Workplace[];
+  /** פרטי מפגשים (הערה, הגשה, תזכורת) — לאייקונים בלו״ז */
+  notes: SessionNote[];
   /** סכום החודש (תקופת השכר הנוכחית) בכל המקומות הפעילים: דווח מול צפי */
   month: { reported: number; forecast: number; label: string } | null;
 };
@@ -100,6 +104,7 @@ export default function HomeScreen() {
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
   const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
   const sessionDialog = useSessionCancel();
+  const sessionSheet = useSessionSheet();
   // התראות מוסתרות שהוצגו שוב ("הצג") — עד שסוגרים שוב
   const [revealed, setRevealed] = useState<string[]>([]);
 
@@ -121,19 +126,21 @@ export default function HomeScreen() {
         loadProfile(),
         readJSON<string[]>(DISMISSED_KEY, []),
         loadDismissedRecommendations(),
+        loadSessionNotes(),
       ]),
     [basis],
-    ([workplaces, reports, courses, accumulated, payroll, profile, gone, recommendDismissed]) => {
+    ([workplaces, reports, courses, accumulated, payroll, profile, gone, recommendDismissed, notes]) => {
       const at = new Date();
       setNow(at);
       setDismissed(gone);
       setData({
         days: agenda(courses, workplaces, reports, at),
-        alerts: homeAlerts({ workplaces, courses, reports, accumulated, payroll, basis, recommendDismissed, now: at }),
+        alerts: homeAlerts({ workplaces, courses, reports, accumulated, payroll, basis, recommendDismissed, notes, now: at }),
         name: firstName(profile.fullName),
         next: nextRelevantDay(courses, workplaces, reports, at),
         courses,
         workplaces,
+        notes,
         month: monthSummary(workplaces, reports, courses, payroll, basis, at),
       });
     },
@@ -191,6 +198,17 @@ export default function HomeScreen() {
         item.status === 'canceled'
           ? () => router.push({ pathname: '/report', params: { course: item.course.id, date: item.date } })
           : undefined,
+    });
+  }
+
+  /** מפגש עתידי — גיליון "פרטי המפגש" (הערה, תוכן, הגעה, הגשה, תזכורת), ומשם גם ביטול. */
+  function openSheet(item: AgendaItem) {
+    sessionSheet.open({
+      course: item.course,
+      workplace: item.workplace,
+      date: item.date,
+      onDone: () => reload(),
+      onCancelSession: () => openCancel(item),
     });
   }
 
@@ -399,14 +417,18 @@ export default function HomeScreen() {
               <SessionRow
                 key={item.course.id}
                 item={item}
+                note={data ? noteFor(data.notes, item.course.id, item.date) : undefined}
                 onPress={
                   item.reportId
                     ? // מפגש שדווח — תצוגת הדיווח (עריכה בכפתור, "חזרה" חוזרת לכאן)
                       () => router.push({ pathname: '/report-view', params: { id: item.reportId } })
-                    : item.status === 'canceled' || item.status === 'upcoming'
-                      ? // מבוטל — הסיבה והחזרה; עתידי — ביטול מראש
+                    : item.status === 'canceled'
+                      ? // מבוטל — הסיבה והחזרה
                         () => openCancel(item)
-                      : () =>
+                      : item.status === 'upcoming'
+                        ? // עתידי — פרטי המפגש (ומשם ביטול)
+                          () => openSheet(item)
+                        : () =>
                           router.push({
                             pathname: '/report',
                             params: { course: item.course.id, date: item.date },
@@ -418,6 +440,7 @@ export default function HomeScreen() {
         </Animated.View>
       ) : null}
       {sessionDialog.dialog}
+      {sessionSheet.dialog}
 
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>התראות ותזכורות</Text>
@@ -500,7 +523,7 @@ function shortWeekday(iso: string): string {
 }
 
 
-function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void }) {
+function SessionRow({ item, onPress, note }: { item: AgendaItem; onPress?: () => void; note?: SessionNote }) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const tone =
@@ -534,6 +557,10 @@ function SessionRow({ item, onPress }: { item: AgendaItem; onPress?: () => void 
             : `${item.time} · ${item.workplace.name}`}
         </Text>
       </View>
+      {note?.flag ? <Icon name={FLAG_ICON[note.flag]} size={18} color={colors.warning} /> : null}
+      {note && (note.note || note.content || note.arrival) ? (
+        <Icon name="note-text-outline" size={18} color={colors.textMuted} />
+      ) : null}
       {item.status === 'upcoming' ? (
         taxi ? <Icon name="taxi" size={20} color={colors.textMuted} /> : null
       ) : (

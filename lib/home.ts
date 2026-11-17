@@ -17,6 +17,7 @@ import { recommendations } from './recommend';
 import { parseTime } from './time';
 import { activeWorkplaces, isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
 import { beforeTracking } from './trackingStart';
+import { effectiveReminder, FLAG_ICON, FLAG_LABEL, stamp, type SessionNote } from './sessionNotes';
 
 // ───────────────────────── ברכה ─────────────────────────
 
@@ -286,6 +287,8 @@ export type AlertInput = {
   basis: PayBasis;
   /** המלצות סידור שנדחו (lib/recommend.ts) */
   recommendDismissed?: readonly string[];
+  /** פרטי מפגשים (lib/sessionNotes.ts) — לתזכורות */
+  notes?: readonly SessionNote[];
   now?: Date;
 };
 
@@ -344,6 +347,43 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
   return out;
 }
 
+/**
+ * תזכורות מפגש (lib/sessionNotes.ts): מהמועד שנקבע ועד סוף המפגש. מפגש שבוטל,
+ * הועבר או דווח — בלי תזכורת.
+ */
+export function reminderAlerts(
+  notes: readonly SessionNote[],
+  workplaces: readonly Workplace[],
+  courses: readonly Course[],
+  reports: readonly WorkReport[],
+  now: Date,
+  cancel: CancelIndex = currentCancel(),
+): HomeAlert[] {
+  const out: HomeAlert[] = [];
+  const at = stamp(now);
+  for (const n of notes) {
+    const when = effectiveReminder(n);
+    if (!when || when > at) continue;
+    const course = courses.find((c) => c.id === n.courseId);
+    const workplace = course && workplaces.find((w) => w.id === course.workplaceId);
+    if (!course || !workplace) continue;
+    if (`${n.date}T${course.end}` < at) continue; // המפגש כבר הסתיים
+    if (sessionCancel(course, n.date, cancel) || courseReport(course, n.date, reports)) continue;
+    const lines = [n.note, n.content && `תוכן: ${n.content}`, n.arrival && `הגעה: ${n.arrival}`].filter(Boolean);
+    const [y, m, d] = n.date.split('-').map(Number);
+    const day = isoDate(now) === n.date ? 'היום' : longDayLabel(new Date(y, m - 1, d));
+    out.push({
+      key: `reminder|${n.courseId}|${n.date}|${when}`,
+      icon: n.flag ? FLAG_ICON[n.flag] : 'bell-outline',
+      tone: n.flag ? 'warn' : 'info',
+      title: `${n.flag ? `${FLAG_LABEL[n.flag]}: ` : 'תזכורת: '}${course.name} · ${day} ${course.start}`,
+      body: lines.length ? lines.join('\n') : workplace.name,
+      action: { label: 'ליומן', href: { pathname: '/reports', params: { tab: 'plan', day: n.date } } },
+    });
+  }
+  return out;
+}
+
 /** מפגשים מהימים האחרונים (לא כולל היום) שלא דווחו. */
 function missingAlerts(
   workplaces: readonly Workplace[],
@@ -391,6 +431,7 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
   // דוחות שכר ותשלומים — לכולם, גם למקום שהועבר לארכיון ועוד חייב תשלום.
   const active = activeWorkplaces(workplaces);
   out.push(...taxiAlerts(active, courses, now));
+  out.push(...reminderAlerts(input.notes ?? [], active, courses, reports, now));
   out.push(...missingAlerts(active, courses, reports, now));
 
   // דוחות שכר ותיאום מס (אותה לוגיקה שהייתה בבאנר התזכורות).

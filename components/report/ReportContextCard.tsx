@@ -7,11 +7,24 @@ import { basisFor } from '../../lib/payBasis';
 import { timeRange } from '../../lib/courses';
 import { formatShekels, hasTravelCost } from '../../lib/travel';
 import { ARRIVAL_MODE_LABELS, paymentTermsLabel, taxPercentOf } from '../../lib/workplaces';
+import { useSessionNotes } from '../useSessionNotes';
+import { FLAG_LABEL, noteFor } from '../../lib/sessionNotes';
 import type { ReportWizard } from './useReportWizard';
 
 /** שורת הקשר בשלבי השעות והסיכום: מקום העבודה, הקורס, התאריך והתנאים. לחיצה — לדף מקום העבודה. */
 export function ReportContextCard({ w }: { w: ReportWizard }) {
   const { router, styles, colorOf, basis, step, date, workplace, selectedCourse, wAt } = w;
+  // פרטי המפגש (הערה, תוכן, הגעה, הגשה) — מוצגים גם בדיווח שלו.
+  const notes = useSessionNotes();
+  const note = selectedCourse ? noteFor(notes, selectedCourse.id, date) : undefined;
+  const noteLines = note
+    ? [
+        note.flag && FLAG_LABEL[note.flag],
+        note.note,
+        note.content && `תוכן: ${note.content}`,
+        note.arrival && `הגעה: ${note.arrival}`,
+      ].filter(Boolean)
+    : [];
   const context =
     (step === 'times' || step === 'summary') && wAt ? (
       <Pressable
@@ -33,6 +46,7 @@ export function ReportContextCard({ w }: { w: ReportWizard }) {
           </Text>
         ) : null}
         <Text style={styles.contextSub}>{longDate(date)}</Text>
+        {noteLines.length ? <Text style={styles.contextCourse}>{noteLines.join(' · ')}</Text> : null}
         <Text style={styles.contextSub}>
           {wAt.paymentType === 'monthly'
             ? `משכורת חודשית ${formatShekels(wAt.rate)}`
