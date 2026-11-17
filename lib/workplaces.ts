@@ -75,6 +75,8 @@ export type Workplace = {
   employeeNumber?: string;
   /** תיאום מס: לכל שנה לועזית — תאריך שבו נשלח ("YYYY-MM-DD") */
   taxCoordination?: Record<string, string>;
+  /** טופס תיאום מס שנטען: לכל שנה לועזית — הקובץ ב־Cloud Storage (lib/taxFiles.ts) */
+  taxFiles?: Record<string, TaxFile>;
   /**
    * היסטוריית תנאים: גרסאות קודמות של התעריף / סוג התשלום / הנסיעות / המס.
    * כל גרסה חלה על תאריכים שלפני `until`. התנאים בשדות הרגילים — הנוכחיים.
@@ -404,6 +406,39 @@ export async function setTaxCoordination(
   });
   await saveWorkplaces(next);
   return next.filter((w) => w.deletedAt == null);
+}
+
+/** קובץ טופס תיאום מס של שנה (lib/taxFiles.ts). */
+export type TaxFile = {
+  /** הנתיב ב־Cloud Storage */
+  path: string;
+  /** שם הקובץ המקורי */
+  name: string;
+  contentType: string;
+  size: number;
+  /** מתי נטען (מילישניות) */
+  uploadedAt: number;
+};
+
+/** שמירת קובץ תיאום המס של שנה, או null להסרה. */
+export async function setTaxFile(workplaceId: string, year: string, file: TaxFile | null): Promise<Workplace[]> {
+  const all = await loadAllPruned();
+  const next = all.map((w) => {
+    if (w.id !== workplaceId) return w;
+    const map = { ...(w.taxFiles ?? {}) };
+    if (file) map[year] = file;
+    else delete map[year];
+    return { ...w, taxFiles: map };
+  });
+  await saveWorkplaces(next);
+  return next.filter((w) => w.deletedAt == null);
+}
+
+/** מצב תיאום המס של מקום עבודה בשנה: חסר → נטען (יש קובץ) → נשלח (תאריך). */
+export type TaxStatus = 'missing' | 'loaded' | 'sent';
+export function taxStatus(w: Workplace, year: string): TaxStatus {
+  if (w.taxCoordination?.[year]) return 'sent';
+  return w.taxFiles?.[year] ? 'loaded' : 'missing';
 }
 
 /** מקומות עבודה פעילים שלא נכללו בתיאום המס של השנה. */

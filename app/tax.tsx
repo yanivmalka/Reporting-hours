@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { EnterChevron } from '../components/Chevrons';
-import { StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
@@ -9,7 +9,13 @@ import { DateField } from '../components/DatePicker';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { todayISO } from '../lib/time';
-import { loadWorkplaces, setTaxCoordination, type Workplace } from '../lib/workplaces';
+import { loadWorkplaces, setTaxCoordination, taxStatus, type Workplace } from '../lib/workplaces';
+import { deleteTaxFile, markTaxSent, pickAndUploadTaxFile, TAX_FILE_ERROR, taxFileUrl, taxMailto } from '../lib/taxFiles';
+import { authUser } from '../lib/sync';
+import { Icon } from '../components/Icon';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
+import { useTheme } from '../theme/ThemeContext';
 import { TEXT_RIGHT } from '../theme/align';
 import { useI18n } from '../lib/i18n';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -17,7 +23,8 @@ import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { useScreenData } from '../components/useScreenData';
 
 /**
- * תיאום מס לשנה לועזית: לכל מקום עבודה — האם נכלל בתיאום שנשלח השנה, ומתי.
+ * תיאום מס לשנה לועזית: לכל מקום עבודה — טופס התיאום (טעינה, צפייה, החלפה,
+ * מחיקה ושליחה במייל, lib/taxFiles.ts) והמצב: חסר → נטען → נשלח (ומתי).
  * מקום עבודה שלא נכלל — מסומן, ומופיעה תזכורת במסך הבית.
  */
 export default function TaxScreen() {
@@ -28,6 +35,11 @@ export default function TaxScreen() {
   const [list, setList] = useState<Workplace[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [date, setDate] = useState(todayISO());
+  /** מקום עבודה שפעולת קובץ שלו רצה (טעינה / צפייה / שליחה) */
+  const [busy, setBusy] = useState<string | null>(null);
+  const confirm = useConfirm();
+  const { showToast } = useToast();
+  const { colors } = useTheme();
 
   useScreenData(loadWorkplaces, [], setList);
 
@@ -39,8 +51,72 @@ export default function TaxScreen() {
     setEditing(null);
   }
 
+  async function upload(w: Workplace) {
+    setBusy(w.id);
+    try {
+      const res = await pickAndUploadTaxFile(w, year);
+      if (!res) return;
+      if ('error' in res) showToast(TAX_FILE_ERROR[res.error]);
+      else {
+        setList(res.list);
+        showToast('הטופס נטען');
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function view(w: Workplace) {
+    const file = w.taxFiles?.[year];
+    if (!file) return;
+    setBusy(w.id);
+    try {
+      const url = await taxFileUrl(file);
+      if (url) await Linking.openURL(url);
+      else showToast('לא ניתן לפתוח את הקובץ כרגע.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function send(w: Workplace) {
+    const file = w.taxFiles?.[year];
+    if (!file) return;
+    if (!w.payrollEmail) {
+      showToast('לא הוגדר מייל מחלקת שכר — בעריכת מקום העבודה, "דוחות שכר".');
+      return;
+    }
+    setBusy(w.id);
+    try {
+      const url = await taxFileUrl(file);
+      if (!url) {
+        showToast('לא ניתן להכין קישור לקובץ כרגע.');
+        return;
+      }
+      await Linking.openURL(taxMailto(w, year, url, authUser()?.name));
+      setList(await markTaxSent(w, year));
+      showToast('נפתחה טיוטת מייל · סומן "נשלח"');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function remove(w: Workplace) {
+    confirm({
+      title: 'מחיקת טופס תיאום המס',
+      message: `הקובץ של ${year} יימחק. סימון "נשלח" (אם יש) נשאר.`,
+      onConfirm: async () => {
+        setList(await deleteTaxFile(w, year));
+        showToast('הטופס נמחק');
+      },
+    });
+  }
+
   const Row = ({ w }: { w: Workplace }) => {
     const sent = w.taxCoordination?.[year];
+    const file = w.taxFiles?.[year];
+    const status = taxStatus(w, year);
+    const working = busy === w.id;
     return (
       <View style={[styles.row, !sent && styles.rowMissing]}>
         <Pressable
@@ -51,9 +127,39 @@ export default function TaxScreen() {
           <Text style={[styles.name, { flex: 1 }]}>{w.name}</Text>
           <EnterChevron />
         </Pressable>
-        <Text style={[styles.meta, sent ? styles.ok : styles.warn]}>
-          {sent ? <>✓ נכלל בתיאום — נשלח <DateText iso={sent} /></> : `לא נכלל בתיאום ${year}`}
+        <Text style={[styles.meta, status === 'sent' ? styles.ok : styles.warn]}>
+          {sent ? (
+            <>✓ נכלל בתיאום — נשלח <DateText iso={sent} /></>
+          ) : status === 'loaded' ? (
+            'הטופס נטען — טרם נשלח'
+          ) : (
+            `לא נכלל בתיאום ${year}`
+          )}
         </Text>
+        {file ? (
+          <View style={styles.fileRow}>
+            <Icon name={file.contentType === 'application/pdf' ? 'file-pdf-box' : 'file-image-outline'} size={20} color={colors.textMuted} />
+            <Text style={styles.fileName} numberOfLines={1}>
+              {file.name}
+            </Text>
+          </View>
+        ) : null}
+        {file ? (
+          <View style={styles.fileActions}>
+            <Button label="צפייה" variant="secondary" onPress={() => view(w)} disabled={working} />
+            <Button label={sent ? 'שליחה שוב במייל' : 'שליחה במייל'} onPress={() => send(w)} loading={working} />
+            <View style={styles.linksRow}>
+              <Pressable onPress={() => upload(w)} accessibilityRole="link" hitSlop={8} disabled={working}>
+                <Text style={styles.link}>החלפת הקובץ</Text>
+              </Pressable>
+              <Pressable onPress={() => remove(w)} accessibilityRole="link" hitSlop={8} disabled={working}>
+                <Text style={styles.deleteLink}>מחיקת הקובץ</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Button label="טעינת טופס (PDF או תמונה)" variant="secondary" onPress={() => upload(w)} loading={working} />
+        )}
         {editing === w.id ? (
           <View style={styles.edit}>
             <DateField value={date} onChange={setDate} />
@@ -62,14 +168,16 @@ export default function TaxScreen() {
             <Button label="סגירה" variant="secondary" onPress={() => setEditing(null)} />
           </View>
         ) : (
-          <Button
-            label={sent ? 'עריכת התאריך' : 'סימון — נשלח תיאום'}
-            variant="secondary"
+          <Pressable
             onPress={() => {
               setDate(sent ?? todayISO());
               setEditing(w.id);
             }}
-          />
+            accessibilityRole="link"
+            hitSlop={8}
+          >
+            <Text style={styles.link}>{sent ? 'עריכת תאריך השליחה' : 'סימון ידני — נשלח תיאום'}</Text>
+          </Pressable>
         )}
       </View>
     );
@@ -80,8 +188,8 @@ export default function TaxScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>תיאום מס</Text>
         <Text style={styles.subtitle}>
-          מעקב לפי שנה לועזית: לאילו מקומות עבודה נשלח תיאום מס, ומתי. מקום עבודה שלא נכלל בתיאום
-          השנה — תזכורת במסך הבית.
+          לכל מקום עבודה ושנה: טוענים את טופס התיאום, צופים בו ושולחים במייל למחלקת השכר. מקום עבודה
+          שלא נכלל בתיאום השנה — תזכורת במסך הבית.
         </Text>
       </View>
 
@@ -107,6 +215,7 @@ export default function TaxScreen() {
       {done.map((w) => (
         <Row key={w.id} w={w} />
       ))}
+      {confirm.dialog}
     </Screen>
   );
 }
@@ -134,4 +243,10 @@ const makeStyles = (colors: AppColors) =>
     ok: { color: colors.success, fontWeight: '700' },
     warn: { color: colors.warning, fontWeight: '700' },
     edit: { gap: spacing.sm },
+    fileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+    fileName: { flex: 1, fontSize: 14, color: colors.text, textAlign: TEXT_RIGHT },
+    fileActions: { gap: spacing.sm },
+    linksRow: { flexDirection: 'row', gap: spacing.lg },
+    link: { fontSize: 14, fontWeight: '700', color: colors.brandDark, textDecorationLine: 'underline', textAlign: TEXT_RIGHT },
+    deleteLink: { fontSize: 14, fontWeight: '700', color: colors.dangerText, textAlign: TEXT_RIGHT },
   });
