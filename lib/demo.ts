@@ -39,6 +39,10 @@ export function onDataChanged(listener: () => void): () => void {
 function notify() {
   listeners.forEach((l) => l());
 }
+/** נתונים השתנו מחוץ למסך הפתוח (למשל דיווח שיובא מהמייל) — המסכים הפתוחים נטענים מחדש. */
+export function notifyDataChanged(): void {
+  notify();
+}
 
 type DemoMeta = {
   /** כמה דקות/שעות הוסיפו נתוני ההדגמה למונה של כל מקום עבודה */

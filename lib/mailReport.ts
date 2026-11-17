@@ -8,7 +8,8 @@
  *    יוכל לשלוח בלי לחשב בעצמו ביטולים, חגים וחופשות:
  *    apps/reporting-hours/users/{uid}/mail/plan.
  *  - `importMailInbox` — תשובות שנקלטו (users/{uid}/mailInbox, status 'new') הופכות לדיווח או לסימון "בוטל".
- * רק לבעלים המחוברים (לא בחשבון ששותף, לא בהדגמה).
+ * התכנון — רק הבעלים המחוברים. הייבוא — הבעלים, או מורשה עם הרשאת דיווח / מלאה בחשבון ששותף
+ * (כדי שדיווח מהמייל ייכנס גם כשמי שפותח את האפליקציה צופה בחשבון של הבעלים). לא בהדגמה.
  */
 import { collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import { APP_ID, firestore } from './firebase';
@@ -96,6 +97,18 @@ async function ownerUid(): Promise<string | null> {
   return user.uid;
 }
 
+/**
+ * לאיזה חשבון מייבאים תשובות: הבעלים עצמם, או — בחשבון ששותף — הבעלים ששיתף, כשלמורשה יש
+ * הרשאה לכתוב דיווחים (`report` / `full`). צפייה בלבד — לא מייבאים.
+ */
+async function importUid(): Promise<string | null> {
+  const user = authUser();
+  if (!user?.email || (await isDemoActive())) return null;
+  const a = getAccess();
+  if (!a) return user.uid;
+  return a.role === 'report' || a.role === 'full' ? a.ownerUid : null;
+}
+
 /** כתיבת התכנון לשרת (גם כשהדיווח במייל כבוי — כדי שהשרת יידע להפסיק). */
 export async function pushMailPlan(): Promise<void> {
   const db = firestore();
@@ -131,7 +144,7 @@ type InboxDoc = {
 /** תשובות שנקלטו במייל → דיווחים / סימוני ביטול. מחזיר כמה יובאו. */
 export async function importMailInbox(): Promise<number> {
   const db = firestore();
-  const uid = await ownerUid();
+  const uid = await importUid();
   if (!db || !uid) return 0;
   const col = collection(db, 'apps', APP_ID, 'users', uid, 'mailInbox');
   const snap = await getDocs(query(col, where('status', '==', 'new')));
