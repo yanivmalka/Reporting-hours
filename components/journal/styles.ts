@@ -5,6 +5,8 @@ import { TEXT_RIGHT } from '../../theme/align';
 
 export const makeJournalStyles = (colors: AppColors) =>
   StyleSheet.create({
+  monthLinkRow: { alignItems: 'center', paddingVertical: spacing.sm },
+  monthLink: { fontSize: 14, fontWeight: '700', color: colors.brandDark, textDecorationLine: 'underline' },
   center: {
     flex: 1,
     alignItems: 'center',

@@ -4,6 +4,7 @@
  * פוטנציאל וצפי. מפגש שנמחק מהתכנון לא מוצג.
  * לחיצה: מפגש שדווח → תצוגת הדיווח; שלא דווח → דיווח ישיר; שבוטל → דיאלוג המפגש.
  */
+import { Fragment, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from './Text';
@@ -23,7 +24,8 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
-import { beforeTracking } from '../lib/trackingStart';
+import { beforeTracking, getTrackingStart } from '../lib/trackingStart';
+import { MonthDivider } from './MonthDivider';
 import { todayISO } from '../lib/time';
 
 /** planned — עתידי; pending — היום ולא דווח; missing — עבר ולא דווח */
@@ -62,6 +64,9 @@ export function PlanList({
   basis,
   onChanged,
   onDayLayout,
+  monthDividers,
+  before,
+  after,
 }: {
   courses: readonly Course[];
   workplaces: readonly Workplace[];
@@ -73,13 +78,22 @@ export function PlanList({
   onChanged: () => void;
   /** מיקום כרטיס היום בתוך הרשימה (y יחסית לראש הרשימה) — לגלילה ליום */
   onDayLayout?: (date: string, y: number, height: number) => void;
+  /** פס מפריד עם שם החודש בתחילת כל חודש (ברשימה רציפה של כמה חודשים) */
+  monthDividers?: boolean;
+  /** תוכן לפני הימים (מתחת לסיכום) ואחריהם — למשל קישור לחודש הקודם / הבא */
+  before?: ReactNode;
+  after?: ReactNode;
 }) {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const sessionDialog = useSessionCancel();
   const active = activeWorkplaces(workplaces).filter((w) => !wpFilter || w.id === wpFilter);
-  const rows = buildSessionRows(courses, active, reports, from, to);
+  // מפגשים שלפני תחילת המעקב ולא דווחו — לא מוצגים; רק שורת טקסט לפני הפריט הראשון.
+  const allRows = buildSessionRows(courses, active, reports, from, to);
+  const rows = allRows.filter((r) => r.status !== 'untracked');
+  const hiddenBefore = allRows.length - rows.length;
+  const trackingStart = getTrackingStart();
   const days = new Map<string, SessionRowData[]>();
   for (const r of rows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
 
@@ -117,15 +131,25 @@ export function PlanList({
           פוטנציאל {money(potential)} · צפי {money(expected)}
         </Text>
       </View>
+      {before}
+      {hiddenBefore > 0 && trackingStart ? (
+        <Text style={styles.untrackedNote}>
+          {hiddenBefore === 1 ? 'מפגש אחד' : `${hiddenBefore} מפגשים`} לפני תחילת המעקב ({short(trackingStart)}.
+          {trackingStart.slice(0, 4)}) {hiddenBefore === 1 ? 'אינו מוצג' : 'אינם מוצגים'}
+        </Text>
+      ) : null}
       {rows.length === 0 ? (
         <View style={styles.empty}>
           <Icon name="calendar-blank-outline" size={22} color={colors.textMuted} />
           <Text style={styles.emptyText}>אין מפגשים מתוכננים בתקופה הזו.</Text>
         </View>
       ) : (
-        [...days].map(([date, list]) => (
+        [...days].map(([date, list], i, all) => (
+          <Fragment key={date}>
+          {monthDividers && (i === 0 || all[i - 1][0].slice(0, 7) !== date.slice(0, 7)) ? (
+            <MonthDivider month={date.slice(0, 7)} />
+          ) : null}
           <View
-            key={date}
             style={styles.day}
             onLayout={
               onDayLayout
@@ -138,8 +162,10 @@ export function PlanList({
               <SessionRow key={`${r.course.id}@${r.date}`} row={r} onPress={() => open(r)} />
             ))}
           </View>
+          </Fragment>
         ))
       )}
+      {after}
       {sessionDialog.dialog}
     </View>
   );
@@ -279,6 +305,7 @@ const makeStyles = (colors: AppColors) =>
       gap: spacing.xs,
       ...cardShadow,
     },
+    untrackedNote: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     dayTitle: { fontSize: 15, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },
     pressed: { opacity: 0.7 },
