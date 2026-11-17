@@ -10,22 +10,20 @@ import { useWheelActive } from '../WheelOverlay';
 import { useToast } from '../Toast';
 import { useFade } from '../useFlash';
 import { nextMissingAfter, nextRelevantDay, unreportedOn } from '../../lib/home';
-import { toAcademic } from '../../lib/academic';
 import { loadLeftoverMode } from '../../lib/leftover';
 import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../../lib/accumulated';
-import { payableHours, reportPay } from '../../lib/pay';
-import { basisFor, usePayBasis } from '../../lib/payBasis';
+import { usePayBasis } from '../../lib/payBasis';
 import { addReport, deleteReport, loadReports, makeBreakId, updateReport, type ExtraSessionKind, type WorkReport } from '../../lib/reports';
 import { courseReported, coursesOn, loadCourses, timeRange, type Course } from '../../lib/courses';
 import { currentPayPeriod } from '../../lib/dashboard';
 import { isLocked, loadPayrollStatus, statusKey } from '../../lib/payroll';
-import { travelCostForDay } from '../../lib/travel';
-import { isValidISODate, parseTime, todayISO } from '../../lib/time';
+import { isValidISODate, todayISO } from '../../lib/time';
 import { activeWorkplaces, isArchived, loadWorkplaces, workplaceAt, type Workplace } from '../../lib/workplaces';
 import { useTheme } from '../../theme/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import { useWorkplaceColor } from '../../theme/workplaceColors';
-import { BreakRow, DEFAULT_BREAK_MINUTES, Step, LeftoverChoice, Errors, parseNum, sumBreaks, AUTO_RETURN_SECONDS } from './shared';
+import { buildReportDraft, reportPreview, validateReportForm } from '../../lib/reportForm';
+import { BreakRow, DEFAULT_BREAK_MINUTES, Step, LeftoverChoice, Errors, AUTO_RETURN_SECONDS } from './shared';
 import { makeReportStyles as makeStyles } from './styles';
 
 /**
@@ -311,32 +309,7 @@ export function useReportWizard() {
   }
 
   function validate(): Errors {
-    const next: Errors = {};
-    if (!workplaceId) next.workplace = 'יש לבחור מקום עבודה';
-    if (!isValidISODate(date)) next.date = 'תאריך בפורמט YYYY-MM-DD';
-
-    const startMin = parseTime(start);
-    const endMin = parseTime(end);
-    if (startMin == null) next.start = 'שעה בפורמט HH:MM';
-    if (endMin == null) next.end = 'שעה בפורמט HH:MM';
-    if (startMin != null && endMin != null && endMin <= startMin) {
-      next.end = 'שעת הסיום חייבת להיות אחרי ההתחלה';
-    }
-
-    for (const row of breaks) {
-      const n = parseNum(row.minutes);
-      if (!Number.isInteger(n) || n < 0) {
-        next.breaks = 'כל הפסקה: מספר דקות שלם, 0 ומעלה';
-        break;
-      }
-    }
-
-    if (startMin != null && endMin != null && endMin > startMin) {
-      if (sumBreaks(breaks) >= endMin - startMin) {
-        next.breaks = 'סך ההפסקות ארוך או שווה לטווח השעות';
-      }
-    }
-    return next;
+    return validateReportForm({ workplaceId, date, start, end, breaks });
   }
 
   /** הקורס שנבחר (אם יש) — לשמירה ולתצוגה. */
@@ -350,30 +323,12 @@ export function useReportWizard() {
     setErrors(found);
     if (Object.values(found).some(Boolean)) return;
 
-    const net = Math.max(
-      0,
-      (parseTime(end) as number) - (parseTime(start) as number) - sumBreaks(breaks),
-    );
-    const leftover =
-      basisFor(workplaces?.find((w) => w.id === workplaceId), basis) === 'academic' ? toAcademic(net).leftoverMinutes : 0;
-    const carried = leftoverChoice === 'carry' ? leftover : 0;
-
     setSaving(true);
     const id = workplaceId as string;
-    const draftReport = {
-      workplaceId: id,
-      date: date.trim(),
-      start: start.trim(),
-      end: end.trim(),
-      breaks: breaks
-        .map((row) => ({ id: row.id, minutes: parseNum(row.minutes) }))
-        .filter((b) => b.minutes > 0),
-      carriedMinutes: carried,
-      ...(note.trim() ? { note: note.trim() } : {}),
-      // הקורס שנבחר — רק אם הדיווח עדיין שייך למקום העבודה שלו.
-      ...(selectedCourse && selectedCourse.workplaceId === id ? { courseId: selectedCourse.id } : {}),
-      ...(selectedCourse && selectedCourse.workplaceId === id && extraKind ? { extraKind } : {}),
-    };
+    const { draft: draftReport, carried } = buildReportDraft(
+      { workplaceId, date, start, end, breaks, note, leftoverChoice },
+      { workplaces: workplaces ?? [], basis, course: selectedCourse, extraKind },
+    );
     const saved = editing
       ? await updateReport(editing.id, draftReport)
       : await addReport(draftReport);
@@ -499,38 +454,26 @@ export type ReportWizardCore = ReturnType<typeof useReportWizard>;
 /** נגזרות אחרי הטעינה — נקרא רק כש־workplaces נטען ויש לפחות מקום עבודה. */
 export function reportWizardView(core: ReportWizardCore & { workplaces: Workplace[] }) {
   const { router, navigation, editId, presetWp, direct, setDirect, skippedCourse, setSkippedCourse, editing, sessionDialog, basis, workplaces, existing, courses, setCourses, courseId, setCourseId, setExtraKind, step, setStep, viaCourse, setViaCourse, setLastSaved, setTouched, setExitReason, swipeRef, workplaceId, setWorkplaceId, date, note, setNote, start, setStart, end, setEnd, breaks, setBreaks, wheelActive, heldPreview, leftoverChoice, setErrors, setBaseline, openOnDate, validate } = core;
-  const startMin = parseTime(start);
-  const endMin = parseTime(end);
-  const rangeMin = startMin != null && endMin != null && endMin > startMin ? endMin - startMin : null;
-  const netPreview = rangeMin == null ? null : Math.max(0, rangeMin - sumBreaks(breaks));
-  const academicPreview = netPreview == null ? null : toAcademic(netPreview);
-  // דקות עודפות נצברות רק במקום שמשלם לפי שעה אקדמית.
-  const wBasis = basisFor(workplaces?.find((w) => w.id === workplaceId), basis);
-  const leftoverPreview = wBasis === 'academic' ? academicPreview?.leftoverMinutes ?? 0 : 0;
-  const academicHoursNow =
-    academicPreview == null
-      ? 0
-      : leftoverChoice === 'carry'
-        ? academicPreview.wholeHours
-        : academicPreview.decimalHours;
-
-  // ── חישוב כספי חי ──
+  // ── התצוגה המקדימה החיה (lib/reportForm.ts) ──
   const workplace = workplaces.find((w) => w.id === workplaceId) ?? null;
-  const draft = {
-    date,
-    start,
-    end,
-    breaks: breaks.map((row) => ({ id: row.id, minutes: Math.max(0, parseNum(row.minutes) || 0) })),
-    carriedMinutes: leftoverChoice === 'carry' ? leftoverPreview : 0,
-  };
-  const pay = workplace && netPreview != null ? reportPay(draft, workplace, basis) : null;
-  const hoursForPay = netPreview != null ? payableHours(draft, basisFor(workplace, basis)) : 0;
-  // נסיעות: רק בתחבורה ציבורית, ורק אם עוד אין דיווח לאותו מקום באותו יום.
-  // בעריכה — הדיווח עצמו לא נחשב "דיווח אחר" באותו יום.
-  const travelCounted =
-    workplace != null &&
-    existing.some((r) => r.workplaceId === workplace.id && r.date === date && r.id !== editing?.id);
-  const travel = workplace && !travelCounted ? travelCostForDay(workplace, date) : 0;
+  const {
+    startMin,
+    endMin,
+    rangeMin,
+    netPreview,
+    academicPreview,
+    wBasis,
+    leftoverPreview,
+    academicHoursNow,
+    draft,
+    pay,
+    hoursForPay,
+    travelCounted,
+    travel,
+  } = reportPreview(
+    { workplaceId, date, start, end, breaks, leftoverChoice },
+    { workplaces, basis, existing, editingId: editing?.id },
+  );
   if (!wheelActive || !heldPreview.current) {
     heldPreview.current = {
       leftover: leftoverPreview,

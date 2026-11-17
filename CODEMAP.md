@@ -103,6 +103,7 @@
 ## חישובים (`lib/`)
 
 - זמן ושעות: `time.ts`, `academic.ts` (45 דק׳), `accumulated.ts`, `redeem.ts`.
+- טופס הדיווח: `reportForm.ts` — אימות, תצוגה מקדימה חיה ובניית הדיווח שנשמר (טהור, עם בדיקות; משמש את `components/report/useReportWizard.tsx`).
 - כסף: `pay.ts`, `payBasis.tsx`, `travel.ts`, `payroll.ts`, `forecast.ts`.
 - לוח שנה: `hebrewDate.ts`, `holidays.ts`, `sessions.ts`, `vacations.ts`.
 - מסכים: `home.ts` (כולל `nextRelevantDay`), `dashboard.ts` (כולל `deadlineRelative`), `recommend.ts`, `dayStatus.ts`.
