@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Course } from '../lib/courses';
-import { buildPlanDays, mailTextArchived } from '../lib/mailReport';
+import { buildPlanDays, mailTextArchived, unseenMailReports } from '../lib/mailReport';
+import { leftoverMinutesFor } from '../lib/reportForm';
 import type { WorkReport } from '../lib/reports';
 import type { Workplace } from '../lib/workplaces';
 
@@ -31,5 +32,28 @@ describe('דיווח במייל — התכנון לשרת', () => {
     const day = 86_400_000;
     expect(mailTextArchived(0, 30, 29 * day)).toBe(false);
     expect(mailTextArchived(0, 30, 31 * day)).toBe(true);
+  });
+});
+
+describe('הודעה על דיווח מהמייל', () => {
+  const r = (receivedAt?: number) => ({ viaEmail: receivedAt ? { text: 'x', receivedAt } : undefined });
+  it('פעם ראשונה — בלי הודעה, רק מסמנים', () => {
+    expect(unseenMailReports([r(5), r(), r(9)], null)).toEqual({ count: 0, latest: 9 });
+  });
+  it('רק מה שהגיע אחרי הסימון', () => {
+    expect(unseenMailReports([r(5), r(12), r(20)], 9)).toEqual({ count: 2, latest: 20 });
+    expect(unseenMailReports([r(5)], 9)).toEqual({ count: 0, latest: 9 });
+  });
+});
+
+// אותם מקרים כמו functions/test/mailRecord.test.mjs ב־apps-platform — השרת משקף את החישוב הזה.
+describe('דקות עודפות — זהה לשרת', () => {
+  const w = (payBasis?: 'academic' | 'regular') => ({ id: 'w1', payBasis }) as unknown as Workplace;
+  it('אקדמי: שארית מ־45; רגיל: 0', () => {
+    expect(leftoverMinutesFor(420, w('academic'), 'academic')).toBe(15);
+    expect(leftoverMinutesFor(405, w('academic'), 'academic')).toBe(0);
+    expect(leftoverMinutesFor(430, w('regular'), 'academic')).toBe(0);
+    expect(leftoverMinutesFor(430, w(), 'regular')).toBe(0);
+    expect(leftoverMinutesFor(430, w(), 'academic')).toBe(25);
   });
 });

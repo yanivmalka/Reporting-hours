@@ -23,6 +23,7 @@
 | קורס מחזורי | `lib/courses.ts` | `reporting-hours/courses/v1` |
 | סימוני מפגש (`canceled` / `held`) | `lib/sessions.ts` | `reporting-hours/sessions/v1` |
 | הגדרות דיווח במייל (הפעלה, שעה, ארכיון) | `lib/mailReport.ts` | `reporting-hours/email-report/v1` |
+| דיווחים מהמייל שכבר הוצגה עליהם הודעה (לכל חשבון, במכשיר) | `components/MailSync.tsx` | `reporting-hours/mail-seen/v1` |
 | פרטי מפגש (הערה, הגעה, תוכן, סימון הגשה, תזכורת) | `lib/sessionNotes.ts` | `reporting-hours/session-notes/v1` |
 | הגדרות ביטול אוטומטי בחגים | `lib/sessions.ts` | `reporting-hours/holiday-cancel/v2` |
 | סיבות ביטול (רשימה גלובלית) | `lib/cancelReasons.ts` | `reporting-hours/cancel-reasons/v1` |
