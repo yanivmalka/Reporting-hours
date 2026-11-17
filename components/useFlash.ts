@@ -44,39 +44,48 @@ export function useFade(key: unknown, duration = 120) {
 }
 
 /**
- * מעבר רך בין ימים בלו״ז הבית: התוכן החדש נכנס בהחלקה קצרה מכיוון המעבר, עם עמעום הדרגתי
- * והאטה בסוף.
- *
- * `prime(dir)` נקרא באירוע הלחיצה, **לפני** החלפת היום: הוא מסתיר את התוכן מיד, כך שהתוכן החדש
- * לא מצויר אף פעם במלוא השקיפות לפני שהאנימציה מתחילה (זה היה ה"הבהוב" — useEffect רץ רק אחרי
- * שהמסך כבר צויר). ההופעה מתחילה כשהמפתח (`key`) משתנה.
+ * מעבר רך בין ימים בלו״ז הבית, בשני שלבים — כך שהתוכן מתחלף רק כשהוא שקוף לגמרי, ואין הבהוב:
+ *   1. יציאה: התוכן הנוכחי דוהה ומחליק מעט הצידה (`OUT_MS`).
+ *   2. בסוף היציאה מוחלף היום (`swap`), והתוכן החדש נכנס מהצד השני בדעיכה איטית (`IN_MS`).
+ * `go(dir, swap)` נקרא בלחיצה / בהחלקה במקום להחליף את היום ישירות. לחיצה באמצע מעבר — ממשיכה ממנו.
  */
-export function useSlideFade(key: unknown, duration = 260) {
-  const v = useRef(new Animated.Value(1)).current;
-  const dir = useRef<1 | -1>(1);
-  const [, force] = useState(0);
-  const primed = useRef(false);
-  const prime = useCallback(
-    (d: 1 | -1) => {
-      v.stopAnimation();
-      v.setValue(0);
-      if (dir.current !== d) {
-        dir.current = d;
-        force((n) => n + 1);
-      }
-      primed.current = true;
+const OUT_MS = 140;
+const IN_MS = 280;
+export function useSlideFade() {
+  const op = useRef(new Animated.Value(1)).current;
+  const tx = useRef(new Animated.Value(0)).current;
+  const pendingIn = useRef<1 | -1 | null>(null);
+  const [tick, setTick] = useState(0);
+
+  const go = useCallback(
+    (dir: 1 | -1, swap: () => void) => {
+      op.stopAnimation();
+      tx.stopAnimation();
+      // RTL: היום הבא משמאל — התוכן הנוכחי יוצא ימינה, והחדש נכנס משמאל.
+      Animated.parallel([
+        Animated.timing(op, { toValue: 0, duration: OUT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        Animated.timing(tx, { toValue: dir * 16, duration: OUT_MS, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      ]).start(({ finished }) => {
+        if (!finished) return;
+        pendingIn.current = dir;
+        swap();
+        setTick((n) => n + 1);
+      });
     },
-    [v],
+    [op, tx],
   );
+
+  // אחרי שהיום החדש צויר (עדיין שקוף) — כניסה.
   useLayoutEffect(() => {
-    if (!primed.current) return;
-    primed.current = false;
-    Animated.timing(v, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [key, v, duration]);
-  const style = {
-    opacity: v.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, 0.55, 1] }),
-    // RTL: היום הבא נמצא משמאל — התוכן החדש מגיע משמאל.
-    transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [dir.current * -28, 0] }) }],
-  };
-  return { style, prime };
+    const dir = pendingIn.current;
+    if (dir == null) return;
+    pendingIn.current = null;
+    tx.setValue(dir * -24);
+    Animated.parallel([
+      Animated.timing(op, { toValue: 1, duration: IN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(tx, { toValue: 0, duration: IN_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, [tick, op, tx]);
+
+  return { style: { opacity: op, transform: [{ translateX: tx }] }, go };
 }
