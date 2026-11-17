@@ -74,6 +74,9 @@ export default function HomeScreen() {
   const [dismissed, setDismissed] = useState<string[]>([]);
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים)
   const [tabIdx, setTabIdx] = useState(AGENDA_TODAY_INDEX);
+  /** גובה מדוד של כל יום בלו״ז — אזור הלו״ז לא קטן מהגבוה שבהם, כדי שמעבר יום לא יזיז את מה שמתחת. */
+  const [dayHeights, setDayHeights] = useState<Record<string, number>>({});
+  const dayAreaMin = Math.max(0, ...Object.values(dayHeights));
   const sessionDialog = useSessionCancel();
   const sessionSheet = useSessionSheet();
   // התראות מוסתרות שהוצגו שוב ("הצג") — עד שסוגרים שוב
@@ -304,14 +307,18 @@ export default function HomeScreen() {
       {days.length ? (
         // כל הימים מרונדרים זה על גבי זה, וגובה האזור הוא של היום הגבוה —
         // כך מעבר בין ימים לא מזיז את מה שמתחת. מוצג רק היום שנבחר.
-        <View style={styles.dayStack} {...swipe}>
+        <View style={[styles.dayStack, { minHeight: dayAreaMin }]} {...swipe}>
           {days.map((d, i) => {
             const shown = i === tabIdx;
             const nextAfter = nextAfterFor(d);
             return (
               <View
                 key={d.key}
-                style={[styles.dayCard, i > 0 && styles.dayLayer, !shown && styles.dayHidden]}
+                style={[styles.dayCard, !shown && styles.dayHidden]}
+                onLayout={(e) => {
+                  const h = Math.ceil(e.nativeEvent.layout.height);
+                  setDayHeights((m) => (m[d.key] === h ? m : { ...m, [d.key]: h }));
+                }}
                 pointerEvents={shown ? 'auto' : 'none'}
                 aria-hidden={!shown}
                 importantForAccessibility={shown ? 'auto' : 'no-hide-descendants'}
@@ -658,11 +665,10 @@ const makeStyles = (colors: AppColors) =>
       borderColor: 'transparent',
       backgroundColor: 'transparent',
     },
-    dayStack: { flexDirection: 'row', alignItems: 'flex-start' },
-    dayCard: { gap: spacing.sm, width: '100%', flexShrink: 0 },
-    // שכבה מעל היום הראשון (באותו מקום) — לא תופסת רוחב משלה
-    dayLayer: { marginStart: '-100%' },
-    dayHidden: { opacity: 0 },
+    dayStack: { position: 'relative' },
+    dayCard: { gap: spacing.sm },
+    // יום מוסתר: מחוץ לזרימה (לא קובע גובה), אבל נמדד; האזור מחזיק את הגבוה שבהם
+    dayHidden: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0 },
     dayHead: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm, paddingHorizontal: 2 },
     dayLabel: { fontSize: 17, fontWeight: '800', color: colors.text },
     dayDate: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
