@@ -7,25 +7,22 @@
  *  - `pushMailPlan` — כותב לשרת את המפגשים של 14 הימים הקרובים (שמתקיימים ועוד לא דווחו), כדי שהשרת
  *    יוכל לשלוח בלי לחשב בעצמו ביטולים, חגים וחופשות:
  *    apps/reporting-hours/users/{uid}/mail/plan.
- *  - `importMailInbox` — תשובות שנקלטו (users/{uid}/mailInbox, status 'new') הופכות לדיווח או לסימון "בוטל".
- * התכנון — רק הבעלים המחוברים. הייבוא — הבעלים, או מורשה עם הרשאת דיווח / מלאה בחשבון ששותף
- * (כדי שדיווח מהמייל ייכנס גם כשמי שפותח את האפליקציה צופה בחשבון של הבעלים). לא בהדגמה.
+ *  - את התשובה רושם השרת מיד בנתונים המסונכרנים (kv: הדיווח עם `viaEmail` ומונה הדקות, או סימון "בוטל"),
+ *    כמו מכשיר נוסף — וכל מכשיר וכל מורשה רואים אותה בסנכרון הבא, בלי שמישהו יפתח את האפליקציה.
+ *  - `unseenMailReports` — להודעה "נקלט דיווח מהמייל" כשהסנכרון מביא דיווח כזה.
+ * התכנון — רק הבעלים המחוברים (לא בחשבון ששותף, לא בהדגמה).
  */
-import { collection, doc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { APP_ID, firestore } from './firebase';
 import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
 import { authUser, getAccess, isDemoActive } from './sync';
 import { courseReported, coursesOn, loadCourses, type Course } from './courses';
-import { addReport, loadReports, makeBreakId, type WorkReport } from './reports';
+import { loadReports, type WorkReport } from './reports';
 import { activeWorkplaces, loadWorkplaces, type Workplace } from './workplaces';
-import { loadCancelIndex, setSessionMark } from './sessions';
+import { loadCancelIndex } from './sessions';
 import { beforeTracking } from './trackingStart';
 import { dateFromIso, isoDate } from './dates';
-import { buildReportDraft } from './reportForm';
-import { loadLeftoverMode } from './leftover';
-import { DEFAULT_PAY_BASIS, isPayBasis, type PayBasis } from './payBasis';
-import { addAccumulatedMinutes } from './accumulated';
 
 export type MailReportSettings = {
   enabled: boolean;
@@ -97,18 +94,6 @@ async function ownerUid(): Promise<string | null> {
   return user.uid;
 }
 
-/**
- * לאיזה חשבון מייבאים תשובות: הבעלים עצמם, או — בחשבון ששותף — הבעלים ששיתף, כשלמורשה יש
- * הרשאה לכתוב דיווחים (`report` / `full`). צפייה בלבד — לא מייבאים.
- */
-async function importUid(): Promise<string | null> {
-  const user = authUser();
-  if (!user?.email || (await isDemoActive())) return null;
-  const a = getAccess();
-  if (!a) return user.uid;
-  return a.role === 'report' || a.role === 'full' ? a.ownerUid : null;
-}
-
 /** כתיבת התכנון לשרת (גם כשהדיווח במייל כבוי — כדי שהשרת יידע להפסיק). */
 export async function pushMailPlan(): Promise<void> {
   const db = firestore();
@@ -127,67 +112,23 @@ export async function pushMailPlan(): Promise<void> {
   });
 }
 
-type InboxDoc = {
-  courseId: string;
-  workplaceId: string;
-  date: string;
-  kind: 'held' | 'times' | 'canceled';
-  start?: string;
-  end?: string;
-  breakMinutes?: number;
-  reason?: string;
-  text: string;
-  receivedAt: number;
-  status: 'new' | 'imported';
-};
-
-/** תשובות שנקלטו במייל → דיווחים / סימוני ביטול. מחזיר כמה יובאו. */
-export async function importMailInbox(): Promise<number> {
-  const db = firestore();
-  const uid = await importUid();
-  if (!db || !uid) return 0;
-  const col = collection(db, 'apps', APP_ID, 'users', uid, 'mailInbox');
-  const snap = await getDocs(query(col, where('status', '==', 'new')));
-  if (snap.empty) return 0;
-  const [courses, workplaces, leftover, basisRaw] = await Promise.all([
-    loadCourses(),
-    loadWorkplaces(),
-    loadLeftoverMode(),
-    readJSON<unknown>(KEYS.payBasis, null),
-  ]);
-  const basis: PayBasis = isPayBasis(basisRaw) ? basisRaw : DEFAULT_PAY_BASIS;
-  let n = 0;
-  for (const d of snap.docs) {
-    const m = d.data() as InboxDoc;
-    const course = courses.find((c) => c.id === m.courseId) ?? null;
-    let reportId: string | undefined;
-    if (m.kind === 'canceled') {
-      await setSessionMark(m.courseId, m.date, 'canceled', m.reason || undefined);
-    } else {
-      const reports = await loadReports();
-      // כבר דווח באפליקציה בינתיים — לא יוצרים כפילות.
-      if (!course || !courseReported(course, m.date, reports)) {
-        const { draft, carried } = buildReportDraft(
-          {
-            workplaceId: m.workplaceId,
-            date: m.date,
-            start: m.start ?? '',
-            end: m.end ?? '',
-            breaks: m.breakMinutes ? [{ id: makeBreakId(), minutes: String(m.breakMinutes) }] : [],
-            note: course?.name ?? '',
-            leftoverChoice: leftover,
-          },
-          { workplaces, basis, course, extraKind: null },
-        );
-        const saved = await addReport({ ...draft, viaEmail: { text: m.text, receivedAt: m.receivedAt } });
-        reportId = saved.find((r) => r.viaEmail?.receivedAt === m.receivedAt && r.date === m.date)?.id;
-        if (carried > 0) await addAccumulatedMinutes(m.workplaceId, carried);
-      }
-    }
-    await updateDoc(d.ref, { status: 'imported', importedAt: Date.now(), ...(reportId ? { reportId } : {}) });
-    n++;
+/**
+ * דיווחים שנרשמו מהמייל ועוד לא הוצגה עליהם הודעה במכשיר: אלה שהתקבלו אחרי `seenAt`.
+ * `seenAt` null (פעם ראשונה במכשיר / בחשבון) — אין הודעה, רק מסמנים את המצב הנוכחי.
+ */
+export function unseenMailReports(
+  reports: readonly Pick<WorkReport, 'viaEmail'>[],
+  seenAt: number | null,
+): { count: number; latest: number } {
+  let latest = seenAt ?? 0;
+  let count = 0;
+  for (const r of reports) {
+    const at = r.viaEmail?.receivedAt;
+    if (!at) continue;
+    if (seenAt != null && at > seenAt) count++;
+    if (at > latest) latest = at;
   }
-  return n;
+  return { count, latest };
 }
 
 /** האם טקסט המייל של הדיווח כבר בארכיון (עברו `archiveDays` ימים מקבלתו). */

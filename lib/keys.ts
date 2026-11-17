@@ -48,6 +48,7 @@ const REGISTRY = {
   theme: def('reporting-hours/theme/v1', 'device'),
   demo: def('reporting-hours/demo/v1', 'device'),
   demoAuto: def('reporting-hours/demo-auto/v1', 'device'),
+  mailSeen: def('reporting-hours/mail-seen/v1', 'device'),
 } as const;
 
 type Registry = typeof REGISTRY;
