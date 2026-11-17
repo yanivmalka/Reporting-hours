@@ -18,7 +18,7 @@ import { useI18n } from '../lib/i18n';
 import { useTrackingStart } from '../lib/trackingStart';
 import { MonthSlide } from './MonthSlide';
 import { useSwipe } from './useSwipe';
-import { radius, spacing } from '../theme/colors';
+import { cardShadow, radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
 const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
@@ -216,11 +216,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   StyleSheet.create({
     wrap: {
       backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
       borderRadius: radius.md,
       padding: spacing.sm,
       gap: spacing.xs,
+      ...cardShadow,
     },
     head: {
       flexDirection: layout.rowStart,

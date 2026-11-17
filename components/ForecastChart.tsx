@@ -21,7 +21,7 @@ import type { ChartResolution, ForecastMonth } from '../lib/forecast';
 import { hebrewMonthNames } from '../lib/hebrewDate';
 import { useI18n } from '../lib/i18n';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, spacing } from '../theme/colors';
+import { cardShadow, radius, spacing } from '../theme/colors';
 import { mix } from '../theme/shades';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -307,11 +307,10 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   StyleSheet.create({
     wrap: {
       backgroundColor: c.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
       borderRadius: 18,
       padding: spacing.sm,
       gap: spacing.sm,
+      ...cardShadow,
     },
     head: { flexDirection: 'row', alignItems: 'center' },
     nav: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },

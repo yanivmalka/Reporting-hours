@@ -8,7 +8,7 @@ import { FoldChevron } from './Chevrons';
 import { Pressable } from './Pressable';
 import { Text } from './Text';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, spacing } from '../theme/colors';
+import { cardShadow, radius, spacing } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 
 type Props = {
@@ -31,7 +31,7 @@ export function FoldSection({ title, summary, meta, defaultOpen = false, plain, 
       style={
         plain
           ? styles.plain
-          : [styles.box, { backgroundColor: colors.surface, borderColor: colors.border }]
+          : [styles.box, { backgroundColor: colors.surface }]
       }
     >
       <Pressable
@@ -57,7 +57,7 @@ export function FoldSection({ title, summary, meta, defaultOpen = false, plain, 
 }
 
 const styles = StyleSheet.create({
-  box: { borderWidth: 1, borderRadius: radius.md },
+  box: { borderRadius: radius.md + 4, ...cardShadow },
   plain: { gap: spacing.sm },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
   headPad: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },

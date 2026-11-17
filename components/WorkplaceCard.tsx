@@ -5,7 +5,7 @@ import { dateRange, type WorkplaceMonthStats } from '../lib/dashboard';
 import { formatHours } from '../lib/pay';
 import type { Workplace } from '../lib/workplaces';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { ProgressBar } from './Charts';
 import { TEXT_RIGHT } from '../theme/align';
 import { useWorkplaceColor } from '../theme/workplaceColors';
@@ -78,11 +78,10 @@ const makeStyles = (colors: AppColors) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.md,
+      ...cardShadow,
     },
     pressed: {
       backgroundColor: colors.brandLight,

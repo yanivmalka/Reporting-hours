@@ -1,6 +1,6 @@
 /** סגנונות טופס מקום העבודה — משותפים למסך ולכל הקבוצות (components/workplaceForm). */
 import { StyleSheet } from 'react-native';
-import { radius, spacing, type AppColors } from '../../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../../theme/colors';
 import { TEXT_RIGHT } from '../../theme/align';
 
 export const makeWorkplaceFormStyles = (colors: AppColors) =>
@@ -30,10 +30,9 @@ export const makeWorkplaceFormStyles = (colors: AppColors) =>
     gap: spacing.sm,
     paddingVertical: 12,
     paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
+    ...cardShadow,
   },
   linkRowText: { flex: 1, fontSize: 14, color: colors.text, textAlign: TEXT_RIGHT },
   linkRowChevron: { fontSize: 20, color: colors.textMuted },
@@ -44,11 +43,10 @@ export const makeWorkplaceFormStyles = (colors: AppColors) =>
   },
   course: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
     gap: 2,
+    ...cardShadow,
   },
   courseName: {
     fontSize: 15,
@@ -141,8 +139,7 @@ export const makeWorkplaceFormStyles = (colors: AppColors) =>
   group: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    ...cardShadow,
   },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
   groupTexts: { flex: 1, minWidth: 0, gap: 2 },

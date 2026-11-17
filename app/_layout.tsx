@@ -49,14 +49,15 @@ function SyncedTree({ children }: { children: ReactNode }) {
 function Chrome() {
   const { colors } = useTheme();
   const { t } = useI18n();
-  const barBg = colors.brand;
-  const barFg = colors.textOnBrand;
+  // כותרת בהירה בצבע הרקע — המסך והכותרת משטח אחד, בלי פס צבע.
+  const barBg = colors.background;
+  const barFg = colors.text;
   const wide = useWideLayout();
 
   return (
     <UpdateProvider>
       <DrawerProvider>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <DemoSeeder />
         <BackupScheduler />
         <ExitGuard />
@@ -69,7 +70,8 @@ function Chrome() {
               screenOptions={{
                 headerStyle: { backgroundColor: barBg },
                 headerTintColor: barFg,
-                headerTitleStyle: { fontWeight: '700' },
+                headerTitleStyle: { fontWeight: '700', fontSize: 20 },
+                headerShadowVisible: false,
                 headerBackTitle: t('common.back'),
                 contentStyle: { backgroundColor: colors.background },
                 // דפוס אנדרואיד/Google בעברית: headerLeft מוצג מימין — ☰ במסך הראשי,

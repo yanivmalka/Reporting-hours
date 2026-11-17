@@ -15,7 +15,7 @@ import { loadWorkplaces } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { DEFAULT_PALETTE_ID } from '../theme/palettes';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useScreenData } from '../components/useScreenData';
 
@@ -231,11 +231,10 @@ const makeStyles = (colors: AppColors) =>
     },
     card: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.sm,
+      ...cardShadow,
     },
     dangerCard: {
       borderColor: colors.danger,

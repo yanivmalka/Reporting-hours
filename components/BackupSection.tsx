@@ -11,7 +11,7 @@ import { hebrewDate } from '../lib/hebrewDate';
 import { useHydrated } from '../lib/useHydrated';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { Button } from './Button';
 import { useCloudSync } from './CloudSync';
@@ -257,11 +257,10 @@ const makeStyles = (colors: AppColors) =>
     pressed: { opacity: 0.85 },
     card: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.sm,
+      ...cardShadow,
     },
     cardTitle: { fontSize: 16, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     text: { fontSize: 13, lineHeight: 20, color: colors.textMuted, textAlign: TEXT_RIGHT },

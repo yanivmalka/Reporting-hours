@@ -1,6 +1,6 @@
 /** סגנונות היומן — משותפים למסך ולכל חלקיו (components/journal). */
 import { StyleSheet } from 'react-native';
-import { radius, spacing, type AppColors } from '../../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../../theme/colors';
 import { TEXT_RIGHT } from '../../theme/align';
 
 export const makeJournalStyles = (colors: AppColors) =>
@@ -92,10 +92,9 @@ export const makeJournalStyles = (colors: AppColors) =>
   dueCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
+    ...cardShadow,
   },
   checkRow: {
     flexDirection: 'row',

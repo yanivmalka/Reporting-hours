@@ -28,7 +28,7 @@ import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { EnterChevron } from '../components/Chevrons';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
@@ -226,10 +226,9 @@ const makeStyles = (colors: AppColors) =>
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     card: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       paddingHorizontal: spacing.md,
+      ...cardShadow,
     },
     row: {
       flexDirection: 'row',

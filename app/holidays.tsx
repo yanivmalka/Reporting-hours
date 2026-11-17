@@ -18,7 +18,7 @@ import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 
 /** סוגי הימים המיוחדים בהגדרות, עם פירוט. */
@@ -160,9 +160,8 @@ const makeStyles = (colors: AppColors) =>
     checkGroup: {
       borderRadius: radius.md,
       backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
       overflow: 'hidden',
+      ...cardShadow,
     },
     checkRow: {
       flexDirection: 'row',

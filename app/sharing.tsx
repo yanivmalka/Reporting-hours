@@ -28,7 +28,7 @@ import {
 } from '../lib/sharing';
 import { formatISODate } from '../lib/time';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 
 const ROLE_OPTIONS: { value: ShareRole; label: string }[] = [
@@ -196,10 +196,9 @@ const makeStyles = (c: AppColors) =>
     card: {
       backgroundColor: c.surface,
       borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: c.border,
       padding: spacing.md,
       gap: spacing.sm,
+      ...cardShadow,
     },
     cardTitle: { fontSize: 16, fontWeight: '700', color: c.text, textAlign: TEXT_RIGHT },
     muted: { fontSize: 13, color: c.textMuted, textAlign: TEXT_RIGHT, lineHeight: 19 },

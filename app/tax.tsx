@@ -13,7 +13,7 @@ import { loadWorkplaces, setTaxCoordination, type Workplace } from '../lib/workp
 import { TEXT_RIGHT } from '../theme/align';
 import { useI18n } from '../lib/i18n';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { useScreenData } from '../components/useScreenData';
 
 /**
@@ -123,11 +123,10 @@ const makeStyles = (colors: AppColors) =>
     section: { fontSize: 15, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT, marginTop: spacing.sm },
     row: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.xs,
+      ...cardShadow,
     },
     rowMissing: { borderColor: colors.warning },
     name: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },

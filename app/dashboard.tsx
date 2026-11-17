@@ -26,7 +26,7 @@ import { formatShekels, money } from '../lib/travel';
 import { loadWorkplaces, paymentTermsLabel, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { workplaceColor } from '../theme/workplaceColors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useScreenData } from '../components/useScreenData';
@@ -611,8 +611,7 @@ const makeStyles = (colors: AppColors) =>
       gap: 2,
       borderRadius: 22,
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...cardShadow,
     },
     pageTab: { flex: 1, minHeight: 40, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
     pageTabOn: { backgroundColor: colors.brand },
@@ -646,8 +645,7 @@ const makeStyles = (colors: AppColors) =>
       padding: 14,
       borderRadius: 16,
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...cardShadow,
     },
     wpFaded: { opacity: 0.55 },
     wpMain: { flex: 1, gap: 6 },
@@ -699,9 +697,8 @@ const makeStyles = (colors: AppColors) =>
       gap: spacing.md,
       backgroundColor: colors.surface,
       borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
       padding: spacing.lg,
+      ...cardShadow,
     },
     emptyText: {
       fontSize: 14,

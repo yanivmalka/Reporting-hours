@@ -136,10 +136,22 @@ export function TimesStep({ w }: { w: ReportWizard }) {
         ) : null}
 
         {shown.net != null ? (
-          <Text style={styles.hint}>
-            נטו {formatDuration(shown.net)} · {formatHours(shown.academic)} שע׳ אקדמיות
-            {shown.money != null ? ` · ${formatShekels(shown.money)}` : ''}
-          </Text>
+          <View style={styles.netCard}>
+            <View style={styles.netCol}>
+              <Text style={styles.netLabel}>נטו</Text>
+              <Text style={styles.netValue}>{formatDuration(shown.net)}</Text>
+            </View>
+            <View style={styles.netCol}>
+              <Text style={styles.netLabel}>שעות אקדמיות</Text>
+              <Text style={styles.netValue}>{formatHours(shown.academic)}</Text>
+            </View>
+            {shown.money != null ? (
+              <View style={styles.netCol}>
+                <Text style={styles.netLabel}>שכר</Text>
+                <Text style={styles.netValue}>{formatShekels(shown.money)}</Text>
+              </View>
+            ) : null}
+          </View>
         ) : null}
       </>
     ) : null}

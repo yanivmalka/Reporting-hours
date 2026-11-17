@@ -14,7 +14,7 @@ import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { money, realization } from './ForecastChart';
 import { useTheme } from '../theme/ThemeContext';
-import { radius, spacing } from '../theme/colors';
+import { cardShadow, radius, spacing } from '../theme/colors';
 import { mix } from '../theme/shades';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -160,9 +160,8 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     card: {
       borderRadius: 16,
       backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
       overflow: 'hidden',
+      ...cardShadow,
     },
     main: { padding: 14, gap: 6 },
     head: { flexDirection: layout.rowStart, alignItems: 'center', gap: spacing.sm },

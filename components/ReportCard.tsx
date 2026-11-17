@@ -6,7 +6,7 @@ import { hebrewDate } from '../lib/hebrewDate';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 
 type ReportCardProps = {
@@ -157,11 +157,10 @@ const makeStyles = (colors: AppColors) =>
     },
     card: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.xs,
+      ...cardShadow,
     },
     headerRow: {
       flexDirection: 'row',

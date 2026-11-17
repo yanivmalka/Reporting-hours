@@ -32,7 +32,7 @@ import { parseTime } from '../lib/time';
 import { ARRIVAL_MODE_LABELS, deadlineLabel, isArchived, loadWorkplaces, setWorkplaceArchived, paymentTermsLabel, taxPercentOf, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { beforeTracking } from '../lib/trackingStart';
@@ -464,8 +464,7 @@ const makeStyles = (colors: AppColors) =>
       padding: spacing.md,
       borderRadius: radius.md,
       backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      ...cardShadow,
     },
     archivedText: { flex: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
     archiveCount: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -492,11 +491,10 @@ const makeStyles = (colors: AppColors) =>
     sectionRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
     card: {
       backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
       borderRadius: 16,
       paddingHorizontal: 14,
       paddingVertical: 4,
+      ...cardShadow,
     },
     infoRow: {
       flexDirection: 'row',
@@ -514,10 +512,9 @@ const makeStyles = (colors: AppColors) =>
 
     payroll: {
       backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
       borderRadius: 16,
       overflow: 'hidden',
+      ...cardShadow,
     },
     payrollHead: { padding: 14, gap: 10 },
     payrollTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

@@ -28,7 +28,7 @@ import type { WorkReport } from '../lib/reports';
 import { useToast } from '../components/Toast';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, spacing, type AppColors } from '../theme/colors';
+import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { beforeTracking } from '../lib/trackingStart';
 import { LoadingScreen } from '../components/LoadingScreen';
@@ -710,10 +710,9 @@ const makeStyles = (colors: AppColors) =>
     viewTitle: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     viewCard: {
       backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
       borderRadius: radius.md,
       paddingHorizontal: spacing.md,
+      ...cardShadow,
     },
     viewRow: {
       flexDirection: 'row',
