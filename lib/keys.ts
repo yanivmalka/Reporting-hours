@@ -37,6 +37,7 @@ const REGISTRY = {
   trackingStart: def('reporting-hours/tracking-start/v1', 'synced'),
   leftoverMode: def('reporting-hours/leftover-mode/v1', 'synced'),
   profile: def('reporting-hours/profile/v1', 'synced'),
+  emailReport: def('reporting-hours/email-report/v1', 'synced'),
   // ── העדפות תצוגה (לא בחשבון של אחר) ──
   homeDismissed: def('reporting-hours/home-dismissed/v1', 'viewerDevice'),
   recommendDismissed: def('reporting-hours/recommend-dismissed/v1', 'viewerDevice'),

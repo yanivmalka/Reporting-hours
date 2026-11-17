@@ -158,13 +158,14 @@ const SETTINGS_LINKS: NavLink[] = [
   { href: '/profile', key: 'nav.profile', icon: 'account-circle-outline' },
   { href: '/data', key: 'nav.data', icon: 'database-cog-outline' },
   { href: '/sharing', key: 'nav.sharing', icon: 'account-multiple-outline' },
+  { href: '/mail-report', key: 'nav.mailReport', icon: 'email-fast-outline' },
 ];
 
 /** הקישורים שהרמה בחשבון הפעיל מתירה (docs/sharing-spec.md). */
 function allowed(a: Access) {
   return (l: NavLink) => {
     if (l.href === '/report') return a.canReport;
-    if (l.href === '/data' || l.href === '/sharing') return a.isOwner;
+    if (l.href === '/data' || l.href === '/sharing' || l.href === '/mail-report') return a.isOwner;
     return true;
   };
 }
