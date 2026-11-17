@@ -41,6 +41,7 @@ import {
   type Vacation,
 } from './vacations';
 import { KEYS, LEGACY_KEYS } from './keys';
+import { moveNote } from './sessionNotes';
 
 export type SessionMark = {
   courseId: string;
@@ -371,8 +372,9 @@ export function returnToPlan(courseId: string, date: string, reason?: string, re
 }
 
 /** העברת מפגש לתאריך אחר — נשמר "הועבר ל…" במקור ו"הועבר מ…" ביעד. */
-export function moveSession(courseId: string, date: string, to: string): Promise<void> {
-  return setSessionMark(courseId, date, 'moved', undefined, to);
+export async function moveSession(courseId: string, date: string, to: string): Promise<void> {
+  await setSessionMark(courseId, date, 'moved', undefined, to);
+  await moveNote(courseId, date, to);
 }
 
 /**

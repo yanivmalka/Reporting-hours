@@ -26,6 +26,7 @@ const REGISTRY = {
   reports: def('reporting-hours/reports/v1', 'synced'),
   courses: def('reporting-hours/courses/v1', 'synced'),
   sessions: def('reporting-hours/sessions/v1', 'synced'),
+  sessionNotes: def('reporting-hours/session-notes/v1', 'synced'),
   holidayCancel: def('reporting-hours/holiday-cancel/v2', 'synced'),
   cancelReasons: def('reporting-hours/cancel-reasons/v1', 'synced'),
   vacations: def('reporting-hours/vacations/v1', 'synced'),

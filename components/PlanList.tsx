@@ -26,6 +26,8 @@ import { TEXT_RIGHT } from '../theme/align';
 import { workplaceColor } from '../theme/workplaceColors';
 import { beforeTracking, getTrackingStart } from '../lib/trackingStart';
 import { MonthDivider } from './MonthDivider';
+import { useSessionNotes } from './useSessionNotes';
+import { FLAG_ICON, noteFor } from '../lib/sessionNotes';
 import { todayISO } from '../lib/time';
 
 /** planned — עתידי; pending — היום ולא דווח; missing — עבר ולא דווח */
@@ -250,6 +252,7 @@ export function SessionRow({
   };
   const t = tone[r.status];
   const faded = r.status === 'planned';
+  const note = noteFor(useSessionNotes(), r.course.id, r.date);
   return (
     <Pressable
       onPress={onPress}
@@ -282,6 +285,12 @@ export function SessionRow({
           {r.movedFrom ? ` · הועבר מ־${short(r.movedFrom)}` : ''} · {r.workplace.name}
         </Text>
       </View>
+      {note?.flag ? (
+        <Icon name={FLAG_ICON[note.flag]} size={16} color={colors.warning} />
+      ) : null}
+      {note && (note.note || note.content || note.arrival) ? (
+        <Icon name="note-text-outline" size={16} color={colors.textMuted} />
+      ) : null}
       <View style={[styles.chip, { backgroundColor: t.bg }]}>
         <Text style={[styles.chipText, { color: t.fg }]}>{t.label}</Text>
       </View>
