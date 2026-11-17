@@ -21,13 +21,23 @@ import { useI18n } from '../lib/i18n';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { useScreenData } from '../components/useScreenData';
+import { FinanceGate } from '../components/AppLock';
 
 /**
  * תיאום מס לשנה לועזית: לכל מקום עבודה — טופס התיאום (טעינה, צפייה, החלפה,
  * מחיקה ושליחה במייל, lib/taxFiles.ts) והמצב: חסר → נטען → נשלח (ומתי).
  * מקום עבודה שלא נכלל — מסומן, ומופיעה תזכורת במסך הבית.
  */
-export default function TaxScreen() {
+/** מסך כספי — נעול כשנעילת המידע הכספי מופעלת (lib/appLock.ts). */
+export default function TaxScreenGated() {
+  return (
+    <FinanceGate>
+      <TaxScreen />
+    </FinanceGate>
+  );
+}
+
+function TaxScreen() {
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { isRTL } = useI18n();

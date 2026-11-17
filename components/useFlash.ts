@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Animated, Easing } from 'react-native';
 
 /**
@@ -45,24 +45,38 @@ export function useFade(key: unknown, duration = 120) {
 
 /**
  * מעבר רך בין ימים בלו״ז הבית: התוכן החדש נכנס בהחלקה קצרה מכיוון המעבר, עם עמעום הדרגתי
- * והאטה בסוף (במקום הבהוב). לא פועל בטעינה הראשונה.
- * @param key  משתנה כשהתוכן מתחלף (היום שנבחר)
- * @param dir  1 = קדימה (יום מאוחר יותר), -1 = אחורה
+ * והאטה בסוף.
+ *
+ * `prime(dir)` נקרא באירוע הלחיצה, **לפני** החלפת היום: הוא מסתיר את התוכן מיד, כך שהתוכן החדש
+ * לא מצויר אף פעם במלוא השקיפות לפני שהאנימציה מתחילה (זה היה ה"הבהוב" — useEffect רץ רק אחרי
+ * שהמסך כבר צויר). ההופעה מתחילה כשהמפתח (`key`) משתנה.
  */
-export function useSlideFade(key: unknown, dir: 1 | -1 = 1, duration = 260) {
+export function useSlideFade(key: unknown, duration = 260) {
   const v = useRef(new Animated.Value(1)).current;
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    v.setValue(0);
+  const dir = useRef<1 | -1>(1);
+  const [, force] = useState(0);
+  const primed = useRef(false);
+  const prime = useCallback(
+    (d: 1 | -1) => {
+      v.stopAnimation();
+      v.setValue(0);
+      if (dir.current !== d) {
+        dir.current = d;
+        force((n) => n + 1);
+      }
+      primed.current = true;
+    },
+    [v],
+  );
+  useLayoutEffect(() => {
+    if (!primed.current) return;
+    primed.current = false;
     Animated.timing(v, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [key, v, duration]);
-  return {
-    opacity: v,
+  const style = {
+    opacity: v.interpolate({ inputRange: [0, 0.25, 1], outputRange: [0, 0.55, 1] }),
     // RTL: היום הבא נמצא משמאל — התוכן החדש מגיע משמאל.
-    transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [dir * -28, 0] }) }],
+    transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [dir.current * -28, 0] }) }],
   };
+  return { style, prime };
 }

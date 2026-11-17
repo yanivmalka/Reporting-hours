@@ -35,7 +35,6 @@ import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { Button } from './Button';
 import { useFade } from './useFlash';
-import { useAppLock } from '../lib/appLock';
 
 type Phase =
   | { kind: 'idle' }
@@ -97,10 +96,7 @@ function UpdateDialog({
 }) {
   const { t } = useI18n();
   const styles = useStyles(makeStyles);
-  const lock = useAppLock();
   if (phase.kind === 'idle') return null;
-  // לא מעל מסך הנעילה — החלון יופיע אחרי הפתיחה.
-  if (!lock.loaded || (lock.enabled && lock.locked)) return null;
   if (hidden && phase.kind === 'downloading') return null;
   const { info } = phase;
   const close = () => (phase.kind === 'downloading' ? setHidden(true) : setPhase({ kind: 'idle' }));

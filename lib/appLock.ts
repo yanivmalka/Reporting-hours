@@ -1,12 +1,13 @@
 /**
- * נעילת האפליקציה בטביעת אצבע / זיהוי פנים / קוד המכשיר — הגדרה לבחירת המשתמש, לכל מכשיר
+ * נעילת המידע הכספי בטביעת אצבע / זיהוי פנים / קוד המכשיר — הגדרה לבחירת המשתמש, לכל מכשיר
  * בנפרד (`KEYS.appLock`, לא מסונכרן: חלה על מי שמשתמש במכשיר, בכל חשבון — גם בחשבון ששותף).
  *
- * - מופעלת רק אחרי זיהוי מוצלח (כדי שלא ננעלים בטעות).
- * - נועלת בפתיחה, ובחזרה לאפליקציה אחרי יותר מ־`RELOCK_AFTER_MS` ברקע (חזרה מהירה — למשל מבורר
- *   קבצים, אנשי קשר או מתקין העדכון — לא נועלת).
- * - מצב הנעילה ברמת המודול (`useAppLocked`), כדי שגם חלונות אחרים (עדכון) לא יוצגו מעל מסך הנעילה.
- * אנדרואיד בלבד; ב־web אין נעילה.
+ * דיווח ותכנון פתוחים תמיד (נעשים גם במקום ציבורי). כשההגדרה מופעלת והמידע נעול:
+ *  - מסכים כספיים (לוח בקרה, דוחות שכר, תשלומים, תיאום מס) וקבוצות שכר בעריכת מקום עבודה
+ *    מבקשים זיהוי (`FinanceGate` / `FinanceSection` ב־components/AppLock.tsx);
+ *  - כל סכום ב־₪ שמוצג ב־`Text` של האפליקציה מוחלף ב־"••• ₪" (`maskMoney`), ולחיצה עליו פותחת.
+ * פתיחה אחת חלה על כל האפליקציה, עד שהיא חוזרת מהרקע אחרי יותר מ־`RELOCK_AFTER_MS`.
+ * ההפעלה רק אחרי זיהוי מוצלח. אנדרואיד בלבד; ב־web אין נעילה.
  */
 import { useSyncExternalStore } from 'react';
 import { AppState, Platform } from 'react-native';
@@ -17,8 +18,8 @@ import { KEYS } from './keys';
 export const RELOCK_AFTER_MS = 60_000;
 export const appLockPlatform = Platform.OS !== 'web';
 
-type State = { loaded: boolean; enabled: boolean; locked: boolean };
-let state: State = { loaded: !appLockPlatform, enabled: false, locked: false };
+type State = { loaded: boolean; enabled: boolean; unlocked: boolean };
+let state: State = { loaded: !appLockPlatform, enabled: false, unlocked: false };
 const listeners = new Set<() => void>();
 function set(next: Partial<State>) {
   state = { ...state, ...next };
@@ -30,24 +31,32 @@ const subscribe = (l: () => void) => {
 };
 
 if (appLockPlatform) {
-  void readJSON<{ enabled?: boolean }>(KEYS.appLock, {}).then((v) => {
-    const enabled = v?.enabled === true;
-    set({ loaded: true, enabled, locked: enabled });
-  });
+  void readJSON<{ enabled?: boolean }>(KEYS.appLock, {}).then((v) => set({ loaded: true, enabled: v?.enabled === true }));
   let backgroundAt = 0;
   AppState.addEventListener('change', (st) => {
     if (st === 'background') backgroundAt = Date.now();
-    else if (st === 'active' && backgroundAt && state.enabled && Date.now() - backgroundAt > RELOCK_AFTER_MS) {
-      set({ locked: true });
+    else if (st === 'active') {
+      if (backgroundAt && state.unlocked && Date.now() - backgroundAt > RELOCK_AFTER_MS) set({ unlocked: false });
+      backgroundAt = 0;
     }
-    if (st === 'active') backgroundAt = 0;
   });
 }
 
-/** מצב הנעילה: `loaded` — ההגדרה נטענה (עד אז מציגים את מסך הנעילה אם ייתכן שהיא מופעלת). */
-export function useAppLock(): State {
-  return useSyncExternalStore(subscribe, () => state, () => state);
+const lockedNow = () => state.enabled && !state.unlocked;
+/** עד שההגדרה נטענת — נעול, כדי שסכום לא ייחשף לרגע. */
+const lockedOrLoading = () => !state.loaded || lockedNow();
+
+/** האם המידע הכספי נעול עכשיו. */
+export function useFinanceLocked(): boolean {
+  return useSyncExternalStore(subscribe, lockedOrLoading, lockedOrLoading);
 }
+
+/** ההגדרה עצמה (לתפריט). */
+export function useAppLockEnabled(): boolean {
+  return useSyncExternalStore(subscribe, () => state.enabled, () => state.enabled);
+}
+
+export { hasMoney, maskMoney } from './moneyMask';
 
 /** האם יש במכשיר אמצעי זיהוי (ביומטרי או קוד / תבנית / סיסמה). */
 export async function lockAvailable(): Promise<boolean> {
@@ -60,7 +69,7 @@ export async function lockAvailable(): Promise<boolean> {
 }
 
 /** זיהוי — טביעת אצבע / פנים, ואם אין או נכשל: קוד המכשיר. */
-export async function authenticate(prompt = 'פתיחת דיווח שעות'): Promise<boolean> {
+export async function authenticate(prompt = 'הצגת מידע כספי'): Promise<boolean> {
   try {
     const r = await LocalAuthentication.authenticateAsync({
       promptMessage: prompt,
@@ -73,17 +82,23 @@ export async function authenticate(prompt = 'פתיחת דיווח שעות'): P
   }
 }
 
-/** פתיחת הנעילה אחרי זיהוי. */
-export async function unlock(): Promise<boolean> {
-  const ok = await authenticate();
-  if (ok) set({ locked: false });
-  return ok;
+let pending: Promise<boolean> | null = null;
+/** פתיחת המידע הכספי אחרי זיהוי (קריאות חופפות — חלון זיהוי אחד). */
+export function unlockFinance(): Promise<boolean> {
+  if (!lockedNow()) return Promise.resolve(true);
+  pending ??= authenticate().then((ok) => {
+    pending = null;
+    if (ok) set({ unlocked: true });
+    return ok;
+  });
+  return pending;
 }
 
 /** הפעלה (רק אחרי זיהוי מוצלח) / כיבוי. מחזיר את המצב שנקבע. */
 export async function setAppLockEnabled(on: boolean): Promise<boolean> {
-  if (on && !(await authenticate('אישור נעילת האפליקציה'))) return state.enabled;
-  set({ enabled: on, locked: false });
+  if (on && !(await authenticate('אישור נעילת המידע הכספי'))) return state.enabled;
+  // מי שהפעיל זה עתה — כבר זוהה; המידע נשאר פתוח עד היציאה הבאה מהאפליקציה.
+  set({ enabled: on, unlocked: on });
   await writeJSON(KEYS.appLock, { enabled: on });
   return on;
 }

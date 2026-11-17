@@ -17,9 +17,19 @@ import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { FoldChevron } from '../components/Chevrons';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { FinanceGate } from '../components/AppLock';
 
 /** מסך דוחות שכר: ממתינים לשליחה, החודש הנוכחי (בהכנה), ודוחות שנשלחו. */
-export default function PayrollScreen() {
+/** מסך כספי — נעול כשנעילת המידע הכספי מופעלת (lib/appLock.ts). */
+export default function PayrollScreenGated() {
+  return (
+    <FinanceGate>
+      <PayrollScreen />
+    </FinanceGate>
+  );
+}
+
+function PayrollScreen() {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();

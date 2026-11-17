@@ -1,79 +1,77 @@
 /**
- * מסך הנעילה (lib/appLock.ts): מכסה את כל האפליקציה כשהיא נעולה. האפליקציה עצמה נשארת טעונה
- * מתחת (סנכרון, טופס באמצע עריכה), כך שפתיחה מחזירה בדיוק למקום שבו עזבו.
- * בהופעת המסך נפתח מיד חלון הזיהוי של המערכת; "פתיחה" — ניסיון חוזר.
+ * נעילת המידע הכספי (lib/appLock.ts):
+ *  - `FinanceGate` — מסך כספי שלם (לוח בקרה, דוחות שכר, תשלומים, תיאום מס): כשנעול, במקום התוכן
+ *    מוצגת בקשת זיהוי (וחלון הזיהוי נפתח מיד).
+ *  - `FinanceSection` — קבוצה בתוך מסך (תנאי שכר בעריכת מקום עבודה): כשנעולה — שורה "מידע כספי נעול · פתיחה".
+ *  - `AppLockSetting` — תיבת הסימון ב"הגדרות ותצוגה".
  */
-import { useEffect, useRef, useState } from 'react';
-import { BackHandler, Image, Modal, StyleSheet, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Button } from './Button';
 import { Icon } from './Icon';
-import { appLockPlatform, lockAvailable, setAppLockEnabled, unlock, useAppLock } from '../lib/appLock';
+import { Pressable } from './Pressable';
 import { Checkbox } from './Checkbox';
+import {
+  appLockPlatform,
+  lockAvailable,
+  setAppLockEnabled,
+  unlockFinance,
+  useAppLockEnabled,
+  useFinanceLocked,
+} from '../lib/appLock';
 import { useTheme } from '../theme/ThemeContext';
-import { spacing } from '../theme/colors';
+import { radius, spacing } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 
-export function AppLockScreen() {
-  const { loaded, enabled, locked } = useAppLock();
+export function FinanceGate({ children }: { children: ReactNode }) {
+  const locked = useFinanceLocked();
   const { colors } = useTheme();
   const [failed, setFailed] = useState(false);
-  const busy = useRef(false);
-  const show = !loaded || (enabled && locked);
-
-  async function tryUnlock() {
-    if (busy.current) return;
-    busy.current = true;
-    const ok = await unlock();
-    busy.current = false;
-    setFailed(!ok);
+  async function open() {
+    setFailed(!(await unlockFinance()));
   }
-
   useEffect(() => {
-    if (loaded && enabled && locked) {
-      setFailed(false);
-      void tryUnlock();
-    }
-  }, [loaded, enabled, locked]);
-
-  if (!show) return null;
+    if (locked) void open();
+  }, [locked]);
+  if (!locked) return <>{children}</>;
   return (
-    // בלי אנימציה: עד שההגדרה נטענת מוצג רקע בלבד (מתחת למסך הפתיחה של המערכת), כדי שהתוכן לא ייחשף לרגע.
-    <Modal visible animationType="none" statusBarTranslucent onRequestClose={() => BackHandler.exitApp()}>
-      <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        {loaded ? (
-          <>
-            <Image source={require('../assets/icon.png')} style={styles.icon} />
-            <Text style={[styles.title, { color: colors.text }]}>דיווח שעות</Text>
-            <Icon name="fingerprint" size={56} color={colors.brand} />
-            <Text style={[styles.body, { color: colors.textMuted }]}>
-              {failed ? 'הזיהוי לא הושלם. אפשר לנסות שוב.' : 'האפליקציה נעולה. פתיחה בטביעת אצבע או בקוד המכשיר.'}
-            </Text>
-            <View style={styles.button}>
-              <Button label="פתיחה" onPress={() => void tryUnlock()} />
-            </View>
-          </>
-        ) : null}
+    <View style={[styles.gate, { backgroundColor: colors.background }]}>
+      <Icon name="fingerprint" size={56} color={colors.brand} />
+      <Text style={[styles.title, { color: colors.text }]}>מידע כספי נעול</Text>
+      <Text style={[styles.body, { color: colors.textMuted }]}>
+        {failed ? 'הזיהוי לא הושלם. אפשר לנסות שוב.' : 'פתיחה בטביעת אצבע או בקוד המכשיר.'}
+      </Text>
+      <View style={styles.button}>
+        <Button label="פתיחה" onPress={() => void open()} />
       </View>
-    </Modal>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg, padding: spacing.xl },
-  icon: { width: 96, height: 96, borderRadius: 22 },
-  title: { fontSize: 24, fontWeight: '700' },
-  body: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  button: { alignSelf: 'stretch', maxWidth: 320, width: '100%' },
-  hint: { fontSize: 13, lineHeight: 19, textAlign: TEXT_RIGHT },
-});
+export function FinanceSection({ children }: { children: ReactNode }) {
+  const locked = useFinanceLocked();
+  const { colors } = useTheme();
+  if (!locked) return <>{children}</>;
+  return (
+    <Pressable
+      onPress={() => void unlockFinance()}
+      accessibilityRole="button"
+      accessibilityLabel="מידע כספי נעול — פתיחה"
+      style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      <Icon name="fingerprint" size={24} color={colors.brand} />
+      <Text style={[styles.sectionText, { color: colors.textMuted }]}>מידע כספי נעול</Text>
+      <Text style={[styles.sectionLink, { color: colors.brand }]}>פתיחה</Text>
+    </Pressable>
+  );
+}
 
 /**
- * ההגדרה בתפריט ("הגדרות ותצוגה"): נעילה בטביעת אצבע / קוד המכשיר. הפעלה דורשת זיהוי מוצלח.
- * מוצגת רק באנדרואיד; כשאין במכשיר אמצעי זיהוי — הסבר במקום תיבת הסימון.
+ * ההגדרה בתפריט: מוצגת רק באנדרואיד; כשאין במכשיר אמצעי זיהוי — הסבר במקום תיבת הסימון.
  */
 export function AppLockSetting() {
-  const { enabled } = useAppLock();
+  const enabled = useAppLockEnabled();
   const { colors } = useTheme();
   const [available, setAvailable] = useState<boolean | null>(null);
   useEffect(() => {
@@ -83,7 +81,7 @@ export function AppLockSetting() {
   if (!available) {
     return (
       <Text style={[styles.hint, { color: colors.textMuted }]}>
-        נעילת האפליקציה: יש להגדיר במכשיר טביעת אצבע או קוד נעילה.
+        נעילת המידע הכספי: יש להגדיר במכשיר טביעת אצבע או קוד נעילה.
       </Text>
     );
   }
@@ -91,8 +89,26 @@ export function AppLockSetting() {
     <Checkbox
       checked={enabled}
       onChange={(on) => void setAppLockEnabled(on)}
-      label="נעילה בטביעת אצבע"
-      hint="בפתיחת האפליקציה, ובחזרה אליה אחרי יותר מדקה — טביעת אצבע, זיהוי פנים או קוד המכשיר."
+      label="נעילת מידע כספי בטביעת אצבע"
+      hint="סכומים, לוח הבקרה, דוחות השכר ותנאי השכר — רק אחרי טביעת אצבע, זיהוי פנים או קוד המכשיר. דיווח ותכנון פתוחים תמיד."
     />
   );
 }
+
+const styles = StyleSheet.create({
+  gate: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
+  title: { fontSize: 22, fontWeight: '700' },
+  body: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  button: { alignSelf: 'stretch', maxWidth: 320, width: '100%', marginTop: spacing.sm },
+  section: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  sectionText: { flex: 1, fontSize: 15, textAlign: TEXT_RIGHT },
+  sectionLink: { fontSize: 15, fontWeight: '700' },
+  hint: { fontSize: 13, lineHeight: 19, textAlign: TEXT_RIGHT },
+});

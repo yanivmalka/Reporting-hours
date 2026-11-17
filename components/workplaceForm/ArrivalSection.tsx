@@ -9,6 +9,7 @@ import { contactsSupported } from '../../lib/contacts';
 import { isTaxi } from '../../lib/workplaces';
 import type { WorkplaceFormModel } from './useWorkplaceForm';
 import { ARRIVAL_OPTIONS, TAXI_REMINDER_OPTIONS } from './shared';
+import { FinanceSection } from '../AppLock';
 
 /** קבוצת "הגעה": אופן הגעה, נסיעות ותזכורת מונית. */
 export function ArrivalSection({ w }: { w: WorkplaceFormModel }) {
@@ -121,17 +122,19 @@ export function ArrivalSection({ w }: { w: WorkplaceFormModel }) {
 
           {isPublicTransport ? (
             <>
-              <FormField
-                label="עלות נסיעה לכיוון (₪)"
-                error={errors.travelCostPerDirection}
-              >
-                <TextField
-                  value={form.travelCostPerDirection}
-                  onChangeText={(t) => set('travelCostPerDirection', t)}
-                  numeric
-                  invalid={Boolean(errors.travelCostPerDirection)}
-                />
-              </FormField>
+              <FinanceSection>
+                <FormField
+                  label="עלות נסיעה לכיוון (₪)"
+                  error={errors.travelCostPerDirection}
+                >
+                  <TextField
+                    value={form.travelCostPerDirection}
+                    onChangeText={(t) => set('travelCostPerDirection', t)}
+                    numeric
+                    invalid={Boolean(errors.travelCostPerDirection)}
+                  />
+                </FormField>
+              </FinanceSection>
 
               <FormField
                 label="מספר נסיעות ליום"

@@ -30,9 +30,7 @@ import { loadReports } from '../lib/reports';
 import { loadDismissedRecommendations } from '../lib/recommend';
 import { readJSON, writeJSON } from '../lib/storage';
 import { isTaxi, loadWorkplaces, type Workplace } from '../lib/workplaces';
-import { currentPayPeriod, isoDate, monthName, periodMonthKey } from '../lib/dashboard';
-import { periodForecast } from '../lib/forecast';
-import { formatShekels } from '../lib/travel';
+import { isoDate } from '../lib/dashboard';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
@@ -61,33 +59,7 @@ type Data = {
   workplaces: Workplace[];
   /** פרטי מפגשים (הערה, הגשה, תזכורת) — לאייקונים בלו״ז */
   notes: SessionNote[];
-  /** סכום החודש (תקופת השכר הנוכחית) בכל המקומות הפעילים: דווח מול צפי */
-  month: { reported: number; forecast: number; label: string } | null;
 };
-
-/** סכום תקופת השכר הנוכחית בכל מקומות העבודה הפעילים — לאריח לוח הבקרה. */
-function monthSummary(
-  workplaces: Workplace[],
-  reports: Parameters<typeof periodForecast>[2],
-  courses: Course[],
-  payroll: Parameters<typeof periodForecast>[4],
-  basis: Parameters<typeof periodForecast>[5],
-  at: Date,
-): Data['month'] {
-  const active = workplaces.filter((w) => !w.archivedAt && !w.deletedAt);
-  if (!active.length) return null;
-  let reported = 0;
-  let forecast = 0;
-  let label = '';
-  for (const w of active) {
-    const period = currentPayPeriod(w.payday, at);
-    const f = periodForecast(w, period, reports, courses, payroll, basis, at);
-    reported += f.reported;
-    forecast += f.forecast;
-    if (!label) label = monthName(periodMonthKey(period)).split(' ')[0];
-  }
-  return { reported, forecast, label };
-}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -103,7 +75,7 @@ export default function HomeScreen() {
   const [dismissed, setDismissed] = useState<string[]>([]);
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים) ושל כיוון המעבר האחרון
   const [dayIdx, setDayIdx] = useState(AGENDA_TODAY_INDEX);
-  const [dayDir, setDayDir] = useState<1 | -1>(1);
+  const daySlide = useSlideFade(dayIdx);
   const sessionDialog = useSessionCancel();
   const sessionSheet = useSessionSheet();
   // התראות מוסתרות שהוצגו שוב ("הצג") — עד שסוגרים שוב
@@ -142,7 +114,6 @@ export default function HomeScreen() {
         courses,
         workplaces,
         notes,
-        month: monthSummary(workplaces, reports, courses, payroll, basis, at),
       });
     },
   );
@@ -180,14 +151,13 @@ export default function HomeScreen() {
 
   function pickDay(i: number) {
     if (i < 0 || i >= days.length || i === dayIdx) return;
-    setDayDir(i > dayIdx ? 1 : -1);
+    daySlide.prime(i > dayIdx ? 1 : -1); // מסתיר לפני ההחלפה — בלי הבהוב
     setDayIdx(i);
   }
   const swipe = useSwipe(
     () => pickDay(dayIdx + 1),
     () => pickDay(dayIdx - 1),
   );
-  const flash = useSlideFade(dayIdx, dayDir);
 
   function openCancel(item: AgendaItem) {
     sessionDialog.open({
@@ -246,6 +216,8 @@ export default function HomeScreen() {
         ) : null}
       </View>
 
+      {/* לוח הבקרה — מעבר בלבד, בלי סכומים: מידע כספי לא נחשף במסך הבית (צנעת הפרט) */}
+      <View style={styles.topRow}>
       {canReport ? (
         <Pressable
           onPress={() => router.push(reportHref)}
@@ -287,47 +259,16 @@ export default function HomeScreen() {
           </View>
         </Pressable>
       ) : null}
-
-      <Pressable
-        onPress={() => router.push('/dashboard')}
-        accessibilityRole="link"
-        accessibilityLabel="לוח בקרה"
-        style={({ pressed }) => [styles.monthTile, pressed && styles.pressed]}
-      >
-        <View style={styles.monthHead}>
-          <Text style={styles.monthLabel}>לוח בקרה{data?.month ? ` · ${data.month.label}` : ''}</Text>
-          <View style={styles.monthHeadEnd}>
-            {data?.month && data.month.forecast > 0 ? (
-              <Text style={styles.monthLabel}>צפי {formatShekels(Math.round(data.month.forecast))}</Text>
-            ) : null}
-            <EnterChevron size={16} />
-          </View>
-        </View>
-        {data?.month ? (
-          <>
-            <View style={styles.monthRow}>
-              <Text style={styles.monthValue}>{formatShekels(Math.round(data.month.reported))}</Text>
-              {data.month.forecast > 0 ? (
-                <Text style={styles.monthLabel}>
-                  {Math.round((data.month.reported / data.month.forecast) * 100)}% מהצפי
-                </Text>
-              ) : null}
-            </View>
-            {data.month.forecast > 0 ? (
-              <View style={styles.monthTrack}>
-                <View
-                  style={[
-                    styles.monthFill,
-                    { width: `${Math.min(100, Math.round((data.month.reported / data.month.forecast) * 100))}%` },
-                  ]}
-                />
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <Text style={styles.monthValue}>—</Text>
-        )}
-      </Pressable>
+        <Pressable
+          onPress={() => router.push('/dashboard')}
+          accessibilityRole="link"
+          accessibilityLabel="לוח בקרה"
+          style={({ pressed }) => [styles.dashTile, !canReport && styles.dashTileWide, pressed && styles.pressed]}
+        >
+          <Icon name="view-dashboard-outline" size={28} color={colors.brand} />
+          <Text style={styles.dashTileText}>לוח בקרה</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>הלו״ז שלי</Text>
@@ -373,7 +314,7 @@ export default function HomeScreen() {
         })}
       </View>
       {day ? (
-        <Animated.View style={[styles.dayCard, flash]} {...swipe}>
+        <Animated.View style={[styles.dayCard, daySlide.style]} {...swipe}>
           <View style={styles.dayHead}>
             <Text style={styles.dayLabel}>{day.label}</Text>
             <Text style={styles.dayDate}>{day.dayLabel}</Text>
@@ -637,6 +578,8 @@ const makeStyles = (colors: AppColors) =>
 
     // כרטיס הדיווח הבא — כמו בעיצוב: צ׳יפ מצב, שם הקורס בגדול וכפתור לבן.
     hero: {
+      flex: 1,
+      minWidth: 0,
       backgroundColor: colors.brand,
       borderRadius: 28,
       padding: 20,
@@ -665,15 +608,19 @@ const makeStyles = (colors: AppColors) =>
     },
     heroBtnText: { fontSize: 17, fontWeight: '700', color: colors.text },
 
-    // אריח לוח הבקרה — סכום החודש מול הצפי, עם פס התקדמות.
-    monthTile: { backgroundColor: colors.surface, borderRadius: 22, padding: 16, gap: 10, ...cardShadow },
-    monthHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-    monthHeadEnd: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-    monthLabel: { fontSize: 13, color: colors.textMuted },
-    monthRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
-    monthValue: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5, color: colors.text, textAlign: TEXT_RIGHT },
-    monthTrack: { height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden', flexDirection: 'row' },
-    monthFill: { height: 8, borderRadius: 4, backgroundColor: colors.brand },
+    topRow: { flexDirection: 'row', alignItems: 'stretch', gap: 12 },
+    dashTile: {
+      width: 96,
+      minHeight: 104,
+      borderRadius: 28,
+      backgroundColor: colors.surface,
+      ...cardShadow,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    dashTileWide: { flex: 1, flexDirection: 'row', width: undefined, minHeight: 64 },
+    dashTileText: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center' },
 
     sectionHead: {
       flexDirection: 'row',

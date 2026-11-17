@@ -166,7 +166,8 @@ const SETTINGS_LINKS: NavLink[] = [
 function allowed(a: Access) {
   return (l: NavLink) => {
     if (l.href === '/report') return a.canReport;
-    if (l.href === '/data' || l.href === '/sharing' || l.href === '/mail-report') return a.isOwner;
+    // שיתוף והרשאות — לכולם: הבעלים מנהלים מורשים, ומורשה רואה ועוזב את מה ששותף איתו.
+    if (l.href === '/data' || l.href === '/mail-report') return a.isOwner;
     return true;
   };
 }

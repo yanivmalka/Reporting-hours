@@ -1,7 +1,8 @@
 /**
- * שיתוף והרשאות (docs/sharing-spec.md): הבעלים מוסיפים כתובת Gmail ורמה
- * (צפייה / מדווח / מלאה), משנים רמה או מסירים. ההרשאה פעילה מיד; "שליחת
- * הודעה" פותח את תפריט השיתוף עם הסבר איך להיכנס.
+ * שיתוף והרשאות (docs/sharing-spec.md) — המקום היחיד לניהול הרשאות:
+ *  - "שיתפו איתי": החשבונות ששותפו איתך, עם "עזיבת השיתוף" (אחרי אישור). זמין גם כשצופים בחשבון ששותף.
+ *  - "המורשים שלי": הבעלים מוסיפים כתובת Gmail ורמה (צפייה / מדווח / מלאה), משנים רמה או מסירים.
+ *    רק כשהם בנתונים של עצמם. ההרשאה פעילה מיד; "שליחת הודעה" פותח את תפריט השיתוף עם הסבר איך להיכנס.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
@@ -13,14 +14,17 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { Screen } from '../components/Screen';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
-import { RequireAccess } from '../components/Access';
+import { useAccess } from '../components/Access';
 import { useCloudSync } from '../components/CloudSync';
+import type { SharedAccess } from '../lib/sync';
 import {
   ROLE_HINTS,
   ROLE_LABELS,
   inviteMessage,
   isValidEmail,
+  leaveShare,
   listGrants,
+  listSharedWithMe,
   removeGrant,
   saveGrant,
   type Grant,
@@ -47,7 +51,9 @@ function SharingScreenInner() {
   const styles = useThemedStyles(makeStyles);
   const { showToast } = useToast();
   const confirm = useConfirm();
-  const { user, ready } = useCloudSync();
+  const { user, ready, access, switchAccount } = useCloudSync();
+  const { isOwner } = useAccess();
+  const [sharedWithMe, setSharedWithMe] = useState<SharedAccess[] | null>(null);
   const [grants, setGrants] = useState<Grant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -65,8 +71,55 @@ function SharingScreenInner() {
   }, []);
 
   useEffect(() => {
-    if (user) void refresh();
-  }, [user, refresh]);
+    if (user && isOwner) void refresh();
+  }, [user, isOwner, refresh]);
+
+  const refreshShared = useCallback(async () => {
+    try {
+      setSharedWithMe(await listSharedWithMe());
+    } catch {
+      setSharedWithMe([]);
+    }
+  }, []);
+  useEffect(() => {
+    if (user) void refreshShared();
+  }, [user, access, refreshShared]);
+
+  function leave(a: SharedAccess) {
+    const name = a.ownerName || a.ownerEmail;
+    confirm({
+      title: 'לעזוב את השיתוף?',
+      message: `לא תוכל/י עוד לראות את הנתונים של ${name}${a.role !== 'view' ? ' ולדווח בהם' : ''}. הנתונים עצמם לא נמחקים. כדי לחזור — ${name} יצטרכו להוסיף אותך מחדש.`,
+      confirmLabel: 'עזיבת השיתוף',
+      onConfirm: async () => {
+        try {
+          if (access?.ownerUid === a.ownerUid) await switchAccount(null);
+          await leaveShare(a.ownerUid);
+          await refreshShared();
+          showToast('עזבת את השיתוף');
+        } catch {
+          showToast('העזיבה נכשלה. נסו שוב.');
+        }
+      },
+    });
+  }
+
+  const sharedSection = sharedWithMe?.length ? (
+    <>
+      <Text style={styles.section}>שיתפו איתי</Text>
+      {sharedWithMe.map((a) => (
+        <View key={a.ownerUid} style={styles.card}>
+          <Text style={styles.cardTitle}>{a.ownerName || a.ownerEmail}</Text>
+          {a.ownerName ? <Text style={styles.muted}>{a.ownerEmail}</Text> : null}
+          <Text style={styles.muted}>
+            {ROLE_LABELS[a.role]} · {ROLE_HINTS[a.role]}
+            {access?.ownerUid === a.ownerUid ? ' · פתוח עכשיו' : ''}
+          </Text>
+          <Button label="עזיבת השיתוף" variant="dangerLink" icon="account-arrow-left-outline" onPress={() => leave(a)} />
+        </View>
+      ))}
+    </>
+  ) : null;
 
   async function sendInvite(to: string, r: ShareRole) {
     try {
@@ -126,8 +179,21 @@ function SharingScreenInner() {
     );
   }
 
+  if (!isOwner) {
+    // צופים בחשבון ששותף: כאן רק מה ששותף איתך. המורשים שלך — בנתונים שלך.
+    return (
+      <Screen>
+        {sharedSection}
+        <Text style={styles.muted}>לניהול המורשים לנתונים שלך — חזרה ל"הנתונים שלי" בראש התפריט ☰.</Text>
+        {confirm.dialog}
+      </Screen>
+    );
+  }
+
   return (
     <Screen keyboardFooter>
+      {sharedSection}
+      <Text style={styles.section}>המורשים שלי</Text>
       <Text style={styles.body}>
         אפשר לתת לבן משפחה גישה לנתונים שלך עם חשבון Google שלו. ההרשאה חלה על כל החשבון ונכנסת לתוקף מיד.
       </Text>
@@ -180,13 +246,9 @@ function SharingScreenInner() {
   );
 }
 
-/** רק הבעלים, כשהם בנתונים של עצמם. */
+/** לכולם: הבעלים מנהלים מורשים; מורשה רואה ועוזב את מה ששותף איתו. */
 export default function SharingScreen() {
-  return (
-    <RequireAccess need="owner">
-      <SharingScreenInner />
-    </RequireAccess>
-  );
+  return <SharingScreenInner />;
 }
 
 const makeStyles = (c: AppColors) =>
