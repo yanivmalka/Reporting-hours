@@ -21,7 +21,7 @@ import { useWheel } from './useWheel';
 import { hideWheelOverlay, showWheelOverlay } from './WheelOverlay';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
-import { radius, type AppColors } from '../theme/colors';
+import { cardShadow, radius, type AppColors } from '../theme/colors';
 
 export type TimeInputHandle = {
   focus: () => void;
@@ -250,12 +250,15 @@ const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
     input: {
       width: '100%',
-      minHeight: 52,
+      minHeight: 76,
       backgroundColor: colors.surface,
+      // בלי מסגרת נראית — כרטיס לבן עם צל, כמו בעיצוב; המסגרת מופיעה בגרירה ובשגיאה.
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.md,
-      fontSize: 22,
+      borderColor: colors.surface,
+      borderRadius: 22,
+      ...cardShadow,
+      fontSize: 38,
+      letterSpacing: -1,
       fontWeight: '700',
       color: colors.text,
       textAlign: 'center',
