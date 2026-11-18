@@ -191,32 +191,34 @@ export default function HomeScreen() {
   return (
     <Screen>
       <View style={styles.greeting}>
-        <View style={styles.helloRow}>
-          <Text style={styles.hello}>
-            {now ? greetingFor(now.getHours()) : 'שלום'}
-            {name ? `, ${name}` : ''}
-          </Text>
-          <FinanceLockToggle />
-        </View>
+        {/* הברכה ברוחב מלא — שבירה לשתי שורות מזיזה את כל המסך מטה (והאריחים כבר לא מול סמל מסך הפתיחה) */}
+        <Text style={styles.hello}>
+          {now ? greetingFor(now.getHours()) : 'שלום'}
+          {name ? `, ${name}` : ''}
+        </Text>
         {today && todayIso ? (
           <Text style={styles.date}>
             {today.dayLabel} · {hebrewDate(todayIso, false)}
           </Text>
         ) : null}
         {data ? (
-          <Text style={styles.context}>
-            {todayCount === 0
-              ? 'אין קורסים מתוכננים להיום'
-              : todayReported === todayCount
-                ? todayCount === 1
-                  ? 'המפגש של היום דווח'
-                  : `כל ${todayCount} המפגשים של היום דווחו`
-                : todayCount === 1
-                  ? 'מפגש אחד מתוכנן להיום'
-                  : todayReported > 0
-                    ? `${todayCount} מפגשים היום · ${todayReported} דווחו`
-                    : `${todayCount} מפגשים מתוכננים להיום`}
-          </Text>
+          // מתג הנעילה בשורה הקצרה, משמאל — לא מוסיף גובה ולא דוחק את הברכה
+          <View style={styles.contextRow}>
+            <Text style={styles.context}>
+              {todayCount === 0
+                ? 'אין קורסים מתוכננים להיום'
+                : todayReported === todayCount
+                  ? todayCount === 1
+                    ? 'המפגש של היום דווח'
+                    : `כל ${todayCount} המפגשים של היום דווחו`
+                  : todayCount === 1
+                    ? 'מפגש אחד מתוכנן להיום'
+                    : todayReported > 0
+                      ? `${todayCount} מפגשים היום · ${todayReported} דווחו`
+                      : `${todayCount} מפגשים מתוכננים להיום`}
+            </Text>
+            <FinanceLockToggle />
+          </View>
         ) : null}
       </View>
 
@@ -601,10 +603,10 @@ const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
     pressed: { opacity: 0.85 },
     greeting: { gap: 2 },
-    helloRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-    hello: { flexShrink: 1, fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -0.5, color: colors.text, textAlign: TEXT_RIGHT },
+    hello: { fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -0.5, color: colors.text, textAlign: TEXT_RIGHT },
     date: { fontSize: 15, color: colors.textMuted, textAlign: TEXT_RIGHT },
-    context: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    contextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+    context: { flexShrink: 1, fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
 
     // כרטיס הדיווח הבא — כמו בעיצוב: צ׳יפ מצב, שם הקורס בגדול וכפתור לבן.
 
