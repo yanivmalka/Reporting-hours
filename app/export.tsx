@@ -16,7 +16,8 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { useScreenData } from '../components/useScreenData';
 import { useToast } from '../components/Toast';
 import { shareCsv, sharePdf } from '../components/exportFile';
-import { buildExport, displayDate, exportFileName, hoursText, toCsv, toHtml } from '../lib/exportReports';
+import { buildExport, displayDate, exportFileName, hoursText, toCsv, toHtml, type EmployeeInfo } from '../lib/exportReports';
+import { loadProfile, senderName, type Profile } from '../lib/profile';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { loadCourses, type Course } from '../lib/courses';
@@ -45,7 +46,7 @@ function rangeOf(kind: Range, now: Date): { from: string; to: string } {
   return { from: isoDate(new Date(y, m, 1)), to: isoDate(new Date(y, m + 1, 0)) };
 }
 
-type Data = { reports: WorkReport[]; workplaces: Workplace[]; courses: Course[] };
+type Data = { reports: WorkReport[]; workplaces: Workplace[]; courses: Course[]; profile: Profile };
 
 export default function ExportScreen() {
   const styles = useThemedStyles(makeStyles);
@@ -61,9 +62,9 @@ export default function ExportScreen() {
   const [busy, setBusy] = useState<'csv' | 'pdf' | null>(null);
 
   useScreenData(
-    () => Promise.all([loadReports(), loadWorkplaces(), loadCourses()]),
+    () => Promise.all([loadReports(), loadWorkplaces(), loadCourses(), loadProfile()]),
     [],
-    ([reports, workplaces, courses]) => setData({ reports, workplaces, courses }),
+    ([reports, workplaces, courses, profile]) => setData({ reports, workplaces, courses, profile }),
   );
 
   if (!data) return <LoadingScreen />;
@@ -89,10 +90,22 @@ export default function ExportScreen() {
     try {
       const out = buildExport(data.reports, data.workplaces, data.courses, basis, { from, to, workplaceId, withPay });
       const name = exportFileName({ from, to }, kind);
-      if (kind === 'csv') await shareCsv(toCsv(out, withPay), name);
+      const p = data.profile;
+      const employee: EmployeeInfo = {
+        ...p,
+        fullName: senderName(p),
+        employeeNumber: data.workplaces.find((w) => w.id === workplaceId)?.employeeNumber,
+      };
+      if (kind === 'csv') await shareCsv(toCsv(out, withPay, employee), name);
       else
         await sharePdf(
-          toHtml(out, withPay, 'דיווח שעות', `${wpName ?? 'כל מקומות העבודה'} · ${displayDate(from)} עד ${displayDate(to)}`),
+          toHtml(
+            out,
+            withPay,
+            'דיווח שעות',
+            `${wpName ?? 'כל מקומות העבודה'} · ${displayDate(from)} עד ${displayDate(to)}`,
+            employee,
+          ),
           name,
         );
     } catch (e) {

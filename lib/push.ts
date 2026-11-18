@@ -10,7 +10,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
-import { PUSH_KINDS, type PushItem, type PushKind } from './pushPlan';
+import { MISSING_TIME, PUSH_KINDS, type PushItem, type PushKind } from './pushPlan';
 
 export const pushPlatform = Platform.OS === 'android';
 
@@ -20,9 +20,12 @@ export type PushPrefs = {
   enabled: boolean;
   /** סוגים שכובו (ברירת מחדל — כולם פעילים) */
   off: PushKind[];
+  /** שעת ההתראה על דיווח חסר "HH:MM" */
+  missingTime: string;
 };
 
-const DEFAULT_PREFS: PushPrefs = { enabled: false, off: [] };
+const DEFAULT_PREFS: PushPrefs = { enabled: false, off: [], missingTime: MISSING_TIME };
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 let prefs: PushPrefs = DEFAULT_PREFS;
 let loaded = !pushPlatform;
@@ -39,7 +42,11 @@ function setPrefs(next: PushPrefs) {
 const ready: Promise<void> = pushPlatform
   ? readJSON<Partial<PushPrefs>>(KEYS.push, {}).then((v) => {
       loaded = true;
-      setPrefs({ enabled: v?.enabled === true, off: Array.isArray(v?.off) ? v.off.filter((k) => PUSH_KINDS.includes(k)) : [] });
+      setPrefs({
+        enabled: v?.enabled === true,
+        off: Array.isArray(v?.off) ? v.off.filter((k) => PUSH_KINDS.includes(k)) : [],
+        missingTime: typeof v?.missingTime === 'string' && TIME_RE.test(v.missingTime) ? v.missingTime : MISSING_TIME,
+      });
     })
   : Promise.resolve();
 
@@ -91,6 +98,23 @@ export async function setPushEnabled(on: boolean): Promise<boolean> {
 export async function setPushKind(kind: PushKind, on: boolean): Promise<void> {
   const off = on ? prefs.off.filter((k) => k !== kind) : [...new Set([...prefs.off, kind])];
   await savePrefs({ ...prefs, off });
+}
+
+/** שעת ההתראה על דיווח חסר (נשמרת רק שעה תקינה). */
+export async function setPushMissingTime(time: string): Promise<void> {
+  if (!TIME_RE.test(time) || time === prefs.missingTime) return;
+  await savePrefs({ ...prefs, missingTime: time });
+}
+
+/** התראת בדיקה — בעוד כמה שניות, כדי לוודא שההתראות מגיעות לטלפון. מחזיר אם תוזמנה. */
+export async function sendTestPush(seconds = 5): Promise<boolean> {
+  if (!pushPlatform) return false;
+  if (!(await ensurePermission())) return false;
+  await Notifications.scheduleNotificationAsync({
+    content: { title: 'דיווח שעות — התראת בדיקה', body: 'ההתראות מגיעות לטלפון 👍', data: { href: '/settings' } },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, channelId: CHANNEL_ID },
+  });
+  return true;
 }
 
 async function ensurePermission(): Promise<boolean> {

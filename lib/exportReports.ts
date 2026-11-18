@@ -5,6 +5,7 @@
  *
  * שורה לכל דיווח: תאריך, יום, מקום עבודה, קורס, שעות, הפסקות, נטו, שעות לתשלום (לפי בסיס
  * השכר של המקום) ושכר — רק אם בוחרים "כולל סכומים". מקום בשכר חודשי — בלי שכר לדיווח.
+ * בראש הקובץ — פרטי העובד (מהפרטים האישיים; בחשבון ששותף — של הבעלים), ומספר העובד כשנבחר מקום אחד.
  */
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
 import { payableHours, reportPay } from './pay';
@@ -46,6 +47,31 @@ export type ExportData = {
   /** מקומות בשכר חודשי שיש להם דיווחים בטווח — השכר שלהם אינו לפי דיווח */
   monthly: string[];
 };
+
+/** פרטי העובד לראש הקובץ (שדות ריקים — לא מוצגים). */
+export type EmployeeInfo = {
+  fullName?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  /** מספר עובד — רק כשהייצוא למקום עבודה אחד */
+  employeeNumber?: string;
+};
+
+/** [תווית, ערך] לכל פרט קיים. */
+export function employeeLines(e: EmployeeInfo | null | undefined): [string, string][] {
+  if (!e) return [];
+  const out: [string, string][] = [];
+  const add = (label: string, v?: string) => {
+    if (v?.trim()) out.push([label, v.trim()]);
+  };
+  add('שם העובד', e.fullName);
+  add('מספר עובד', e.employeeNumber);
+  add('טלפון', e.phone);
+  add('מייל', e.email);
+  add('כתובת', e.address);
+  return out;
+}
 
 const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
@@ -141,8 +167,9 @@ function csvCell(v: string | number): string {
 /**
  * CSV עם BOM (כדי שאקסל יזהה UTF-8 ועברית), שורת כותרות, שורה לכל דיווח ושורת סיכום.
  */
-export function toCsv(data: ExportData, withPay: boolean): string {
-  const lines = [headers(withPay), ...data.rows.map((r) => cells(r, withPay))];
+export function toCsv(data: ExportData, withPay: boolean, employee?: EmployeeInfo | null): string {
+  const info = employeeLines(employee);
+  const lines: (string | number)[][] = [...info, ...(info.length ? [[]] : []), headers(withPay), ...data.rows.map((r) => cells(r, withPay))];
   const total: (string | number)[] = ['סה״כ', '', '', `${data.totals.reports} דיווחים`, '', '', '', hoursText(data.totals.netMinutes), '', ''];
   if (withPay) total.push(round2(data.totals.pay));
   lines.push(total);
@@ -153,7 +180,17 @@ const esc = (s: string | number) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** HTML מלא בעברית (RTL) לטבלה — ל־PDF ולהדפסה. */
-export function toHtml(data: ExportData, withPay: boolean, title: string, subtitle: string): string {
+export function toHtml(
+  data: ExportData,
+  withPay: boolean,
+  title: string,
+  subtitle: string,
+  employee?: EmployeeInfo | null,
+): string {
+  const info = employeeLines(employee);
+  const employeeHtml = info.length
+    ? `<p class="emp">${info.map(([k, v]) => `<span><b>${esc(k)}:</b> ${esc(v)}</span>`).join('')}</p>`
+    : '';
   const head = headers(withPay).map((h) => `<th>${esc(h)}</th>`).join('');
   const body = data.rows
     .map((r) => {
@@ -182,6 +219,7 @@ export function toHtml(data: ExportData, withPay: boolean, title: string, subtit
   .sub { color: #555; margin: 0 0 12px; font-size: 13px; }
   .sum { font-weight: 700; margin: 0 0 12px; font-size: 14px; }
   .note { color: #555; font-size: 12px; }
+  .emp { margin: 0 0 10px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
   table { border-collapse: collapse; width: 100%; font-size: 11px; }
   th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: right; white-space: nowrap; }
   td:nth-child(4) { white-space: normal; }
@@ -192,6 +230,7 @@ export function toHtml(data: ExportData, withPay: boolean, title: string, subtit
 <body>
 <h1>${esc(title)}</h1>
 <p class="sub">${esc(subtitle)}</p>
+${employeeHtml}
 <p class="sum">${esc(summary)}</p>
 ${monthly}
 <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>

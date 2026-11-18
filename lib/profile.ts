@@ -4,6 +4,7 @@
  */
 import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
+import { authUser, getAccess } from './sync';
 
 export type Profile = {
   fullName: string;
@@ -39,4 +40,16 @@ export function signatureLines(p: Profile, employeeNumber?: string): string[] {
   const contact = [p.phone, p.email].filter(Boolean);
   if (contact.length) lines.push(contact.join(' · '));
   return lines;
+}
+
+/**
+ * השם שבו יוצאים מיילים "בשם המשתמש": השם המלא מהפרטים האישיים של בעל החשבון.
+ * בחשבון ששותף — הפרטים הנטענים הם של הבעלים, ובלי שם מלא — שם הבעלים מההרשאה (לא שם המורשה).
+ */
+export function senderName(p: Profile | null | undefined): string {
+  const full = p?.fullName?.trim();
+  if (full) return full;
+  const access = getAccess();
+  if (access) return access.ownerName || '';
+  return authUser()?.name ?? '';
 }
