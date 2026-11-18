@@ -55,10 +55,10 @@ export function BreakField({ value, onChange }: { value: string; onChange: (v: s
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
-    row: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+    row: { flexDirection: 'row', gap: 6, alignItems: 'center' },
     chip: {
       height: 38,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: 12,
       justifyContent: 'center',
       borderRadius: radius.md,
       borderWidth: 1,
@@ -70,7 +70,8 @@ const makeStyles = (colors: AppColors) =>
     chipTextOn: { color: colors.textOnBrand },
     customBox: {
       flex: 1,
-      minWidth: 80,
+      minWidth: 0,
+      maxWidth: 110,
       height: 38,
       flexDirection: 'row',
       alignItems: 'center',

@@ -113,6 +113,7 @@ function Chrome() {
             <Stack.Screen name="data" options={{ title: t('nav.data') }} />
             <Stack.Screen name="sharing" options={{ title: t('nav.sharing') }} />
             <Stack.Screen name="mail-report" options={{ title: t('nav.mailReport') }} />
+            <Stack.Screen name="preferences" options={{ title: t('nav.preferences') }} />
           </Stack>
         </View>
       </View>

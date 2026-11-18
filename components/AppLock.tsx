@@ -3,7 +3,8 @@
  *  - `FinanceGate` — מסך כספי שלם (לוח בקרה, דוחות שכר, תשלומים, תיאום מס): כשנעול, במקום התוכן
  *    מוצגת בקשת זיהוי (וחלון הזיהוי נפתח מיד).
  *  - `FinanceSection` — קבוצה בתוך מסך (תנאי שכר בעריכת מקום עבודה): כשנעולה — שורה "מידע כספי נעול · פתיחה".
- *  - `AppLockSetting` — תיבת הסימון ב"הגדרות ותצוגה".
+ *  - `AppLockSetting` — תיבת הסימון בדף "הגדרות" (app/preferences.tsx).
+ *  - `FinanceLockToggle` — מתג קטן בדף הבית: מנעול סגור (הצגה) / פתוח (נעילה).
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';

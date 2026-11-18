@@ -7,8 +7,8 @@
  * השפה) ולא ב־left/right — אלה מוחלפים אוטומטית באנדרואיד ב־RTL ולכן
  * הפאנל נצמד לצד הלא נכון.
  *
- * בתוכו: ניווט ראשי (5), שכר ומס (3), ו"הגדרות ותצוגה" מתקפל — מסכי
- * ההגדרות, מצב יום/לילה, ערכת צבעים, שפה, חשבון ועדכונים. מצב הפתיחה משותף דרך DrawerProvider כך שכפתור ההמבורגר
+ * בתוכו: ניווט ראשי, שכר ומס, חגים וארכיון, ו"הגדרות" — דף נפרד (app/preferences.tsx)
+ * עם ערכת צבעים, שפה, נעילה, חשבון, אודות ועדכונים. מצב הפתיחה משותף דרך DrawerProvider כך שכפתור ההמבורגר
  * בכותרת (DrawerToggle) יכול לפתוח אותו.
  *
  * במסך רחב (דפדפן במחשב, טאבלט לרוחב) התפריט מוצג קבוע בצד (SideNav),
@@ -31,18 +31,10 @@ import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '../lib/i18n';
-import type { Lang } from '../lib/strings';
 import { useTheme } from '../theme/ThemeContext';
-import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
-import { AppLockSetting } from './AppLock';
-import { setTrackingStart, useTrackingStart } from '../lib/trackingStart';
-import { todayISO } from '../lib/time';
-import { DateField } from './DatePicker';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
-import { SegmentedControl } from './SegmentedControl';
-import { UpdateSection } from './UpdateChecker';
-import { AccountSection, AccountSwitcher } from './CloudSync';
+import { AccountSwitcher } from './CloudSync';
 import { useAccess, type Access } from './Access';
 import { useHydrated } from '../lib/useHydrated';
 
@@ -153,14 +145,8 @@ const ARCHIVE_LINKS: NavLink[] = [
   { href: '/archive', key: 'nav.archive', icon: 'archive-outline' },
 ];
 
-/** מסכי הגדרה — בתוך "הגדרות ותצוגה" המתקפל. */
-const SETTINGS_LINKS: NavLink[] = [
-  { href: '/settings', key: 'nav.settings', icon: 'timer-cog-outline' },
-  { href: '/profile', key: 'nav.profile', icon: 'account-circle-outline' },
-  { href: '/data', key: 'nav.data', icon: 'database-cog-outline' },
-  { href: '/sharing', key: 'nav.sharing', icon: 'account-multiple-outline' },
-  { href: '/mail-report', key: 'nav.mailReport', icon: 'email-fast-outline' },
-];
+/** דף ההגדרות — מסכי ההגדרה (דקות מצטברות, פרטים, שיתוף, נתונים, דיווח במייל) נפתחים ממנו. */
+const PREFERENCES_LINK: NavLink = { href: '/preferences', key: 'nav.preferences', icon: 'cog-outline' };
 
 /** הקישורים שהרמה בחשבון הפעיל מתירה (docs/sharing-spec.md). */
 function allowed(a: Access) {
@@ -185,7 +171,6 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
   const pathname = usePathname();
   const { t } = useI18n();
   const { colors } = useTheme();
-  const { open: openDrawer } = useDrawer();
   const menuStyles = useStyles(makeOverflowStyles);
   const [open, setOpen] = useState(false);
   const wide = useWideLayout();
@@ -234,16 +219,8 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
                 {PAY_LINKS.map(item)}
                 <View style={menuStyles.divider} />
                 {ARCHIVE_LINKS.map(item)}
-                <Pressable
-                  onPress={() => {
-                    setOpen(false);
-                    openDrawer();
-                  }}
-                  style={({ pressed }) => [menuStyles.item, pressed && menuStyles.itemPressed]}
-                >
-                  <Icon name="cog-outline" size={20} color={colors.textMuted} />
-                  <Text style={menuStyles.itemText}>הגדרות ותצוגה…</Text>
-                </Pressable>
+                <View style={menuStyles.divider} />
+                {item(PREFERENCES_LINK)}
               </ScrollView>
             </View>
           </View>
@@ -407,19 +384,11 @@ export function SideNav() {
 /** תוכן התפריט — משותף למגירה ולתפריט הקבוע. */
 function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
   const ok = allowed(useAccess());
-  const { t, lang, setLang, langLabels } = useI18n();
-  const { paletteId, setPaletteId, palettes, colors } = useTheme();
+  const { t } = useI18n();
+  const { colors } = useTheme();
   const drawerStyles = useStyles(makeStyles);
   const router = useRouter();
   const pathname = usePathname();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const showHeb = useShowHebrewDates();
-  const trackingStart = useTrackingStart();
-  const [langNotice, setLangNotice] = useState(false);
-
-  function chooseLang(next: Lang) {
-    setLangNotice(!setLang(next));
-  }
 
   function go(href: Href) {
     onNavigate?.();
@@ -428,10 +397,6 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
     else router.push(href);
   }
 
-  const langOptions: { value: Lang; label: string }[] = [
-    { value: 'he', label: langLabels.he },
-    { value: 'en', label: langLabels.en },
-  ];
 
   const navItem = (link: NavLink) => {
     const current = isCurrent(link.href, pathname);
@@ -464,107 +429,10 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
       <View style={drawerStyles.divider} />
       {ARCHIVE_LINKS.map(navItem)}
 
-      <Pressable
-        onPress={() => setSettingsOpen((v) => !v)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: settingsOpen }}
-        style={({ pressed }) => [drawerStyles.navItem, pressed && drawerStyles.navItemPressed]}
-      >
-        <Icon name="cog-outline" size={22} color={colors.textMuted} />
-        <Text style={drawerStyles.navItemText}>הגדרות ותצוגה</Text>
-        <Icon name={settingsOpen ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
-      </Pressable>
-
-      {settingsOpen ? (
-        <View style={drawerStyles.settings}>
-          {SETTINGS_LINKS.filter(ok).map(navItem)}
-
-          <View style={drawerStyles.section}>
-            <SectionLabel icon="palette-outline" text={t('drawer.appearance')} />
-            <View style={drawerStyles.swatchRow}>
-              {palettes.map((palette) => {
-                const selected = palette.id === paletteId;
-                const label = lang === 'he' ? palette.labelHe : palette.labelEn;
-                return (
-                  <Pressable
-                    key={palette.id}
-                    onPress={() => setPaletteId(palette.id)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={label}
-                    style={[drawerStyles.swatch, selected && drawerStyles.swatchSelected]}
-                  >
-                    <View style={drawerStyles.swatchDisc}>
-                      <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.colors.brand }]} />
-                      <View style={[drawerStyles.swatchHalf, { backgroundColor: palette.swatchTint }]} />
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Pressable
-              onPress={() => void setShowHebrewDates(!showHeb)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: showHeb }}
-              style={({ pressed }) => [drawerStyles.checkRow, pressed && drawerStyles.navItemPressed]}
-            >
-              <Icon
-                name={showHeb ? 'checkbox-marked' : 'checkbox-blank-outline'}
-                size={24}
-                color={showHeb ? colors.brand : colors.textMuted}
-              />
-              <Text style={drawerStyles.navItemText}>הצגת תאריך עברי</Text>
-            </Pressable>
-          </View>
-
-          <AppLockSetting />
-
-          <View style={drawerStyles.section}>
-            <SectionLabel icon="calendar-start" text="תחילת עבודה עם המערכת" />
-            {trackingStart ? (
-              <>
-                <DateField value={trackingStart} onChange={(d) => void setTrackingStart(d)} />
-                <Text style={drawerStyles.langNotice}>
-                  מפגש לפני התאריך שלא דווח לא ייחשב דיווח חסר. מפגש שדווח נכלל כרגיל.
-                </Text>
-                <Pressable onPress={() => void setTrackingStart(null)} hitSlop={6}>
-                  <Text style={drawerStyles.linkText}>ביטול התאריך</Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Text style={drawerStyles.langNotice}>לא נקבע — כל המפגשים שעברו נבדקים לדיווח.</Text>
-                <Pressable onPress={() => void setTrackingStart(todayISO())} hitSlop={6}>
-                  <Text style={drawerStyles.linkText}>קביעת תאריך</Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-
-          <View style={drawerStyles.section}>
-            <SectionLabel icon="translate" text={t('drawer.language')} />
-            <SegmentedControl options={langOptions} value={lang} onChange={chooseLang} />
-            {langNotice ? (
-              <Text style={drawerStyles.langNotice}>תמיכה באנגלית תתווסף בהמשך</Text>
-            ) : null}
-          </View>
-
-          <AccountSection />
-          <UpdateSection />
-        </View>
-      ) : null}
+      <View style={drawerStyles.divider} />
+      {/* הגדרות — דף נפרד (app/preferences.tsx), לא בתוך התפריט */}
+      {navItem(PREFERENCES_LINK)}
     </ScrollView>
-  );
-}
-
-function SectionLabel({ icon, text }: { icon: string; text: string }) {
-  const drawerStyles = useStyles(makeStyles);
-  const { colors } = useTheme();
-  return (
-    <View style={drawerStyles.sectionHead}>
-      <Icon name={icon} size={16} color={colors.textMuted} />
-      <Text style={drawerStyles.sectionLabel}>{text}</Text>
-    </View>
   );
 }
 
