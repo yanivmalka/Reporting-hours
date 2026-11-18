@@ -104,6 +104,7 @@ function Chrome() {
             />
             <Stack.Screen name="payments" options={{ title: t('nav.payments') }} />
             <Stack.Screen name="tax" options={{ title: t('nav.tax') }} />
+            <Stack.Screen name="export" options={{ title: t('nav.export') }} />
             <Stack.Screen name="profile" options={{ title: t('nav.profile') }} />
             <Stack.Screen name="payroll" options={{ title: t('nav.payroll') }} />
             <Stack.Screen name="payroll-report" options={{ title: 'דוח שכר' }} />

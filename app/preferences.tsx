@@ -153,6 +153,7 @@ export default function PreferencesScreen() {
         {link('/settings', 'timer-cog-outline', t('nav.settings'), 'מונה הדקות, פדיון ודקות עודפות')}
         {isOwner ? link('/mail-report', 'email-fast-outline', t('nav.mailReport')) : null}
         {link('/holidays', 'calendar-check-outline', t('nav.holidays'))}
+        {link('/export', 'file-export-outline', t('nav.export'), 'CSV לאקסל או PDF להדפסה')}
       </Group>
 
       {isOwner ? (

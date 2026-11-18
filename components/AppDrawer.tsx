@@ -138,6 +138,7 @@ const PAY_LINKS: NavLink[] = [
   { href: '/payroll', key: 'nav.payroll', icon: 'file-document-outline' },
   { href: '/payments', key: 'nav.payments', icon: 'cash-check' },
   { href: '/tax', key: 'nav.tax', icon: 'receipt-text-outline' },
+  { href: '/export', key: 'nav.export', icon: 'file-export-outline' },
 ];
 
 /** ארכיון ואשפה — מסך אחד עם בורר. */
