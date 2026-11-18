@@ -26,6 +26,7 @@
 | דיווחים מהמייל שכבר הוצגה עליהם הודעה (לכל חשבון, במכשיר) | `components/MailSync.tsx` | `reporting-hours/mail-seen/v1` |
 | נקודת ההמשך של הורדת עדכון שהושהתה (במכשיר) | `lib/update.ts` | `reporting-hours/update-download/v1` |
 | נעילת האפליקציה בטביעת אצבע (במכשיר) | `lib/appLock.ts` | `reporting-hours/app-lock/v1` |
+| התראות לטלפון — הפעלה וסוגים שכובו (במכשיר) | `lib/push.ts` | `reporting-hours/push/v1` |
 | פרטי מפגש (הערה, הגעה, תוכן, סימון הגשה, תזכורת) | `lib/sessionNotes.ts` | `reporting-hours/session-notes/v1` |
 | הגדרות ביטול אוטומטי בחגים | `lib/sessions.ts` | `reporting-hours/holiday-cancel/v2` |
 | סיבות ביטול (רשימה גלובלית) | `lib/cancelReasons.ts` | `reporting-hours/cancel-reasons/v1` |
@@ -112,6 +113,7 @@
 - טופס הדיווח: `reportForm.ts` — אימות, תצוגה מקדימה חיה ובניית הדיווח שנשמר (טהור, עם בדיקות; משמש את `components/report/useReportWizard.tsx`).
 - כסף: `pay.ts`, `payBasis.tsx`, `travel.ts`, `payroll.ts`, `forecast.ts`.
 - לוח שנה: `hebrewDate.ts`, `holidays.ts`, `sessions.ts`, `vacations.ts`.
+- התראות לטלפון: `pushPlan.ts` (מה לתזמן — טהור, עם בדיקות), `push.ts` (הגדרה, הרשאה ותזמון ב־expo-notifications).
 - מסכים: `home.ts` (כולל `nextRelevantDay`), `dashboard.ts` (כולל `deadlineRelative`), `recommend.ts`, `dayStatus.ts`.
 - תשתית: `keys.ts` (מרשם המפתחות), `dates.ts` (המרות ISO), `storage.ts`, `sync.ts`, `firebase.ts`, `authPlatform(.web).ts`, `backup.ts`, `update.ts`, `rtl.ts`, `i18n.tsx`, `strings.ts`, `demo.ts`.
 
@@ -120,7 +122,7 @@
 - דיאלוגים: המסגרת המשותפת `Dialog` (כותרת וכפתורים קבועים, אמצע נגלל, מצב מקלדת), ועליה `ConfirmDialog`, `SessionCancelDialog`, `PaymentDialog`, `SessionSheet`.
 - חופשות: `Vacations` — `VacationBoard` (הלוח המרכזי), `VacationsCard` (בדף קורס / מקום עבודה, עם "התעלם" בעריכה), `useVacationEditor`.
 - ניווט וכותרות: `AppDrawer`, `Screen`, `ExitGuard`.
-- תשתית: `CloudSync` (סנכרון), `BackupScheduler` / `BackupSection`, `UpdateChecker`, `DemoSeeder`.
+- תשתית: `CloudSync` (סנכרון), `BackupScheduler` / `BackupSection`, `UpdateChecker`, `DemoSeeder`, `MailSync`, `PushScheduler` (תזמון מחדש של ההתראות לטלפון ופתיחת המסך בלחיצה; ההגדרה — `PushSetting`).
 - תצוגה: `Charts`, `ForecastChart`, `WorkplaceTile`, `ReportCard`, `RangeCalendar`, `WeekStrip`, `TrashList`, `PlanList`.
 - טעינה: `useScreenData` (טעינת נתוני מסך: פוקוס, תוצאה ישנה, רענון אחרי החלפת נתונים, `reload`), `LoadingScreen`.
 - משותפים: `Checkbox`, `FoldSection` (קבוצה מתקפלת), `MonthSlide` (החלקת חודש בתאריכון), `DateText` (לועזי + עברי בלי שבירה), `Chevrons` (חץ כניסה ‹ וחץ קיפול ⌄/⌃), `DayDot` (נקודות מצב יום ומקרא, לפי `lib/dayStatus.ts`), `useFlash` / `useFade` (הבהוב / עמעום קצר).

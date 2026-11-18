@@ -17,6 +17,8 @@ import { Checkbox } from '../components/Checkbox';
 import { DateField } from '../components/DatePicker';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { AppLockSetting } from '../components/AppLock';
+import { PushSetting } from '../components/PushSetting';
+import { pushPlatform } from '../lib/push';
 import { UpdateSection } from '../components/UpdateChecker';
 import { AccountSection } from '../components/CloudSync';
 import { useAccess } from '../components/Access';
@@ -134,10 +136,16 @@ export default function PreferencesScreen() {
         />
       </Group>
 
+      {pushPlatform ? (
+        <Group title="התראות" icon="bell-outline">
+          <PushSetting />
+        </Group>
+      ) : null}
+
       <Group title="פרטיות ואבטחה" icon="shield-lock-outline">
         <AppLockSetting />
         <Text style={styles.sub}>
-          אפשר גם לנעול ולהציג סכומים מדף הבית (סימן המנעול ליד הברכה), כשהנעילה מופעלת.
+          אפשר גם לנעול ולהציג סכומים מדף הבית (סימן המנעול שמתחת לתאריך), כשהנעילה מופעלת.
         </Text>
       </Group>
 

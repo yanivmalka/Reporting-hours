@@ -13,6 +13,7 @@ import { UpdateProvider } from '../components/UpdateChecker';
 import { DemoSeeder } from '../components/DemoSeeder';
 import { BackupScheduler } from '../components/BackupScheduler';
 import { MailSync } from '../components/MailSync';
+import { PushScheduler } from '../components/PushScheduler';
 import { SyncProvider, useCloudSync } from '../components/CloudSync';
 import { BlockedWriteNotice } from '../components/Access';
 import { I18nProvider, useI18n } from '../lib/i18n';
@@ -64,6 +65,7 @@ function Chrome() {
       <DemoSeeder />
       <BackupScheduler />
       <MailSync />
+      <PushScheduler />
       <ExitGuard />
       <BlockedWriteNotice />
       {/* במסך רחב: תפריט קבוע בצד ההתחלה (ימין בעברית) והניווט לצדו */}
