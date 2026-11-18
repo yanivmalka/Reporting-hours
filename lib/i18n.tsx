@@ -149,6 +149,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
+/** כיוון הטקסט בלי לדרוש Provider (ברירת מחדל — עברית, מימין לשמאל). */
+export function useIsRTL(): boolean {
+  return useContext(I18nContext)?.isRTL ?? true;
+}
+
 export function useI18n(): I18nContextValue {
   const ctx = useContext(I18nContext);
   if (!ctx) {

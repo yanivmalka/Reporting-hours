@@ -12,6 +12,8 @@
  *   (צעד של שעה), בחצי הימני — דקות (צעד של דקה; מעבר 59 / 00 מעדכן את השעה).
  *   בזמן הגרירה מוצגת שכבת גלגלת כהה מעל התיבה (`WheelOverlay`), עם `label`.
  * - הערך החיצוני הוא "HH:MM" כשהשעה מלאה, אחרת מחרוזת ריקה.
+ * - `min` (שעת סיום — שעת ההתחלה): הגלגלת לא יורדת אל `min` ומתחת לו ולא עוברת את חצות,
+ *   ושעה מוקלדת שאינה אחרי `min` מסומנת כשגויה.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -43,6 +45,8 @@ type TimeInputProps = {
   placeholder?: string;
   /** בכניסה לשדה (למשל גלילה כדי שהמקלדת לא תסתיר אותו) */
   onFocus?: () => void;
+  /** השעה חייבת להיות אחרי זו ("HH:MM") — לשעת סיום */
+  min?: string;
 };
 
 const onlyDigits = (text: string) => text.replace(/\D/g, '');
@@ -70,13 +74,19 @@ function display(h: string, m: string): string {
   return `${h}:${m}`;
 }
 
+/** "HH:MM" → דקות מתחילת היום; אחרת null */
+function toMinutes(v: string): number | null {
+  const r = /^(\d{2}):(\d{2})$/.exec(v);
+  return r ? Number(r[1]) * 60 + Number(r[2]) : null;
+}
+
 function fromValue(value: string): [string, string] {
   const r = /^(\d{1,2}):(\d{2})$/.exec(value);
   return r ? [r[1].padStart(2, '0'), r[2]] : ['', ''];
 }
 
 export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function TimeInput(
-  { value, onChange, label = 'שעה', onComplete, onOverflow, invalid, placeholder = '00:00', onFocus },
+  { value, onChange, label = 'שעה', onComplete, onOverflow, invalid, placeholder = '00:00', onFocus, min },
   ref,
 ) {
   const styles = useThemedStyles(makeStyles);
@@ -161,6 +171,13 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     feed(d.slice(prevDigits.length));
   }
 
+  const minMinutes = toMinutes(min ?? '');
+  const minRef = useRef(minMinutes);
+  minRef.current = minMinutes;
+  const current = toMinutes(display(hh, mm));
+  /** שעה מלאה שאינה אחרי `min` */
+  const beforeMin = minMinutes != null && current != null && current <= minMinutes;
+
   // ── גלגלת ──
   /** איזה חלק נגרר, ותחתית שכבת הגלגלת (ראש התיבה בחלון) */
   const [drag, setDrag] = useState<{ part: 0 | 1; top: number } | null>(null);
@@ -171,7 +188,12 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     const base = partsRef.current[0].length === 2 && partsRef.current[1].length === 2
       ? partsRef.current
       : fromValue(savedRef.current);
-    const total = (((Number(base[0] || 0) * 60 + Number(base[1] || 0) + delta) % 1440) + 1440) % 1440;
+    const lo = minRef.current;
+    // שדה ריק עם `min` — הגלגלת מתחילה משעת ההתחלה.
+    const from = base[0] === '' && lo != null ? lo : Number(base[0] || 0) * 60 + Number(base[1] || 0);
+    const raw = from + delta;
+    // עם `min` — בלי מעבר חצות, ותמיד אחרי `min`.
+    const total = lo != null ? Math.min(1439, Math.max(lo + 1, raw)) : ((raw % 1440) + 1440) % 1440;
     setSaved('');
     emit(pad2(Math.floor(total / 60)), pad2(total % 60));
   }
@@ -244,7 +266,7 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         inputMode="numeric"
         returnKeyType="next"
         onSubmitEditing={() => onComplete?.()}
-        style={[styles.input, drag && styles.dragging, invalid && styles.invalid]}
+        style={[styles.input, drag && styles.dragging, (invalid || beforeMin) && styles.invalid]}
       />
       {/* סימן גלגלת בשני הצדדים: גרירה למעלה / למטה משנה שעות (שמאל) ודקות (ימין) */}
       <View pointerEvents="none" style={[styles.wheelMark, styles.wheelMarkLeft]}>

@@ -5,6 +5,7 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
+import { Checkbox } from '../components/Checkbox';
 import { DateField } from '../components/DatePicker';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
@@ -105,13 +106,21 @@ function TaxScreen() {
     }
   }
 
+  /** מקומות שהמשתמש בחר לשלוח להם בלי מייל מחלקת השכר (הנמען נבחר בטיוטה) */
+  const [notToPayroll, setNotToPayroll] = useState<Set<string>>(new Set());
+  const toPayroll = (w: Workplace) => !!w.payrollEmail && !notToPayroll.has(w.id);
+  function setToPayroll(id: string, on: boolean) {
+    setNotToPayroll((prev) => {
+      const next = new Set(prev);
+      if (on) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function send(w: Workplace) {
     const file = w.taxFiles?.[year];
     if (!file) return;
-    if (!w.payrollEmail) {
-      showToast('לא הוגדר מייל מחלקת שכר — בעריכת מקום העבודה, "דוחות שכר".');
-      return;
-    }
     setBusy(w.id);
     try {
       const url = await taxFileUrl(file);
@@ -119,7 +128,7 @@ function TaxScreen() {
         showToast('לא ניתן להכין קישור לקובץ כרגע.');
         return;
       }
-      await Linking.openURL(taxMailto(w, year, url, authUser()?.name));
+      await Linking.openURL(taxMailto(w, year, url, authUser()?.name, toPayroll(w)));
       setList(await markTaxSent(w, year));
       showToast('נפתחה טיוטת מייל · סומן "נשלח"');
     } finally {
@@ -173,6 +182,20 @@ function TaxScreen() {
         {file ? (
           <View style={styles.fileActions}>
             <Button label="צפייה" variant="secondary" onPress={() => view(w)} disabled={working} />
+            {w.payrollEmail ? (
+              <Checkbox
+                checked={toPayroll(w)}
+                onChange={(on) => setToPayroll(w.id, on)}
+                label="שליחה למייל מחלקת השכר"
+                hint={
+                  toPayroll(w)
+                    ? [w.payrollEmail, ...(w.ccEmails ?? [])].join(' · ')
+                    : 'הטיוטה תיפתח בלי נמען — בוחרים למי לשלוח'
+                }
+              />
+            ) : (
+              <Text style={styles.meta}>לא הוגדר מייל מחלקת שכר — הטיוטה תיפתח בלי נמען.</Text>
+            )}
             <Button label={sent ? 'שליחה שוב במייל' : 'שליחה במייל'} onPress={() => send(w)} loading={working} />
             <View style={styles.linksRow}>
               <Pressable onPress={() => upload(w)} accessibilityRole="link" hitSlop={8} disabled={working}>

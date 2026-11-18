@@ -49,6 +49,16 @@ export function parseTime(value: string): number | null {
   return hours * 60 + minutes;
 }
 
+/** הודעת השגיאה כששעת הסיום אינה אחרי שעת ההתחלה. */
+export const END_BEFORE_START = 'שעת הסיום חייבת להיות אחרי ההתחלה';
+
+/** שתי השעות מלאות ושעת הסיום אינה אחרי ההתחלה. */
+export function endNotAfterStart(start: string, end: string): boolean {
+  const s = parseTime(start);
+  const e = parseTime(end);
+  return s != null && e != null && e <= s;
+}
+
 /** תוויות שפה לפירמוט משך; ברירת המחדל עברית לשמירה על תאימות לאחור. */
 export type DurationLabels = {
   hoursShort: string;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildReportDraft, hasErrors, reportPreview, validateReportForm, type BreakRow } from '../lib/reportForm';
+import { END_BEFORE_START, endNotAfterStart } from '../lib/time';
 import type { Workplace } from '../lib/workplaces';
 
 const wp = (over: Partial<Workplace> = {}): Workplace =>
@@ -95,5 +96,19 @@ describe('הדיווח שנשמר', () => {
     expect(own.carried).toBe(0);
     const foreign = buildReportDraft({ ...form, note: '', leftoverChoice: 'include' }, { ...ctx, course: { id: 'c2', workplaceId: 'w9' } });
     expect(foreign.draft.courseId).toBeUndefined();
+  });
+});
+
+describe('שעת סיום אחרי ההתחלה', () => {
+  it('endNotAfterStart — רק כששתי השעות מלאות', () => {
+    expect(endNotAfterStart('10:00', '09:59')).toBe(true);
+    expect(endNotAfterStart('10:00', '10:00')).toBe(true);
+    expect(endNotAfterStart('10:00', '10:01')).toBe(false);
+    expect(endNotAfterStart('10:00', '')).toBe(false);
+  });
+
+  it('האימות חוסם סיום לפני ההתחלה', () => {
+    const e = validateReportForm({ workplaceId: 'w', date: '2026-11-18', start: '12:00', end: '11:00', breaks: [] });
+    expect(e.end).toBe(END_BEFORE_START);
   });
 });

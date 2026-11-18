@@ -133,3 +133,33 @@ export function unseenMailReports(
 export function mailTextArchived(receivedAt: number, archiveDays: number, now = Date.now()): boolean {
   return now - receivedAt > archiveDays * 86_400_000;
 }
+
+/** סימני כיווניות (Gmail בעברית עוטף בהם את שורת הציטוט) — מוסרים לפני ההשוואה. */
+const BIDI = /[‎‏‪-‮⁦-⁩]/g;
+
+/** שורה (או שתי שורות מחוברות) שפותחת את ההתכתבות המצוטטת. */
+function startsQuote(line: string, next: string): boolean {
+  const l = line.replace(BIDI, '').trim();
+  if (!l) return false;
+  if (l.startsWith('>')) return true;
+  if (/^-{2,}\s*(original message|forwarded message|הודעה מקורית|הודעה שהועברה)/i.test(l)) return true;
+  if (/^_{8,}$/.test(l)) return true;
+  if (/^(from|מאת):\s/i.test(l)) return true;
+  const two = `${l} ${next.replace(BIDI, '').trim()}`;
+  const attribution = (s: string) =>
+    /^on\s.+\swrote:$/i.test(s) || /^בתאריך\s.+(מאת\s.+|כתב(\/ה|ה)?):$/.test(s) || /^ב[־-]?.+כתב(\/ה|ה)?:$/.test(s);
+  return attribution(l) || attribution(two);
+}
+
+/**
+ * תשובה במייל → הטקסט שהמשתמש כתב (`reply`) ושאר ההתכתבות המצוטטת (`quoted`, ריק אם אין).
+ * בתצוגת הדיווח מוצגת התשובה, וההתכתבות מקופלת.
+ */
+export function splitMailReply(text: string): { reply: string; quoted: string } {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const at = lines.findIndex((l, i) => startsQuote(l, lines[i + 1] ?? ''));
+  const reply = at > 0 ? lines.slice(0, at).join('\n').trim() : '';
+  // אין ציטוט, או שאין טקסט לפניו — מציגים את הכול.
+  if (!reply) return { reply: text.trim(), quoted: '' };
+  return { reply, quoted: lines.slice(at).join('\n').trim() };
+}

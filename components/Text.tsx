@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { FONT_FAMILY, normalizeWeight } from '../theme/fonts';
 import { hasMoney, maskMoney, unlockFinance, useFinanceLocked } from '../lib/appLock';
+import { useIsRTL } from '../lib/i18n';
 
 const base: TextStyle = FONT_FAMILY ? { fontFamily: FONT_FAMILY } : {};
 
@@ -66,8 +67,21 @@ export const Text = forwardRef<RNText, TextProps>(function Text({ style, childre
   );
 });
 
+/**
+ * יישור תיבות הטקסט: תמיד לתחילת השורה של השפה (בעברית — לימין), חוץ מ־center.
+ * ב־TextInput של אנדרואיד textAlign אינו מתהפך ב־RTL (בניגוד ל־Text), ולכן
+ * `TEXT_RIGHT` / `layout.textStart` (שהם 'left' באנדרואיד) הצמידו את הטקסט לשמאל.
+ * כאן היישור נקבע במקום אחד לכל האפליקציה.
+ */
+function inputAlign(style: StyleProp<TextStyle>, rtl: boolean): TextStyle {
+  const align = (StyleSheet.flatten(style) as TextStyle | undefined)?.textAlign;
+  if (align === 'center' || align === 'justify') return {};
+  return { textAlign: rtl ? 'right' : 'left' };
+}
+
 export const TextInput = forwardRef<RNTextInput, TextInputProps>(function TextInput({ style, ...props }, ref) {
-  return <RNTextInput ref={ref} {...props} style={withFont(style)} />;
+  const rtl = useIsRTL();
+  return <RNTextInput ref={ref} {...props} style={[withFont(style), inputAlign(style, rtl)]} />;
 });
 
 export type { TextProps, TextInputProps };

@@ -532,14 +532,11 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
   const continuous = !range && !periodMode;
   /** תכנון בחודש הנוכחי: הימים שלפני היום מקופלים — אריח היום בראש הרשימה */
   const todayIso = todayISO();
-  const collapseBefore =
-    tab === 'plan' &&
-    continuous &&
-    !core.earlierShown &&
-    win.from === todayIso.slice(0, 7) &&
-    !(focusDay && focusDay < todayIso)
-      ? todayIso
-      : null;
+  const collapsible =
+    tab === 'plan' && continuous && win.from === todayIso.slice(0, 7) && !(focusDay && focusDay < todayIso);
+  const collapseBefore = collapsible && !core.earlierShown ? todayIso : null;
+  /** הימים הקודמים הורחבו — אפשר לקפל אותם שוב */
+  const expandedBefore = collapsible && core.earlierShown ? todayIso : null;
 
   // "דיווחים": גם מפגשים שעוד לא דווחו — של היום ("ממתין") ושעברו ("חסר").
   // מפגשים עתידיים שייכים ל"תכנון" ולא מוצגים כאן.
@@ -628,6 +625,7 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     showCalendar,
     continuous,
     collapseBefore,
+    expandedBefore,
   };
 }
 

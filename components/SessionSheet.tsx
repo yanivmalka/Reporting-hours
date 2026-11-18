@@ -175,7 +175,8 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
     (sec === 'reminder' && rem !== 'none');
   const toggle = (sec: Section) =>
     setOpened((o) => (o.includes(sec) ? o.filter((x) => x !== sec) : [...o, sec]));
-  const sections: Section[] = past ? ['summary', 'note', 'content', 'arrival'] : ['note', 'content', 'arrival', 'reminder'];
+  // במפגש שכבר התקיים אין "תוכן מתוכנן" (תוכן שנכתב מראש עדיין מוצג).
+  const sections: Section[] = past ? ['summary', 'note', 'arrival'] : ['note', 'content', 'arrival', 'reminder'];
 
   function chooseRem(r: ReminderChoice) {
     setRem(r);
@@ -245,7 +246,8 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
             {!loaded ? null : (
               <>
                 <Text style={styles.label}>סימון</Text>
-                <View style={styles.chips}>
+                {/* הסימונים בשורה אחת */}
+                <View style={styles.flagRow}>
                   {([null, ...FLAGS] as const).map((f) => (
                     <Pressable
                       key={f ?? 'none'}
@@ -253,10 +255,17 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
                       disabled={!canEdit}
                       accessibilityRole="radio"
                       accessibilityState={{ checked: flag === f }}
-                      style={[styles.chip, flag === f && styles.chipOn]}
+                      style={[styles.chip, styles.flagChip, flag === f && styles.chipOn]}
                     >
                       {f ? <Icon name={FLAG_ICON[f]} size={14} color={flag === f ? colors.brand : colors.textMuted} /> : null}
-                      <Text style={[styles.chipText, flag === f && styles.chipTextOn]}>{f ? FLAG_LABEL[f] : 'ללא'}</Text>
+                      <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
+                        style={[styles.chipText, styles.flagText, flag === f && styles.chipTextOn]}
+                      >
+                        {f ? FLAG_LABEL[f] : 'ללא'}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -463,6 +472,9 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       backgroundColor: c.background,
     },
     chipOn: { backgroundColor: c.brandLight, borderColor: c.brand },
+    flagRow: { flexDirection: layout.rowStart, gap: 4 },
+    flagChip: { flexGrow: 1, flexShrink: 1, justifyContent: 'center', paddingHorizontal: 6, gap: 3 },
+    flagText: { flexShrink: 1 },
     chipText: { fontSize: 13, color: c.textMuted },
     chipTextOn: { color: c.brand, fontWeight: '700' },
     customRow: { flexDirection: layout.rowStart, gap: spacing.sm, alignItems: 'center' },
