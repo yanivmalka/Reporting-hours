@@ -15,11 +15,13 @@ import { readJSON, writeJSON } from './storage';
 import {
   currentCancel,
   currentMoves,
+  currentPlan,
   keptInPotential,
   loadCancelIndex,
   type CancelIndex,
   type Cancellation,
   type MovesIndex,
+  type PlanIndex,
 } from './sessions';
 import { parseTime } from './time';
 import { KEYS } from './keys';
@@ -460,8 +462,8 @@ export const COURSE_STATUS_LABELS: Record<CourseStatus, string> = {
 };
 
 /** תאריך המפגש האחרון של הקורס (כולל נוספים ומועברים); בלי מפגשים — סוף התקופה. */
-export function lastSessionDate(course: Course): string {
-  const all = courseSessions(course, '0000-01-01', '9999-12-31');
+export function lastSessionDate(course: Course, plan: PlanIndex = currentPlan()): string {
+  const all = courseSessions(course, '0000-01-01', '9999-12-31', plan.cancel, plan.moves);
   return all.length ? all[all.length - 1].date : course.to;
 }
 
@@ -471,12 +473,12 @@ export function lastSessionDate(course: Course): string {
  *   - פעיל — יש לו מפגש בחודש הנוכחי, או שהוא מתחיל בשבוע הנוכחי.
  *   - מתוכנן — כל קורס אחר.
  */
-export function courseStatus(course: Course, today: string): CourseStatus {
-  if (lastSessionDate(course) < today) return 'ended';
+export function courseStatus(course: Course, today: string, plan: PlanIndex = currentPlan()): CourseStatus {
+  if (lastSessionDate(course, plan) < today) return 'ended';
   const month = today.slice(0, 7);
   const [y, m] = month.split('-').map(Number);
   const monthEnd = iso(new Date(y, m, 0));
-  if (courseSessions(course, `${month}-01`, monthEnd).length > 0) return 'active';
+  if (courseSessions(course, `${month}-01`, monthEnd, plan.cancel, plan.moves).length > 0) return 'active';
   const t = parseISO(today);
   const weekStart = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() - t.getDay()));
   const weekEnd = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() - t.getDay() + 6));
@@ -485,8 +487,12 @@ export function courseStatus(course: Course, today: string): CourseStatus {
 }
 
 /** מזהי מקומות העבודה שיש להם קורס פעיל (`courseStatus` = פעיל) — לתיאום מס ולדקות מצטברות. */
-export function workplacesWithActiveCourse(courses: readonly Course[], today: string): Set<string> {
+export function workplacesWithActiveCourse(
+  courses: readonly Course[],
+  today: string,
+  plan: PlanIndex = currentPlan(),
+): Set<string> {
   const out = new Set<string>();
-  for (const c of courses) if (!out.has(c.workplaceId) && courseStatus(c, today) === 'active') out.add(c.workplaceId);
+  for (const c of courses) if (!out.has(c.workplaceId) && courseStatus(c, today, plan) === 'active') out.add(c.workplaceId);
   return out;
 }
