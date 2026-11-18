@@ -4,13 +4,16 @@
  * `apps/reporting-hours/users/{uid}/files/tax/{workplaceId}-{year}.{ext}` (רק הבעלים —
  * storage.rules בריפו apps-platform), והפרטים שלו ב־`Workplace.taxFiles[year]`.
  *
- * שליחה: עד שהשליחה מהשרת תעלה (docs/fixes-spec-2026-11-17.md סעיף 3) — טיוטת
- * מייל במכשיר לנמען דוחות השכר, עם קישור הורדה לקובץ. השליחה מסמנת "נשלח".
+ * שליחה מהשרת (`sendTaxFormFromServer`): בקשה ב־`users/{uid}/taxSend/{id}`, ו־Cloud Function ‏`taxSend`
+ * בריפו apps-platform (`functions/src/taxSend.mjs`) שולחת את הקובץ כקובץ מצורף מתיבת האפליקציה — למייל מחלקת
+ * השכר ולמכותבים שבנתוני מקום העבודה (לא מהבקשה), עם עותק ו־Reply-To אליך — ומסמנת "נשלח" בנתונים המסונכרנים.
+ * בלי מייל מחלקת שכר (או כשמבטלים את הסימון) — נשלח אליך בלבד. גיבוי: טיוטת מייל במכשיר עם קישור (`taxMailto`).
  */
 import * as DocumentPicker from 'expo-document-picker';
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { APP_ID, cloudStorage } from './firebase';
-import { authUser, getAccess } from './sync';
+import { addDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { APP_ID, cloudStorage, firestore } from './firebase';
+import { authUser, flush, getAccess, isDemoActive } from './sync';
 import { setTaxCoordination, setTaxFile, type TaxFile, type Workplace } from './workplaces';
 import { todayISO } from './time';
 
@@ -125,4 +128,99 @@ export function taxMailto(
 /** סימון "נשלח" היום (אחרי פתיחת טיוטת המייל). */
 export function markTaxSent(w: Workplace, year: string): Promise<Workplace[]> {
   return setTaxCoordination(w.id, year, todayISO());
+}
+
+/** כמה לחכות לתשובת השרת לפני שמציעים טיוטה במכשיר. */
+const SERVER_TIMEOUT_MS = 45_000;
+
+export type ServerSendError =
+  | 'signedOut'
+  | 'shared'
+  | 'demo'
+  | 'timeout'
+  | 'failed'
+  // מהשרת (functions/src/taxSend.mjs)
+  | 'year'
+  | 'workplace'
+  | 'file'
+  | 'user'
+  | 'recipient'
+  | 'limit'
+  | 'storage'
+  | 'send';
+
+export const SERVER_SEND_ERROR: Record<ServerSendError, string> = {
+  signedOut: 'כדי לשלוח מהשרת צריך להתחבר עם חשבון Google.',
+  shared: 'בחשבון ששותף איתך אפשר רק לצפות בטפסים.',
+  demo: 'בנתוני הדגמה אין שליחה מהשרת.',
+  timeout: 'השרת לא ענה בזמן.',
+  failed: 'השליחה נכשלה.',
+  year: 'שנה לא תקינה.',
+  workplace: 'מקום העבודה לא נמצא בשרת — אולי עוד לא סונכרן. אפשר לנסות שוב בעוד דקה.',
+  file: 'הטופס עוד לא הגיע לשרת — אולי עוד לא סונכרן. אפשר לנסות שוב בעוד דקה.',
+  user: 'לא נמצאה כתובת המייל שלך בחשבון.',
+  recipient: 'לא הוגדר מייל מחלקת השכר במקום העבודה.',
+  limit: 'הגעת למכסת השליחות להיום.',
+  storage: 'הקובץ לא נמצא באחסון. כדאי לטעון אותו שוב.',
+  send: 'שליחת המייל נכשלה.',
+};
+
+/** שגיאות שבהן כדאי להציע טיוטת מייל במכשיר במקום. */
+export const draftHelps = (e: ServerSendError) => e === 'timeout' || e === 'failed' || e === 'send' || e === 'demo';
+
+/**
+ * שליחת הטופס מהשרת. `toPayroll` — למייל מחלקת השכר (ולמכותבים); אחרת — אליך בלבד.
+ * מחכה לתשובת השרת; בהצלחה מסמן "נשלח" גם במכשיר (השרת מסמן בנתונים המסונכרנים).
+ */
+export async function sendTaxFormFromServer(
+  w: Workplace,
+  year: string,
+  toPayroll: boolean,
+  senderName?: string | null,
+): Promise<{ ok: true; to: string; list: Workplace[] } | { ok: false; error: ServerSendError }> {
+  const user = authUser();
+  const db = firestore();
+  if (!user || !db) return { ok: false, error: 'signedOut' };
+  if (getAccess()) return { ok: false, error: 'shared' };
+  if (await isDemoActive()) return { ok: false, error: 'demo' };
+  try {
+    // השרת קורא את מקום העבודה והקובץ מהנתונים המסונכרנים — דוחפים קודם שינויים שעוד לא עלו.
+    await flush();
+    const ref = await addDoc(collection(db, 'apps', APP_ID, 'users', user.uid, 'taxSend'), {
+      workplaceId: w.id,
+      year,
+      toPayroll,
+      senderName: senderName ?? '',
+      status: 'pending',
+      created: serverTimestamp(),
+    });
+    const result = await new Promise<{ status: string; error?: string; to?: string } | null>((resolve) => {
+      const timer = setTimeout(() => {
+        off();
+        resolve(null);
+      }, SERVER_TIMEOUT_MS);
+      const off = onSnapshot(
+        ref,
+        (snap) => {
+          const d = snap.data();
+          if (!d || d.status === 'pending') return;
+          clearTimeout(timer);
+          off();
+          resolve(d as { status: string; error?: string; to?: string });
+        },
+        () => {
+          clearTimeout(timer);
+          resolve({ status: 'error', error: 'failed' });
+        },
+      );
+    });
+    if (!result) return { ok: false, error: 'timeout' };
+    if (result.status !== 'sent') {
+      const e = (result.error ?? 'failed') as ServerSendError;
+      return { ok: false, error: e in SERVER_SEND_ERROR ? e : 'failed' };
+    }
+    return { ok: true, to: result.to ?? '', list: await markTaxSent(w, year) };
+  } catch {
+    return { ok: false, error: 'failed' };
+  }
 }

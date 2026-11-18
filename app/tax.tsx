@@ -13,7 +13,17 @@ import { todayISO } from '../lib/time';
 import { loadCourses, workplacesWithActiveCourse } from '../lib/courses';
 import { useTrackingStart } from '../lib/trackingStart';
 import { loadWorkplaces, setTaxCoordination, taxStatus, type Workplace } from '../lib/workplaces';
-import { deleteTaxFile, markTaxSent, pickAndUploadTaxFile, TAX_FILE_ERROR, taxFileUrl, taxMailto } from '../lib/taxFiles';
+import {
+  deleteTaxFile,
+  draftHelps,
+  markTaxSent,
+  pickAndUploadTaxFile,
+  sendTaxFormFromServer,
+  SERVER_SEND_ERROR,
+  TAX_FILE_ERROR,
+  taxFileUrl,
+  taxMailto,
+} from '../lib/taxFiles';
 import { authUser } from '../lib/sync';
 import { Icon } from '../components/Icon';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -118,7 +128,30 @@ function TaxScreen() {
     });
   }
 
+  /** טיוטה במכשיר — כשהשליחה מהשרת נכשלה (מוצעת אחרי שגיאה) */
+  const [draftFor, setDraftFor] = useState<string | null>(null);
+
+  /** שליחה מהשרת: הקובץ מצורף, ממייל האפליקציה, עם עותק אליך. */
   async function send(w: Workplace) {
+    if (!w.taxFiles?.[year]) return;
+    setBusy(w.id);
+    setDraftFor(null);
+    try {
+      const res = await sendTaxFormFromServer(w, year, toPayroll(w), authUser()?.name);
+      if (res.ok) {
+        setList(res.list);
+        showToast(toPayroll(w) ? `נשלח אל ${res.to} · עותק אליך` : 'נשלח אליך — אפשר להעביר משם');
+      } else {
+        showToast(SERVER_SEND_ERROR[res.error] + (draftHelps(res.error) ? ' אפשר לשלוח מטיוטה במכשיר.' : ''));
+        if (draftHelps(res.error)) setDraftFor(w.id);
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** גיבוי: טיוטת מייל במכשיר עם קישור לקובץ (מסמנת "נשלח"). */
+  async function sendDraft(w: Workplace) {
     const file = w.taxFiles?.[year];
     if (!file) return;
     setBusy(w.id);
@@ -130,6 +163,7 @@ function TaxScreen() {
       }
       await Linking.openURL(taxMailto(w, year, url, authUser()?.name, toPayroll(w)));
       setList(await markTaxSent(w, year));
+      setDraftFor(null);
       showToast('נפתחה טיוטת מייל · סומן "נשלח"');
     } finally {
       setBusy(null);
@@ -189,14 +223,26 @@ function TaxScreen() {
                 label="שליחה למייל מחלקת השכר"
                 hint={
                   toPayroll(w)
-                    ? [w.payrollEmail, ...(w.ccEmails ?? [])].join(' · ')
-                    : 'הטיוטה תיפתח בלי נמען — בוחרים למי לשלוח'
+                    ? `${[w.payrollEmail, ...(w.ccEmails ?? [])].join(' · ')} · עותק אליך`
+                    : 'יישלח אליך בלבד — אפשר להעביר משם'
                 }
               />
             ) : (
-              <Text style={styles.meta}>לא הוגדר מייל מחלקת שכר — הטיוטה תיפתח בלי נמען.</Text>
+              <Text style={styles.meta}>לא הוגדר מייל מחלקת שכר — הטופס יישלח אליך בלבד.</Text>
             )}
-            <Button label={sent ? 'שליחה שוב במייל' : 'שליחה במייל'} onPress={() => send(w)} loading={working} />
+            <Button
+              label={sent ? 'שליחה שוב במייל' : 'שליחה במייל'}
+              icon="email-fast-outline"
+              onPress={() => send(w)}
+              loading={working}
+              loadingLabel="שולח…"
+            />
+            <Text style={styles.meta}>הקובץ נשלח מצורף, ממייל האפליקציה; תשובות יגיעו אליך.</Text>
+            {draftFor === w.id ? (
+              <Pressable onPress={() => void sendDraft(w)} accessibilityRole="link" hitSlop={8} disabled={working}>
+                <Text style={styles.link}>שליחה מטיוטת מייל במכשיר (עם קישור לקובץ)</Text>
+              </Pressable>
+            ) : null}
             <View style={styles.linksRow}>
               <Pressable onPress={() => upload(w)} accessibilityRole="link" hitSlop={8} disabled={working}>
                 <Text style={styles.link}>החלפת הקובץ</Text>
