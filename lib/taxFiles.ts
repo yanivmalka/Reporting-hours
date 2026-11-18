@@ -16,6 +16,7 @@ import { APP_ID, cloudFunctions, cloudStorage } from './firebase';
 import { authUser, flush, getAccess } from './sync';
 import { setTaxCoordination, setTaxFile, type TaxFile, type Workplace } from './workplaces';
 import { todayISO } from './time';
+import { senderName, signatureLines, type Profile } from './profile';
 
 /** עד 10MB, כמו בחוקי האבטחה */
 export const TAX_FILE_MAX = 10 * 1024 * 1024;
@@ -104,14 +105,15 @@ export function taxMailto(
   w: Workplace,
   year: string,
   url: string,
-  senderName?: string | null,
+  profile: Profile,
   toPayroll = true,
 ): string {
+  const name = senderName(profile);
   const to = toPayroll ? (w.payrollEmail ?? '') : '';
   const params: string[] = [];
   const cc = toPayroll ? (w.ccEmails ?? []).join(',') : '';
   if (cc) params.push(`cc=${encodeURIComponent(cc)}`);
-  params.push(`subject=${encodeURIComponent(`טופס תיאום מס ${year}${senderName ? ` — ${senderName}` : ''}`)}`);
+  params.push(`subject=${encodeURIComponent(`טופס תיאום מס ${year}${name ? ` — ${name}` : ''}`)}`);
   const body = [
     'שלום,',
     '',
@@ -119,7 +121,7 @@ export function taxMailto(
     url,
     '',
     'בברכה,',
-    senderName ?? '',
+    ...signatureLines({ ...profile, fullName: name }, w.employeeNumber),
   ].join('\n');
   params.push(`body=${encodeURIComponent(body)}`);
   return `mailto:${encodeURIComponent(to).replace(/%40/g, '@')}?${params.join('&')}`;
@@ -132,8 +134,8 @@ export function markTaxSent(w: Workplace, year: string): Promise<Workplace[]> {
 
 export type ServerSendResult =
   | { ok: true; to: string; cc: string[] }
-  /** quota — הגעת למגבלת השליחות היומית; draft — לנסות בטיוטה מהמכשיר (רשת / שרת / אין נמען) */
-  | { ok: false; reason: 'quota' | 'draft' };
+  /** quota — מגבלת השליחות היומית; shared — מורשה בלי הרשאה מלאה; draft — לנסות בטיוטה מהמכשיר (רשת / שרת / אין נמען) */
+  | { ok: false; reason: 'quota' | 'draft' | 'shared' };
 
 /**
  * שליחת הטופס מהשרת למייל מחלקת השכר של מקום העבודה (עם העתק למשתמש).
@@ -142,18 +144,26 @@ export type ServerSendResult =
  */
 export async function sendTaxFromServer(w: Workplace, year: string): Promise<ServerSendResult> {
   const fns = cloudFunctions();
-  if (!fns || !authUser() || getAccess()) return { ok: false, reason: 'draft' };
+  const access = getAccess();
+  if (!fns || !authUser()) return { ok: false, reason: 'draft' };
+  // מורשה — רק בהרשאה מלאה, ותמיד מהשרת (לקובץ עצמו אין לו גישה); השם והכתובת — של הבעלים.
+  if (access && access.role !== 'full') return { ok: false, reason: 'shared' };
   try {
     await flush().catch(() => {});
-    const call = httpsCallable<{ workplaceId: string; year: string }, { ok: boolean; to: string; cc: string[] }>(
+    const call = httpsCallable<
+      { workplaceId: string; year: string; ownerUid?: string },
+      { ok: boolean; to: string; cc: string[] }
+    >(
       fns,
       'taxSend',
       { timeout: 60_000 },
     );
-    const res = await call({ workplaceId: w.id, year });
+    const res = await call({ workplaceId: w.id, year, ...(access ? { ownerUid: access.ownerUid } : {}) });
     return res.data?.ok ? { ok: true, to: res.data.to, cc: res.data.cc ?? [] } : { ok: false, reason: 'draft' };
   } catch (e) {
     const code = (e as { code?: string })?.code ?? '';
-    return { ok: false, reason: code.endsWith('resource-exhausted') ? 'quota' : 'draft' };
+    if (code.endsWith('resource-exhausted')) return { ok: false, reason: 'quota' };
+    if (code.endsWith('permission-denied')) return { ok: false, reason: 'shared' };
+    return { ok: false, reason: 'draft' };
   }
 }

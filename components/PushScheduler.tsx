@@ -61,7 +61,7 @@ async function reschedule(): Promise<void> {
         loadSessionNotes(),
         loadPayrollStatus(),
       ]);
-      const items = planPush({ workplaces, courses, reports, notes, payroll, now: new Date(), kinds: activeKinds(prefs) });
+      const items = planPush({ workplaces, courses, reports, notes, payroll, now: new Date(), kinds: activeKinds(prefs), missingTime: prefs.missingTime });
       await syncScheduled(items);
     } while (again);
   } catch (e) {
@@ -73,7 +73,7 @@ async function reschedule(): Promise<void> {
 
 export function PushScheduler() {
   const router = useRouter();
-  const { enabled, off, loaded } = usePushPrefs();
+  const { enabled, off, missingTime, loaded } = usePushPrefs();
 
   // תזמון מחדש: בפתיחה, בשינוי ההגדרה, בחזרה לאפליקציה ובכל שינוי בנתונים.
   useEffect(() => {
@@ -94,7 +94,7 @@ export function PushScheduler() {
       offRemote();
       sub.remove();
     };
-  }, [loaded, enabled, off.join(',')]);
+  }, [loaded, enabled, off.join(','), missingTime]);
 
   // לחיצה על התראה — המסך שלה (גם כשהאפליקציה נפתחה מההתראה).
   useEffect(() => {

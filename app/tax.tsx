@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { EnterChevron } from '../components/Chevrons';
 import { Linking, StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
@@ -22,7 +22,8 @@ import {
   taxFileUrl,
   taxMailto,
 } from '../lib/taxFiles';
-import { authUser } from '../lib/sync';
+import { getAccess } from '../lib/sync';
+import { EMPTY_PROFILE, loadProfile, senderName, type Profile } from '../lib/profile';
 import { Icon } from '../components/Icon';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
@@ -51,7 +52,14 @@ export default function TaxScreenGated() {
 function TaxScreen() {
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
+  /** נפתח ממסך מקום עבודה — רק המקום הזה */
+  const { wp } = useLocalSearchParams<{ wp?: string }>();
   const { isRTL } = useI18n();
+  const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
+  /** בחשבון ששותף: טעינה / החלפה / מחיקה / צפייה — רק לבעלים; שליחה מהשרת — במורשה בהרשאה מלאה */
+  const access = getAccess();
+  const isOwner = !access;
+  const canSend = !access || access.role === 'full';
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [list, setList] = useState<Workplace[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
@@ -65,19 +73,20 @@ function TaxScreen() {
   /** מקומות עם קורס פעיל — רק הם מוצגים (ועוד מקום שכבר יש לו טופס / סימון לשנה הנבחרת) */
   const [withActive, setWithActive] = useState<Set<string>>(new Set());
   useScreenData(
-    () => Promise.all([loadWorkplaces(), loadCourses()]),
+    () => Promise.all([loadWorkplaces(), loadCourses(), loadProfile()]),
     [],
-    ([wps, courses]) => {
+    ([wps, courses, prof]) => {
       setList(wps);
+      setProfile(prof);
       setWithActive(workplacesWithActiveCourse(courses, todayISO()));
     },
   );
 
   const trackStart = useTrackingStart();
   const trackYear = trackStart ? Number(trackStart.slice(0, 4)) : null;
-  const shown = list.filter(
-    (w) => w.taxCoordination?.[year] || w.taxFiles?.[year] || (!w.archivedAt && withActive.has(w.id)),
-  );
+  const shown = wp
+    ? list.filter((w) => w.id === wp)
+    : list.filter((w) => w.taxCoordination?.[year] || w.taxFiles?.[year] || (!w.archivedAt && withActive.has(w.id)));
   const done = shown.filter((w) => w.taxCoordination?.[year]);
   const missing = shown.filter((w) => !w.taxCoordination?.[year]);
 
@@ -116,7 +125,7 @@ function TaxScreen() {
 
   /** מקומות שהמשתמש בחר לשלוח להם בלי מייל מחלקת השכר (הנמען נבחר בטיוטה) */
   const [notToPayroll, setNotToPayroll] = useState<Set<string>>(new Set());
-  const toPayroll = (w: Workplace) => !!w.payrollEmail && !notToPayroll.has(w.id);
+  const toPayroll = (w: Workplace) => !!w.payrollEmail && (!isOwner || !notToPayroll.has(w.id));
   function setToPayroll(id: string, on: boolean) {
     setNotToPayroll((prev) => {
       const next = new Set(prev);
@@ -144,6 +153,14 @@ function TaxScreen() {
           showToast('הגעת למגבלת השליחות להיום. אפשר לנסות שוב מחר.');
           return;
         }
+        if (res.reason === 'shared' || !isOwner) {
+          showToast(
+            res.reason === 'shared'
+              ? 'שליחה בשם בעל החשבון — רק בהרשאה מלאה.'
+              : 'השליחה נכשלה. כדאי לבדוק את החיבור ולנסות שוב.',
+          );
+          return;
+        }
         fallback = true;
       }
       const url = await taxFileUrl(file);
@@ -151,7 +168,7 @@ function TaxScreen() {
         showToast(fallback ? 'השליחה נכשלה. כדאי לבדוק את החיבור ולנסות שוב.' : 'לא ניתן להכין קישור לקובץ כרגע.');
         return;
       }
-      await Linking.openURL(taxMailto(w, year, url, authUser()?.name, toPayroll(w)));
+      await Linking.openURL(taxMailto(w, year, url, profile, toPayroll(w)));
       setList(await markTaxSent(w, year));
       showToast(
         fallback ? 'השליחה מהשרת נכשלה — נפתחה טיוטת מייל במכשיר · סומן "נשלח"' : 'נפתחה טיוטת מייל · סומן "נשלח"',
@@ -206,8 +223,18 @@ function TaxScreen() {
         ) : null}
         {file ? (
           <View style={styles.fileActions}>
-            <Button label="צפייה" variant="secondary" onPress={() => view(w)} disabled={working} />
-            {w.payrollEmail ? (
+            {isOwner ? <Button label="צפייה" variant="secondary" onPress={() => view(w)} disabled={working} /> : null}
+            {!canSend ? (
+              <Text style={styles.meta}>שליחה בשם בעל החשבון — רק בהרשאה מלאה.</Text>
+            ) : !isOwner ? (
+              w.payrollEmail ? (
+                <Text style={styles.meta}>
+                  {`נשלח מהשרת ל־${[w.payrollEmail, ...(w.ccEmails ?? [])].join(' · ')} בשם ${senderName(profile) || 'בעל החשבון'} — עותק לבעל החשבון ואליך`}
+                </Text>
+              ) : (
+                <Text style={styles.meta}>לא הוגדר מייל מחלקת שכר — אין אפשרות לשלוח מחשבון ששותף.</Text>
+              )
+            ) : w.payrollEmail ? (
               <Checkbox
                 checked={toPayroll(w)}
                 onChange={(on) => setToPayroll(w.id, on)}
@@ -221,7 +248,10 @@ function TaxScreen() {
             ) : (
               <Text style={styles.meta}>לא הוגדר מייל מחלקת שכר — הטיוטה תיפתח בלי נמען.</Text>
             )}
-            <Button label={sent ? 'שליחה שוב במייל' : 'שליחה במייל'} onPress={() => send(w)} loading={working} />
+            {canSend && (isOwner || w.payrollEmail) ? (
+              <Button label={sent ? 'שליחה שוב במייל' : 'שליחה במייל'} onPress={() => send(w)} loading={working} />
+            ) : null}
+            {isOwner ? (
             <View style={styles.linksRow}>
               <Pressable onPress={() => upload(w)} accessibilityRole="link" hitSlop={8} disabled={working}>
                 <Text style={styles.link}>החלפת הקובץ</Text>
@@ -230,9 +260,12 @@ function TaxScreen() {
                 <Text style={styles.deleteLink}>מחיקת הקובץ</Text>
               </Pressable>
             </View>
+            ) : null}
           </View>
-        ) : (
+        ) : isOwner ? (
           <Button label="טעינת טופס (PDF או תמונה)" variant="secondary" onPress={() => upload(w)} loading={working} />
+        ) : (
+          <Text style={styles.meta}>את הטופס טוען בעל החשבון.</Text>
         )}
         {editing === w.id ? (
           <View style={styles.edit}>
@@ -266,6 +299,12 @@ function TaxScreen() {
           השכר. מקום שלא נכלל בתיאום השנה — תזכורת במסך הבית.
         </Text>
       </View>
+
+      {wp ? (
+        <Pressable onPress={() => router.setParams({ wp: '' })} accessibilityRole="link" hitSlop={8}>
+          <Text style={styles.link}>כל מקומות העבודה</Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.yearRow}>
         {/* לא לפני שנת תחילת העבודה עם המערכת */}

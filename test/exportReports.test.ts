@@ -71,3 +71,24 @@ describe('ייצוא דיווחים', () => {
     expect(exportFileName({ from: '2026-11-01', to: '2026-11-30' }, 'pdf')).toBe('reports_2026-11-01_2026-11-30.pdf');
   });
 });
+
+describe('פרטי העובד בראש הקובץ', () => {
+  const emp = { fullName: 'יניב מלכא', phone: '050-1', email: 'y@x.com', address: '', employeeNumber: '77' };
+  it('CSV — שורות פרטים, שורה ריקה ואז הטבלה', () => {
+    const csv = toCsv(buildExport(reports, [hourly], [course], 'regular', opts), false, emp);
+    const lines = csv.replace('﻿', '').split('\r\n');
+    expect(lines[0]).toBe('שם העובד,יניב מלכא');
+    expect(lines[1]).toBe('מספר עובד,77');
+    expect(lines).not.toContain('כתובת,');
+    expect(lines[4]).toBe('');
+  });
+  it('PDF — הפרטים מתחת לכותרת', () => {
+    const html = toHtml(buildExport(reports, [hourly], [course], 'regular', opts), false, 'דיווח שעות', 'נובמבר', emp);
+    expect(html).toContain('<b>שם העובד:</b> יניב מלכא');
+    expect(html).toContain('<b>מספר עובד:</b> 77');
+  });
+  it('בלי פרטים — כמו קודם', () => {
+    const out = buildExport(reports, [hourly], [course], 'regular', opts);
+    expect(toCsv(out, false, null)).toBe(toCsv(out, false));
+  });
+});

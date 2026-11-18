@@ -51,15 +51,20 @@ describe('התראות לטלפון — מה מתוזמן', () => {
   it('דיווח חסר: בערב של יום המפגש, ונעלם כשיש דיווח', () => {
     const m = plan({ kinds: ['missing'] }).filter((p) => p.id === 'missing|2026-11-24');
     expect(m).toHaveLength(1);
-    expect(hhmm(m[0].at)).toBe('24.11 20:00');
+    expect(hhmm(m[0].at)).toBe('24.11 22:00');
     expect(m[0].href).toBe('/report?course=c1&date=2026-11-24');
     expect(ids({ kinds: ['missing'], reports: [report] })).not.toContain('missing|2026-11-24');
   });
 
   it('דיווח חסר: מפגש שמסתיים מאוחר — חצי שעה אחרי הסיום', () => {
-    const late = { ...course, start: '18:00', end: '21:00' };
+    const late = { ...course, start: '19:00', end: '22:00' };
     const m = plan({ kinds: ['missing'], courses: [late] }).find((p) => p.id === 'missing|2026-11-24');
-    expect(m && hhmm(m.at)).toBe('24.11 21:30');
+    expect(m && hhmm(m.at)).toBe('24.11 22:30');
+  });
+
+  it('דיווח חסר: שעה מההגדרות', () => {
+    const m = plan({ kinds: ['missing'], missingTime: '21:15' }).find((p) => p.id === 'missing|2026-11-24');
+    expect(m && hhmm(m.at)).toBe('24.11 21:15');
   });
 
   it('מונית: X שעות לפני המפגש הראשון, או בערב שלפני', () => {

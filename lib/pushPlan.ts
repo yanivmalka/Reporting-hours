@@ -45,14 +45,16 @@ export type PushInput = {
   payroll: StatusMap;
   now: Date;
   kinds?: readonly PushKind[];
+  /** שעת ההתראה על דיווח חסר "HH:MM" (ברירת מחדל `MISSING_TIME`) */
+  missingTime?: string;
 };
 
 /** כמה ימים קדימה מתזמנים. */
 export const PUSH_HORIZON_DAYS = 14;
 /** תקרה למספר ההתראות המתוזמנות (אנדרואיד מגביל את מספר ההתראות הממתינות). */
 export const PUSH_MAX = 60;
-/** שעת ההתראה על דיווח חסר, כשהמפגש הסתיים לפניה. */
-export const MISSING_TIME = '20:00';
+/** שעת ההתראה על דיווח חסר (ברירת מחדל; ניתנת לשינוי בהגדרות), כשהמפגש הסתיים לפניה. */
+export const MISSING_TIME = '22:00';
 /** שעות ההתראה על היום האחרון לדיווח שכר: בערב שלפני ובבוקר עצמו. */
 export const PAYROLL_EVE_TIME = '19:00';
 export const PAYROLL_DAY_TIME = '09:00';
@@ -151,6 +153,7 @@ function missingPush(
   reports: readonly WorkReport[],
   dates: string[],
   plan: PlanIndex,
+  missingTime: string = MISSING_TIME,
 ): PushItem[] {
   const ids = new Set(workplaces.map((w) => w.id));
   const out: PushItem[] = [];
@@ -162,7 +165,7 @@ function missingPush(
     if (open.length === 0) continue;
     // אחרי סיום המפגש האחרון: בשעה הקבועה, או חצי שעה אחרי הסיום אם הוא מאוחר יותר.
     const lastEnd = Math.max(...open.map((o) => parseTime(o.end) ?? 0));
-    const fireMin = Math.max(parseTime(MISSING_TIME) ?? 0, lastEnd + 30);
+    const fireMin = Math.max(parseTime(missingTime) ?? parseTime(MISSING_TIME) ?? 0, lastEnd + 30);
     const fire = at(date, formatTime(fireMin));
     const first = open[0];
     out.push({
@@ -242,7 +245,7 @@ export function planPush(input: PushInput, plan: PlanIndex = currentPlan()): Pus
   const out: PushItem[] = [];
   if (kinds.has('taxi')) out.push(...taxiPush(active, courses, dates, plan));
   if (kinds.has('reminder')) out.push(...reminderPush(input.notes, active, courses, input.reports, plan));
-  if (kinds.has('missing')) out.push(...missingPush(active, courses, input.reports, dates, plan));
+  if (kinds.has('missing')) out.push(...missingPush(active, courses, input.reports, dates, plan, input.missingTime));
   if (kinds.has('payroll')) out.push(...payrollPush(all, courses, input.reports, input.payroll, now, horizonEnd));
   const limit = addDays(now, PUSH_HORIZON_DAYS + 1).getTime();
   return out

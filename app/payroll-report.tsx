@@ -9,7 +9,7 @@ import { Pressable } from '../components/Pressable';
 import { PaymentDialog } from '../components/PaymentDialog';
 import { TextField } from '../components/TextField';
 import { basisFor, usePayBasis } from '../lib/payBasis';
-import { loadProfile, type Profile } from '../lib/profile';
+import { loadProfile, senderName, type Profile } from '../lib/profile';
 import { taxPercentOf, workplaceAt } from '../lib/workplaces';
 import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
@@ -76,7 +76,8 @@ function PayrollReportScreen() {
       ]),
     [params.wp, params.start, basis],
     ([workplaces, reports, courses, st, prof]) => {
-      setProfile(prof);
+      // שם השולח: השם המלא מהפרטים האישיים (בחשבון ששותף — של הבעלים).
+      setProfile({ ...prof, fullName: senderName(prof) });
       const w = workplaces.find((x) => x.id === params.wp);
       if (!w || !params.start) {
         setMissing(true);

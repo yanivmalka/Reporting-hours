@@ -29,7 +29,7 @@ import { reportPay } from '../lib/pay';
 import { basisFor, usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { parseTime } from '../lib/time';
-import { ARRIVAL_MODE_LABELS, deadlineLabel, isArchived, loadWorkplaces, setWorkplaceArchived, paymentTermsLabel, taxPercentOf, type Workplace } from '../lib/workplaces';
+import { ARRIVAL_MODE_LABELS, deadlineLabel, isArchived, loadWorkplaces, setWorkplaceArchived, paymentTermsLabel, taxPercentOf, taxStatus, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
@@ -92,6 +92,7 @@ export default function WorkplaceDetailScreen() {
   );
   const current = forecasts[0];
   const tax = taxPercentOf(w);
+  const taxYear = String(new Date().getFullYear());
   const netOf = (f: PeriodForecast) => f.reportedPay * (1 - tax / 100) + (f.reported - f.reportedPay);
 
   // התשלום הבא: הדוח הישן ביותר שנסגר ועוד לא שולם; אחרת — התקופה הנוכחית.
@@ -294,6 +295,17 @@ export default function WorkplaceDetailScreen() {
           />
           <InfoRow label="סוג תשלום" value={w.paymentType === 'monthly' ? 'חודשי' : 'שעתי'} />
           <InfoRow label="אחוז מס" value={`${tax}%`} />
+          <Pressable
+            onPress={() => router.push({ pathname: '/tax', params: { wp: w.id } })}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.infoRow, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.infoLabel}>תיאום מס {taxYear}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.infoValue}>{TAX_STATUS_TEXT[taxStatus(w, taxYear)]}</Text>
+              <EnterChevron />
+            </View>
+          </Pressable>
           <InfoRow label="תנאי תשלום" value={paymentTermsLabel(w)} />
           <InfoRow label="יום אחרון לדיווח שכר" value={deadlineLabel(w)} />
           <InfoRow
@@ -552,3 +564,5 @@ const makeStyles = (colors: AppColors) =>
     chipText: { fontSize: 12, fontWeight: '700' },
     actions: { gap: spacing.sm, marginTop: spacing.sm },
   });
+
+const TAX_STATUS_TEXT = { missing: 'טרם נשלח', loaded: 'הטופס נטען — טרם נשלח', sent: '✓ נשלח' } as const;
