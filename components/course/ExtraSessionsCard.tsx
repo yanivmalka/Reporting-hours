@@ -5,15 +5,15 @@
  * וב־`Course.extraInfo` (lib/courses.ts).
  */
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Text, TextInput } from '../Text';
 import { Button } from '../Button';
+import { Dialog } from '../Dialog';
 import { Pressable } from '../Pressable';
 import { Icon } from '../Icon';
 import { EnterChevron } from '../Chevrons';
 import { DateField } from '../DatePicker';
 import { TimeInput } from '../TimeInput';
-import { WheelOverlayHost } from '../WheelOverlay';
 import { occursOn, timeRange, type Course, type ExtraSessionInfo } from '../../lib/courses';
 import { formatISODate, parseTime, todayISO } from '../../lib/time';
 import { useTheme } from '../../theme/ThemeContext';
@@ -137,65 +137,65 @@ export function ExtraSessionsCard({
       ) : null}
 
       {edit ? (
-        <Modal transparent animationType="fade" visible onRequestClose={() => setEdit(null)} statusBarTranslucent>
-          <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <View style={styles.dialog}>
-              <ScrollView contentContainerStyle={styles.dialogBody} keyboardShouldPersistTaps="handled">
-                <Text style={styles.dialogTitle}>{edit.original ? 'מפגש נוסף' : 'הוספת מפגש נוסף'}</Text>
-                <Text style={styles.label}>שם המפגש</Text>
-                <TextInput
-                  value={edit.draft.name}
-                  onChangeText={(t) => setEdit({ ...edit, draft: { ...edit.draft, name: t } })}
-                  placeholder="למשל: שיעור השלמה, סיור"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
-                />
-                <Text style={styles.label}>תאריך</Text>
-                <DateField
-                  value={edit.draft.date}
-                  onChange={(v) => setEdit({ ...edit, draft: { ...edit.draft, date: v } })}
-                />
-                <View style={styles.times}>
-                  <View style={styles.timeCol}>
-                    <Text style={styles.label}>התחלה</Text>
-                    <TimeInput
-                      value={edit.draft.start}
-                      onChange={(v) => setEdit((e) => (e ? { ...e, draft: { ...e.draft, start: v } } : e))}
-                      label="שעת התחלה"
-                    />
-                  </View>
-                  <View style={styles.timeCol}>
-                    <Text style={styles.label}>סיום</Text>
-                    <TimeInput
-                      value={edit.draft.end}
-                      min={edit.draft.start}
-                      onChange={(v) => setEdit((e) => (e ? { ...e, draft: { ...e.draft, end: v } } : e))}
-                      label="שעת סיום"
-                    />
-                  </View>
-                </View>
-                <Text style={styles.label}>תיאור</Text>
-                <TextInput
-                  value={edit.draft.description}
-                  onChangeText={(t) => setEdit({ ...edit, draft: { ...edit.draft, description: t } })}
-                  multiline
-                  placeholder="מה במפגש"
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.input, styles.multi]}
-                />
-                {error ? <Text style={styles.error}>{error}</Text> : null}
-                <Button label="שמירה" onPress={save} />
-                <Button label="סגירה" variant="secondary" onPress={() => setEdit(null)} />
-                {edit.original ? (
-                  <Pressable onPress={remove} accessibilityRole="button" hitSlop={8} style={styles.removeLink}>
-                    <Text style={styles.removeText}>הסרת המפגש הנוסף</Text>
-                  </Pressable>
-                ) : null}
-              </ScrollView>
+        <Dialog
+          title={edit.original ? 'מפגש נוסף' : 'הוספת מפגש נוסף'}
+          compactTitle={edit.draft.name || (edit.original ? 'מפגש נוסף' : 'הוספת מפגש נוסף')}
+          onClose={() => setEdit(null)}
+          actions={[
+            <Button key="save" label="שמירה" onPress={save} />,
+            <Button key="close" label="סגירה" variant="secondary" onPress={() => setEdit(null)} />,
+          ]}
+          below={
+            edit.original ? (
+              <Pressable onPress={remove} accessibilityRole="button" hitSlop={8} style={styles.removeLink}>
+                <Text style={styles.removeText}>הסרת המפגש הנוסף</Text>
+              </Pressable>
+            ) : null
+          }
+        >
+          <Text style={styles.label}>שם המפגש</Text>
+          <TextInput
+            value={edit.draft.name}
+            onChangeText={(t) => setEdit({ ...edit, draft: { ...edit.draft, name: t } })}
+            placeholder="למשל: שיעור השלמה, סיור"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+          />
+          <Text style={styles.label}>תאריך</Text>
+          <DateField
+            value={edit.draft.date}
+            onChange={(v) => setEdit({ ...edit, draft: { ...edit.draft, date: v } })}
+          />
+          <View style={styles.times}>
+            <View style={styles.timeCol}>
+              <Text style={styles.label}>התחלה</Text>
+              <TimeInput
+                value={edit.draft.start}
+                onChange={(v) => setEdit((e) => (e ? { ...e, draft: { ...e.draft, start: v } } : e))}
+                label="שעת התחלה"
+              />
             </View>
-          </KeyboardAvoidingView>
-          <WheelOverlayHost />
-        </Modal>
+            <View style={styles.timeCol}>
+              <Text style={styles.label}>סיום</Text>
+              <TimeInput
+                value={edit.draft.end}
+                min={edit.draft.start}
+                onChange={(v) => setEdit((e) => (e ? { ...e, draft: { ...e.draft, end: v } } : e))}
+                label="שעת סיום"
+              />
+            </View>
+          </View>
+          <Text style={styles.label}>תיאור</Text>
+          <TextInput
+            value={edit.draft.description}
+            onChangeText={(t) => setEdit({ ...edit, draft: { ...edit.draft, description: t } })}
+            multiline
+            placeholder="מה במפגש"
+            placeholderTextColor={colors.textMuted}
+            style={[styles.input, styles.multi]}
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </Dialog>
       ) : null}
     </View>
   );
@@ -217,16 +217,6 @@ const makeStyles = (colors: AppColors) =>
     rowTexts: { flex: 1, minWidth: 0, gap: 1 },
     rowTitle: { fontSize: 14, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     action: { paddingVertical: spacing.xs },
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: spacing.lg,
-    },
-    dialog: { width: '100%', maxWidth: 440, maxHeight: '90%', backgroundColor: colors.surface, borderRadius: radius.md },
-    dialogBody: { padding: spacing.lg, gap: spacing.sm },
-    dialogTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     label: { fontSize: 14, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     input: {
       minHeight: 48,
@@ -243,6 +233,6 @@ const makeStyles = (colors: AppColors) =>
     times: { flexDirection: 'row', gap: spacing.md },
     timeCol: { flex: 1, minWidth: 0, gap: 4 },
     error: { fontSize: 13, color: colors.danger, textAlign: TEXT_RIGHT },
-    removeLink: { alignSelf: 'center', paddingVertical: spacing.sm },
+    removeLink: { alignSelf: 'center', paddingVertical: spacing.xs },
     removeText: { fontSize: 14, fontWeight: '700', color: colors.dangerText },
   });

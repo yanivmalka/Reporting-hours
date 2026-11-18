@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Linking, Modal, Share, StyleSheet, View } from 'react-native';
+import { Linking, Share, StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
+import { Dialog } from '../components/Dialog';
 import { Pressable } from '../components/Pressable';
 import { PaymentDialog } from '../components/PaymentDialog';
 import { TextField } from '../components/TextField';
@@ -384,23 +385,21 @@ function PayrollReportScreen() {
         onClose={() => setPayOpen(false)}
       />
 
-      <Modal transparent animationType="fade" visible={cancelOpen} onRequestClose={() => setCancelOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.dialog}>
-            <Text style={styles.title}>ביטול הדוח שנשלח</Text>
-            <Text style={styles.subtitle}>
-              הדיווחים בחודש זה ייפתחו לעריכה, והדוח יחזור ל"ממתינים לשליחה". הסיבה נשמרת בהיסטוריה.
-            </Text>
-            <TextField
-              value={cancelReason}
-              onChangeText={setCancelReason}
-              placeholder="למשל: תיקון שעות ביום 12/10"
-            />
-            <Button label="ביטול הדוח" variant="danger" onPress={cancelSent} disabled={!cancelReason.trim()} />
-            <Button label="חזרה" variant="secondary" onPress={() => setCancelOpen(false)} />
-          </View>
-        </View>
-      </Modal>
+      <Dialog
+        visible={cancelOpen}
+        onClose={() => setCancelOpen(false)}
+        title="ביטול הדוח שנשלח"
+        maxWidth={420}
+        actions={[
+          <Button key="cancel" label="ביטול הדוח" variant="danger" onPress={cancelSent} disabled={!cancelReason.trim()} />,
+          <Button key="back" label="חזרה" variant="secondary" onPress={() => setCancelOpen(false)} />,
+        ]}
+      >
+        <Text style={styles.subtitle}>
+          הדיווחים בחודש זה ייפתחו לעריכה, והדוח יחזור ל"ממתינים לשליחה". הסיבה נשמרת בהיסטוריה.
+        </Text>
+        <TextField value={cancelReason} onChangeText={setCancelReason} placeholder="למשל: תיקון שעות ביום 12/10" />
+      </Dialog>
     </Screen>
   );
 }
@@ -410,21 +409,6 @@ const makeStyles = (colors: AppColors) =>
     paidLock: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
     totalBig: { fontSize: 17, fontWeight: '800', color: colors.brandDark, textAlign: TEXT_RIGHT },
     totalNote: { fontSize: 12, color: colors.brandDark, textAlign: TEXT_RIGHT },
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: spacing.lg,
-    },
-    dialog: {
-      width: '100%',
-      maxWidth: 420,
-      backgroundColor: colors.surface,
-      borderRadius: radius.md,
-      padding: spacing.lg,
-      gap: spacing.md,
-    },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     header: { gap: 4 },
     title: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },

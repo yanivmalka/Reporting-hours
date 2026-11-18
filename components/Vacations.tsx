@@ -8,10 +8,11 @@
  * כל שינוי נשמר מיד ובונה מחדש את אינדקס הביטולים (saveVacations).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Button } from './Button';
+import { Dialog } from './Dialog';
 import { TextField } from './TextField';
 import { DateField } from './DatePicker';
 import { SelectField, type SelectOption } from './SelectField';
@@ -159,65 +160,64 @@ function VacationEditor({ request, onClose }: { request: EditorRequest; onClose:
   }
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.dialog}>
-          <Text style={styles.title}>{existing ? 'עריכת חופשה' : 'חופשה חדשה'}</Text>
-          <SegmentedControl
-            options={[
-              { value: 'cancel', label: 'ביטול המפגשים' },
-              { value: 'shift', label: 'הזזה לסוף הקורס' },
-            ]}
-            value={mode}
-            onChange={setMode}
+    <Dialog
+      title={existing ? 'עריכת חופשה' : 'חופשה חדשה'}
+      onClose={onClose}
+      maxWidth={420}
+      actions={[
+        <Button key="save" label={existing ? 'שמירה' : 'הוספה'} onPress={save} loading={busy} />,
+        <Button key="cancel" label="ביטול" variant="secondary" onPress={onClose} disabled={busy} />,
+      ]}
+      below={
+        existing ? <Button label="מחיקת החופשה" variant="dangerLink" onPress={remove} disabled={busy} /> : null
+      }
+    >
+      <SegmentedControl
+        options={[
+          { value: 'cancel', label: 'ביטול המפגשים' },
+          { value: 'shift', label: 'הזזה לסוף הקורס' },
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+      <Text style={styles.message}>
+        {mode === 'cancel'
+          ? 'מפגשים בחופשה מתבטלים: הם לא נכללים בפוטנציאל ובצפי.'
+          : 'מפגשים בחופשה עוברים לשבוע הפנוי הבא אחרי סוף הקורס, והקורס מתארך. ההזזה מסומנת "הועבר".'}{' '}
+        מפגש שכבר דווח לא מושפע.
+      </Text>
+      <TextField value={name} onChangeText={setName} placeholder="שם (לא חובה), למשל חופשת חנוכה" />
+      <View style={styles.dates}>
+        <View style={styles.dateCol}>
+          <Text style={styles.fieldLabel}>מתאריך</Text>
+          <DateField
+            value={from}
+            onChange={(v) => {
+              setFrom(v);
+              if (v > to) setTo(v);
+            }}
           />
-          <Text style={styles.message}>
-            {mode === 'cancel'
-              ? 'מפגשים בחופשה מתבטלים: הם לא נכללים בפוטנציאל ובצפי.'
-              : 'מפגשים בחופשה עוברים לשבוע הפנוי הבא אחרי סוף הקורס, והקורס מתארך. ההזזה מסומנת "הועבר".'}{' '}
-            מפגש שכבר דווח לא מושפע.
-          </Text>
-          <TextField value={name} onChangeText={setName} placeholder="שם (לא חובה), למשל חופשת חנוכה" />
-          <View style={styles.dates}>
-            <View style={styles.dateCol}>
-              <Text style={styles.fieldLabel}>מתאריך</Text>
-              <DateField
-                value={from}
-                onChange={(v) => {
-                  setFrom(v);
-                  if (v > to) setTo(v);
-                }}
-              />
-            </View>
-            <View style={styles.dateCol}>
-              <Text style={styles.fieldLabel}>עד תאריך</Text>
-              <DateField value={to} onChange={setTo} invalid={tried && invalid} />
-            </View>
-          </View>
-          {tried && invalid ? <Text style={styles.error}>תאריך הסיום לפני תאריך ההתחלה</Text> : null}
-          {request.fixedScope ? (
-            <Text style={styles.message}>חלה על: {scopeLabel(scope, workplaces, courses)}</Text>
-          ) : (
-            <View style={styles.gapSm}>
-              <Text style={styles.fieldLabel}>חלה על</Text>
-              <SelectField
-                value={scopeKey(scope)}
-                options={options}
-                onChange={(k) => setScope(parseScope(k))}
-                title="על מה חלה החופשה"
-              />
-            </View>
-          )}
-          <View style={styles.actions}>
-            {existing ? (
-              <Button label="מחיקת החופשה" variant="dangerLink" onPress={remove} disabled={busy} />
-            ) : null}
-            <Button label="ביטול" variant="secondary" onPress={onClose} disabled={busy} />
-            <Button label={existing ? 'שמירה' : 'הוספה'} onPress={save} loading={busy} />
-          </View>
+        </View>
+        <View style={styles.dateCol}>
+          <Text style={styles.fieldLabel}>עד תאריך</Text>
+          <DateField value={to} onChange={setTo} invalid={tried && invalid} />
         </View>
       </View>
-    </Modal>
+      {tried && invalid ? <Text style={styles.error}>תאריך הסיום לפני תאריך ההתחלה</Text> : null}
+      {request.fixedScope ? (
+        <Text style={styles.message}>חלה על: {scopeLabel(scope, workplaces, courses)}</Text>
+      ) : (
+        <View style={styles.gapSm}>
+          <Text style={styles.fieldLabel}>חלה על</Text>
+          <SelectField
+            value={scopeKey(scope)}
+            options={options}
+            onChange={(k) => setScope(parseScope(k))}
+            title="על מה חלה החופשה"
+          />
+        </View>
+      )}
+    </Dialog>
   );
 }
 
@@ -391,29 +391,11 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   StyleSheet.create({
     pressed: { opacity: 0.85 },
     gapSm: { gap: spacing.sm },
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: spacing.lg,
-    },
-    dialog: {
-      width: '100%',
-      maxWidth: 420,
-      backgroundColor: c.surface,
-      borderRadius: radius.md,
-      padding: spacing.lg,
-      gap: spacing.sm,
-    },
-    title: { fontSize: 18, fontWeight: '800', color: c.text, textAlign: layout.textStart },
     message: { fontSize: 14, lineHeight: 21, color: c.textMuted, textAlign: layout.textStart },
     error: { fontSize: 13, color: c.danger, textAlign: layout.textStart },
     fieldLabel: { fontSize: 13, color: c.textMuted, textAlign: layout.textStart, marginBottom: 4 },
     dates: { flexDirection: layout.rowStart, gap: spacing.sm },
     dateCol: { flex: 1, minWidth: 0 },
-    // כפתורים זה מתחת לזה, ברוחב מלא; הפעולה הראשית (האחרונה בקוד) למעלה.
-    actions: { flexDirection: 'column-reverse', gap: spacing.sm, marginTop: spacing.sm },
     card: {
       backgroundColor: c.surface,
       borderRadius: radius.md,
