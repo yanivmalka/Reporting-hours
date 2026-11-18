@@ -45,11 +45,45 @@ export type Course = {
   to: string;
   /** מפגשים פרטניים נוספים ("YYYY-MM-DD"), בשעות הקורס — מעבר ליום הקבוע */
   extraDates?: string[];
+  /** פרטי מפגש נוסף לפי תאריך: שם, תיאור ושעות משלו (בלי שעות — שעות הקורס) */
+  extraInfo?: Record<string, ExtraSessionInfo>;
+  /**
+   * קורס שמתקיים בכמה ימים בשבוע נשמר כקורס לכל יום (עם שעות משלו), וכולם עם אותו
+   * `groupId` (מזהה הקורס הראשון). שם, הפסקה ותקופה משותפים ומתעדכנים יחד.
+   */
+  groupId?: string;
   /** נוצר כנתוני הדגמה */
   demo?: boolean;
 };
 
+export type ExtraSessionInfo = {
+  /** שם המפגש, למשל "סיור" */
+  name?: string;
+  description?: string;
+  /** "HH:MM" — כששונה משעות הקורס */
+  start?: string;
+  end?: string;
+};
+
 export type CourseDraft = Omit<Course, 'id' | 'demo'>;
+
+/** שעות המפגש בתאריך: מפגש נוסף עם שעות משלו (בלי הפסקה), אחרת — שעות הקורס. */
+export function sessionTimes(
+  course: Pick<Course, 'start' | 'end' | 'breakMinutes' | 'extraInfo'>,
+  date: string,
+): { start: string; end: string; breakMinutes: number } {
+  const x = course.extraInfo?.[date];
+  if (x?.start && x?.end) return { start: x.start, end: x.end, breakMinutes: 0 };
+  return { start: course.start, end: course.end, breakMinutes: course.breakMinutes };
+}
+
+/** הקורסים באותה קבוצה (אותו קורס בימים נוספים), בלי הקורס עצמו. */
+export function courseSiblings(course: Pick<Course, 'id' | 'groupId'>, courses: readonly Course[]): Course[] {
+  const g = course.groupId ?? course.id;
+  return courses
+    .filter((c) => c.id !== course.id && (c.groupId ?? c.id) === g)
+    .sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start));
+}
 
 const STORAGE_KEY = KEYS.courses;
 
@@ -76,6 +110,55 @@ export async function upsertCourse(draft: CourseDraft & { id?: string }): Promis
   const next = draft.id
     ? list.map((c) => (c.id === draft.id ? { ...c, ...draft, id: c.id } : c))
     : [...list, { ...draft, id: makeId() }];
+  await saveCourses(next);
+  return next;
+}
+
+/** יום נוסף בשבוע לקורס (נשמר כקורס אח באותה קבוצה). */
+export type ExtraWeekday = { weekday: number; start: string; end: string };
+
+/**
+ * שמירת קורס עם ימים נוספים בשבוע (טהור — מקבל את הרשימה ומחזיר רשימה חדשה):
+ *  - הקורס עצמו נשמר (חדש — עם `newId`);
+ *  - לכל יום נוסף נוצר קורס אח עם אותו שם, הפסקה, תקופה ומקום, והשעות של אותו יום;
+ *  - לאחים הקיימים מתעדכנים השם, ההפסקה והתקופה (היום והשעות שלהם נשארים).
+ * לכולם `groupId` משותף — זה של הקורס, או מזהה הקורס עצמו.
+ */
+export function applyCourseGroup(
+  list: readonly Course[],
+  draft: CourseDraft & { id?: string },
+  extraDays: readonly ExtraWeekday[],
+  makeNewId: () => string = makeId,
+): Course[] {
+  const id = draft.id ?? makeNewId();
+  const prev = list.find((c) => c.id === id);
+  const hasSiblings = prev ? courseSiblings(prev, list).length > 0 : false;
+  const groupId = draft.groupId ?? prev?.groupId ?? (extraDays.length || hasSiblings ? id : undefined);
+  const main: Course = { ...(prev ?? {}), ...draft, id, ...(groupId ? { groupId } : {}) } as Course;
+  const shared = { name: main.name, breakMinutes: main.breakMinutes, from: main.from, to: main.to };
+  const next = prev ? list.map((c) => (c.id === id ? main : c)) : [...list, main];
+  const out = next.map((c) =>
+    groupId && c.id !== id && (c.groupId ?? c.id) === groupId ? { ...c, ...shared } : c,
+  );
+  for (const d of extraDays) {
+    out.push({
+      id: makeNewId(),
+      workplaceId: main.workplaceId,
+      ...shared,
+      weekday: d.weekday,
+      start: d.start,
+      end: d.end,
+      groupId,
+    });
+  }
+  return out;
+}
+
+export async function saveCourseGroup(
+  draft: CourseDraft & { id?: string },
+  extraDays: readonly ExtraWeekday[],
+): Promise<Course[]> {
+  const next = applyCourseGroup(await loadCourses(), draft, extraDays);
   await saveCourses(next);
   return next;
 }
@@ -250,7 +333,10 @@ export function plannedMinutes(
 ): number {
   return courses
     .filter((c) => c.workplaceId === workplaceId)
-    .reduce((sum, c) => sum + occurrences(c, start, end, cancel).length * sessionMinutes(c), 0);
+    .reduce(
+      (sum, c) => sum + occurrences(c, start, end, cancel).reduce((n, d) => n + sessionMinutes(sessionTimes(c, d)), 0),
+      0,
+    );
 }
 
 /** שעות אקדמיות של מפגש — לתצוגה ("4 שע׳ אקד׳"). */

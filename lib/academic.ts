@@ -6,8 +6,24 @@
  * מועברות למונה "דקות עבודה מצטברות" (ראה lib/accumulated.ts).
  */
 
+import { parseTime } from './time';
+
 /** מספר הדקות בשעה אקדמית אחת. */
 export const ACADEMIC_HOUR_MINUTES = 45;
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * מחשבון שעת הסיום בטופס הקורס: התחלה + שעות × אורך שעה (אקדמית 45 / רגילה 60) + הפסקה.
+ * null כששעת ההתחלה לא תקינה, בלי שעות, או כשהסיום חוצה חצות.
+ */
+export function computeEnd(start: string, hours: number, unit: 'academic' | 'regular', breakMinutes: number): string | null {
+  const s = parseTime(start);
+  if (s == null || hours <= 0) return null;
+  const total = s + Math.round(hours * (unit === 'academic' ? ACADEMIC_HOUR_MINUTES : 60)) + Math.max(0, breakMinutes);
+  if (total >= 24 * 60) return null;
+  return `${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`;
+}
 
 export type AcademicBreakdown = {
   /** שעות אקדמיות שלמות: ⌊נטו ÷ 45⌋ */

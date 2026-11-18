@@ -12,7 +12,7 @@
  */
 import { useEffect, useSyncExternalStore } from 'react';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
-import { sessionMinutes, type Course } from './courses';
+import { sessionMinutes, sessionTimes, type Course } from './courses';
 import { basisFor, type PayBasis } from './payBasis';
 import type { Cancellation } from './sessions';
 import { readJSON, writeJSON } from './storage';
@@ -107,7 +107,7 @@ export function cancelRuleFor(w: Workplace, cancel: Cancellation | null): Cancel
  */
 export function canceledSessionPay(
   w: Workplace,
-  course: Pick<Course, 'start' | 'end' | 'breakMinutes'>,
+  course: Pick<Course, 'start' | 'end' | 'breakMinutes' | 'extraInfo'>,
   date: string,
   cancel: Cancellation | null,
   basis: PayBasis,
@@ -119,7 +119,7 @@ export function canceledSessionPay(
   if (at.paymentType !== 'hourly') return 0;
   if (rule.kind === 'fixed') return Math.max(0, rule.value ?? 0);
   const per = basis === 'academic' ? ACADEMIC_HOUR_MINUTES : 60;
-  const full = (Math.max(0, at.rate) * sessionMinutes(course)) / per;
+  const full = (Math.max(0, at.rate) * sessionMinutes(sessionTimes(course, date))) / per;
   if (rule.kind === 'full') return full;
   return (full * Math.min(100, Math.max(0, rule.value ?? 0))) / 100;
 }

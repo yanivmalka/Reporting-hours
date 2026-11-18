@@ -57,3 +57,28 @@ describe('מפגשים שלא מתקיימים בתאריך (שלב התאריך
     expect(canceledOn([course], '2026-10-25', idx)).toHaveLength(0);
   });
 });
+
+describe('קורס בכמה ימים בשבוע', async () => {
+  const { applyCourseGroup, courseSiblings, sessionTimes } = await import('../lib/courses');
+  let n = 0;
+  const ids = () => `x${++n}`;
+  it('ימים נוספים נשמרים כקורסים אחים עם שעות משלהם', () => {
+    const list = applyCourseGroup(
+      [],
+      { workplaceId: 'w1', name: 'סדנה', weekday: 0, start: '09:00', end: '12:00', breakMinutes: 0, from: '2026-11-01', to: '2026-12-31' },
+      [{ weekday: 2, start: '15:00', end: '17:00' }],
+      ids,
+    );
+    expect(list).toHaveLength(2);
+    expect(list[1]).toMatchObject({ weekday: 2, start: '15:00', name: 'סדנה', groupId: list[0].id });
+    expect(courseSiblings(list[0], list).map((c) => c.weekday)).toEqual([2]);
+    // שינוי שם ותקופה בקורס — עובר גם לאח
+    const next = applyCourseGroup(list, { ...list[0], name: 'סדנה ב׳', to: '2027-01-31' }, [], ids);
+    expect(next[1]).toMatchObject({ name: 'סדנה ב׳', to: '2027-01-31', start: '15:00' });
+  });
+  it('מפגש נוסף עם שעות משלו', () => {
+    const c = { ...course, extraInfo: { '2026-10-07': { name: 'סיור', start: '10:00', end: '11:30' } } };
+    expect(sessionTimes(c, '2026-10-07')).toEqual({ start: '10:00', end: '11:30', breakMinutes: 0 });
+    expect(sessionTimes(c, '2026-10-04')).toEqual({ start: '09:00', end: '12:00', breakMinutes: 0 });
+  });
+});

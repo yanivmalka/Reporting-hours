@@ -17,7 +17,7 @@
  */
 import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
-import { potentialSessions, sessionMinutes, type Course } from './courses';
+import { potentialSessions, sessionMinutes, sessionTimes, type Course } from './courses';
 import { currentPayPeriod, expectedPaymentDate, isoDate, periodMonthKey, totalsFor, type PayPeriod } from './dashboard';
 import { basisFor, type PayBasis } from './payBasis';
 import { expectedPayment, reportLate, statusKey, type StatusMap } from './payroll';
@@ -102,7 +102,7 @@ function amountFor(
       const at = workplaceAt(w, s.date);
       if (at.paymentType === 'hourly') {
         const per = basis === 'academic' ? ACADEMIC_HOUR_MINUTES : 60;
-        pay += (Math.max(0, at.rate) * sessionMinutes(c)) / per;
+        pay += (Math.max(0, at.rate) * sessionMinutes(sessionTimes(c, s.date))) / per;
       }
     }
   }
