@@ -271,11 +271,12 @@ export function coursesOn(
   date: string,
   workplaceId?: string,
   cancel: CancelIndex = currentCancel(),
+  moves: MovesIndex = currentMoves(),
 ): Course[] {
   return courses
     .filter(
       (c) =>
-        (!workplaceId || c.workplaceId === workplaceId) && occursOn(c, date) && !sessionCancel(c, date, cancel),
+        (!workplaceId || c.workplaceId === workplaceId) && occursOn(c, date, moves) && !sessionCancel(c, date, cancel),
     )
     .sort((a, b) => a.start.localeCompare(b.start));
 }
@@ -288,9 +289,10 @@ export function canceledOn(
   courses: readonly Course[],
   date: string,
   cancel: CancelIndex = currentCancel(),
+  moves: MovesIndex = currentMoves(),
 ): { course: Course; cancel: Cancellation }[] {
   return courses
-    .filter((c) => occursOn(c, date))
+    .filter((c) => occursOn(c, date, moves))
     .map((c) => ({ course: c, cancel: sessionCancel(c, date, cancel) }))
     .filter((x): x is { course: Course; cancel: Cancellation } => x.cancel != null && x.cancel.kind !== 'removed')
     .sort((a, b) => a.course.start.localeCompare(b.course.start));
@@ -302,8 +304,9 @@ export function occurrences(
   start: string,
   end: string,
   cancel: CancelIndex = currentCancel(),
+  moves: MovesIndex = currentMoves(),
 ): string[] {
-  return courseSessions(course, start, end, cancel)
+  return courseSessions(course, start, end, cancel, moves)
     .filter((s) => !s.cancel)
     .map((s) => s.date);
 }
@@ -317,8 +320,9 @@ export function potentialSessions(
   start: string,
   end: string,
   cancel: CancelIndex = currentCancel(),
+  moves: MovesIndex = currentMoves(),
 ): { date: string; canceled: boolean; cancel: Cancellation | null }[] {
-  return courseSessions(course, start, end, cancel)
+  return courseSessions(course, start, end, cancel, moves)
     .filter((s) => !s.cancel || keptInPotential(s.cancel))
     .map((s) => ({ date: s.date, canceled: s.cancel != null, cancel: s.cancel }));
 }
@@ -330,11 +334,12 @@ export function plannedMinutes(
   start: string,
   end: string,
   cancel: CancelIndex = currentCancel(),
+  moves: MovesIndex = currentMoves(),
 ): number {
   return courses
     .filter((c) => c.workplaceId === workplaceId)
     .reduce(
-      (sum, c) => sum + occurrences(c, start, end, cancel).reduce((n, d) => n + sessionMinutes(sessionTimes(c, d)), 0),
+      (sum, c) => sum + occurrences(c, start, end, cancel, moves).reduce((n, d) => n + sessionMinutes(sessionTimes(c, d)), 0),
       0,
     );
 }

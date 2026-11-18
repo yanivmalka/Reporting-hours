@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Course } from '../lib/courses';
 import { planPush, type PushInput } from '../lib/pushPlan';
 import type { WorkReport } from '../lib/reports';
-import { NO_CANCEL } from '../lib/sessions';
+import { NO_PLAN } from '../lib/sessions';
 import type { SessionNote } from '../lib/sessionNotes';
 import type { Workplace } from '../lib/workplaces';
 
@@ -43,7 +43,7 @@ const input = (over: Partial<PushInput>): PushInput => ({
   now: new Date(2026, 10, 24, 8, 0),
   ...over,
 });
-const plan = (over: Partial<PushInput>) => planPush(input(over), NO_CANCEL);
+const plan = (over: Partial<PushInput>) => planPush(input(over), NO_PLAN);
 const ids = (over: Partial<PushInput>) => plan(over).map((p) => p.id);
 const hhmm = (d: Date) => `${d.getDate()}.${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 

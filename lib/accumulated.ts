@@ -1,6 +1,7 @@
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { readJSON, writeJSON } from './storage';
-import { KEYS, LEGACY_KEYS } from './keys';
+import { ensureMigrated } from './migrations';
+import { KEYS } from './keys';
 
 /**
  * מונה "דקות עבודה מצטברות" (סעיף 5 ב־WISHLIST) — נפרד לכל מקום עבודה.
@@ -29,9 +30,6 @@ export type AccumulatedState = {
 };
 
 const STORAGE_KEY = KEYS.accumulated;
-/** מונה גלובלי ישן (לפני הפיצול למקומות עבודה) — להסבה חד־פעמית. */
-const LEGACY_KEY = LEGACY_KEYS.accumulatedV1;
-const REPORTS_KEY = KEYS.reports;
 
 const EMPTY_ENTRY: AccumulatedEntry = { minutes: 0, redeemedHours: 0 };
 
@@ -94,44 +92,11 @@ export async function redeemMinutesFromCounter(
   );
 }
 
-/**
- * הסבה מהמונה הגלובלי הישן: הדקות שהועברו בכל דיווח (`carriedMinutes`)
- * משויכות למקום העבודה של הדיווח, והשעות שכבר נפדו מחולקות בין המקומות
- * (קודם למקום שצבר הכי הרבה דקות), כך שהסכום הכולל נשמר.
- */
-async function migrateFromLegacy(): Promise<AccumulatedState | null> {
-  const legacy = await readJSON<Partial<AccumulatedEntry> | null>(LEGACY_KEY, null);
-  if (!legacy) return null;
-  const reports = await readJSON<{ workplaceId: string; carriedMinutes?: number }[]>(REPORTS_KEY, []);
-  const carried: Record<string, number> = {};
-  for (const r of reports) {
-    if ((r.carriedMinutes ?? 0) > 0) carried[r.workplaceId] = (carried[r.workplaceId] ?? 0) + (r.carriedMinutes ?? 0);
-  }
-  const byWorkplace: Record<string, AccumulatedEntry> = {};
-  for (const [id, minutes] of Object.entries(carried)) byWorkplace[id] = { minutes, redeemedHours: 0 };
-
-  let toRedeem = toCount(legacy.redeemedHours);
-  while (toRedeem > 0) {
-    const richest = Object.entries(byWorkplace)
-      .filter(([, e]) => e.minutes >= ACADEMIC_HOUR_MINUTES)
-      .sort((a, b) => b[1].minutes - a[1].minutes)[0];
-    if (!richest) break;
-    richest[1].minutes -= ACADEMIC_HOUR_MINUTES;
-    richest[1].redeemedHours += 1;
-    toRedeem -= 1;
-  }
-  return sanitize({ byWorkplace });
-}
-
 export async function loadAccumulated(): Promise<AccumulatedState> {
+  // הסבה מהמונה הגלובלי הישן — lib/migrations.ts
+  await ensureMigrated();
   const stored = await readJSON<AccumulatedState | null>(STORAGE_KEY, null);
-  if (stored) return sanitize(stored);
-  const migrated = await migrateFromLegacy();
-  if (migrated) {
-    await writeJSON(STORAGE_KEY, migrated);
-    return migrated;
-  }
-  return { byWorkplace: {} };
+  return stored ? sanitize(stored) : { byWorkplace: {} };
 }
 
 export async function saveAccumulated(state: AccumulatedState): Promise<AccumulatedState> {
