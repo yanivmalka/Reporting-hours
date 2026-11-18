@@ -4,7 +4,7 @@
  * כל הסבה ממירה מפתח ישן (`LEGACY_KEYS`) למבנה החדש, והיא אידמפוטנטית: רצה רק כשהמפתח החדש
  * חסר והישן קיים, ולא מוחקת את הישן (מכשיר עם גרסה ישנה עוד עשוי לקרוא אותו). לכן אפשר להריץ
  * אותן בכל רגע — גם אחרי שהנתונים הוחלפו (סנכרון, שחזור גיבוי, מעבר לחשבון ששותף), כשמגיעים
- * נתונים בפורמט ישן.
+ * נתונים בפורמט ישן. בחשבון ששותף — רק מפתחות שהמורשה רשאי לכתוב (`canWriteKey`).
  *
  * המודולים קוראים `ensureMigrated()` לפני טעינת המפתח שלהם (`loadAccumulated`, `loadHolidaySettings`).
  * הבדיקה זולה (כמה קריאות מהאחסון), והרצות במקביל מתאחדות להרצה אחת.
@@ -16,12 +16,15 @@
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { readJSON, writeJSON } from './storage';
 import { KEYS, LEGACY_KEYS } from './keys';
+import { canWriteKey } from './sync';
 
 export type Migration = {
   /** מספר רץ — הסדר שבו ההסבות רצות */
   version: number;
   id: string;
   description: string;
+  /** המפתח שההסבה כותבת — בחשבון ששותף בלי הרשאת כתיבה אליו ההסבה לא רצה */
+  writes: string;
   /** האם צריך להריץ (המפתח החדש חסר והישן קיים) */
   needed: () => Promise<boolean>;
   run: () => Promise<void>;
@@ -41,6 +44,7 @@ const accumulatedPerWorkplace: Migration = {
   version: 1,
   id: 'accumulated-v2',
   description: 'מונה דקות מצטברות לכל מקום עבודה',
+  writes: KEYS.accumulated,
   needed: async () => !(await has(KEYS.accumulated)) && (await has(LEGACY_KEYS.accumulatedV1)),
   run: async () => {
     const legacy = await readJSON<{ redeemedHours?: unknown } | null>(LEGACY_KEYS.accumulatedV1, null);
@@ -75,6 +79,7 @@ const holidayKinds: Migration = {
   version: 2,
   id: 'holiday-cancel-v2',
   description: 'ביטול אוטומטי לפי סוג יום מיוחד',
+  writes: KEYS.holidayCancel,
   needed: async () =>
     !(await has(KEYS.holidayCancel)) && typeof (await readJSON<unknown>(LEGACY_KEYS.holidayCancelV1, null)) === 'boolean',
   run: async () => {
@@ -95,7 +100,8 @@ export async function runMigrations(): Promise<string[]> {
   const ran: string[] = [];
   for (const m of [...MIGRATIONS].sort((a, b) => a.version - b.version)) {
     try {
-      if (!(await m.needed())) continue;
+      // מורשה בלי הרשאת כתיבה למפתח (צפייה / מדווח) — ההסבה תרוץ אצל הבעלים.
+      if (!canWriteKey(m.writes) || !(await m.needed())) continue;
       await m.run();
       ran.push(m.id);
     } catch (e) {
