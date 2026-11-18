@@ -37,6 +37,7 @@ import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyle
 import { AccountSwitcher } from './CloudSync';
 import { useAccess, type Access } from './Access';
 import { useHydrated } from '../lib/useHydrated';
+import { appLockPlatform, lockFinance, unlockFinance, useAppLockEnabled, useFinanceLocked } from '../lib/appLock';
 
 type DrawerContextValue = {
   open: () => void;
@@ -174,8 +175,31 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
   const menuStyles = useStyles(makeOverflowStyles);
   const [open, setOpen] = useState(false);
   const wide = useWideLayout();
+  const lockEnabled = useAppLockEnabled();
+  const financeLocked = useFinanceLocked();
   // במסך רחב התפריט כבר גלוי בצד — אין צורך בשכפול שלו.
   if (!canGoBack || wide) return null;
+
+  /** הצגת סכומים / נעילה — כשנעילת המידע הכספי מופעלת (כמו המתג בדף הבית) */
+  const lockItem =
+    appLockPlatform && lockEnabled ? (
+      <Pressable
+        onPress={() => {
+          setOpen(false);
+          if (financeLocked) void unlockFinance();
+          else lockFinance();
+        }}
+        accessibilityRole="button"
+        style={({ pressed }) => [menuStyles.item, pressed && menuStyles.itemPressed]}
+      >
+        <Icon
+          name={financeLocked ? 'lock-open-variant-outline' : 'lock-outline'}
+          size={20}
+          color={colors.textMuted}
+        />
+        <Text style={menuStyles.itemText}>{financeLocked ? 'הצגת סכומים' : 'נעילת סכומים'}</Text>
+      </Pressable>
+    ) : null;
 
   function go(href: Href) {
     setOpen(false);
@@ -221,6 +245,8 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
                 {ARCHIVE_LINKS.map(item)}
                 <View style={menuStyles.divider} />
                 {item(PREFERENCES_LINK)}
+                {lockItem ? <View style={menuStyles.divider} /> : null}
+                {lockItem}
               </ScrollView>
             </View>
           </View>

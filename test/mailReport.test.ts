@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Course } from '../lib/courses';
-import { buildPlanDays, mailTextArchived, unseenMailReports } from '../lib/mailReport';
+import { buildPlanDays, mailTextArchived, splitMailReply, unseenMailReports } from '../lib/mailReport';
 import { leftoverMinutesFor } from '../lib/reportForm';
 import type { WorkReport } from '../lib/reports';
 import type { Workplace } from '../lib/workplaces';
@@ -55,5 +55,35 @@ describe('דקות עודפות — זהה לשרת', () => {
     expect(leftoverMinutesFor(430, w('regular'), 'academic')).toBe(0);
     expect(leftoverMinutesFor(430, w(), 'regular')).toBe(0);
     expect(leftoverMinutesFor(430, w(), 'academic')).toBe(25);
+  });
+});
+
+describe('splitMailReply', () => {
+  it('Gmail בעברית: התשובה לבד, וההתכתבות מהשורה "בתאריך … מאת …:"', () => {
+    const text = [
+      'כן, 16:00-19:10',
+      '',
+      '\u202bבתאריך יום ד׳, 18 בנוב׳ 2026 ב-20:00 מאת \u202aדיווח שעות\u202c\u200f <\u202areportinghours.app@gmail.com\u202c\u200f>:\u202c',
+      '',
+      '> האם התקיים היום הקורס?',
+    ].join('\n');
+    const { reply, quoted } = splitMailReply(text);
+    expect(reply).toBe('כן, 16:00-19:10');
+    expect(quoted).toContain('האם התקיים');
+  });
+
+  it('Gmail באנגלית — שורת "On … wrote:" שנשברה לשתי שורות', () => {
+    const text = 'yes\n\nOn Wed, Nov 18, 2026 at 8:00 PM Reporting <a@b.com>\nwrote:\n> question';
+    expect(splitMailReply(text)).toEqual({ reply: 'yes', quoted: 'On Wed, Nov 18, 2026 at 8:00 PM Reporting <a@b.com>\nwrote:\n> question' });
+  });
+
+  it('שורות מצוטטות ב־> וכותרת Outlook', () => {
+    expect(splitMailReply('בוטל\n> שאלה').reply).toBe('בוטל');
+    expect(splitMailReply('התקיים\n\nFrom: Reporting\nSent: today').reply).toBe('התקיים');
+  });
+
+  it('בלי ציטוט, או רק ציטוט — הכול מוצג', () => {
+    expect(splitMailReply('  כן  ')).toEqual({ reply: 'כן', quoted: '' });
+    expect(splitMailReply('> רק ציטוט')).toEqual({ reply: '> רק ציטוט', quoted: '' });
   });
 });

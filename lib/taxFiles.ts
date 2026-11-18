@@ -93,11 +93,20 @@ export async function deleteTaxFile(w: Workplace, year: string): Promise<Workpla
   return setTaxFile(w.id, year, null);
 }
 
-/** טיוטת מייל לנמען דוחות השכר, עם קישור לטופס. */
-export function taxMailto(w: Workplace, year: string, url: string, senderName?: string | null): string {
-  const to = w.payrollEmail ?? '';
+/**
+ * טיוטת מייל עם קישור לטופס. `toPayroll` (ברירת מחדל) — ממוענת למייל מחלקת השכר (ולמכותבים);
+ * אחרת — בלי נמען, והמשתמש בוחר בעצמו בטיוטה.
+ */
+export function taxMailto(
+  w: Workplace,
+  year: string,
+  url: string,
+  senderName?: string | null,
+  toPayroll = true,
+): string {
+  const to = toPayroll ? (w.payrollEmail ?? '') : '';
   const params: string[] = [];
-  const cc = (w.ccEmails ?? []).join(',');
+  const cc = toPayroll ? (w.ccEmails ?? []).join(',') : '';
   if (cc) params.push(`cc=${encodeURIComponent(cc)}`);
   params.push(`subject=${encodeURIComponent(`טופס תיאום מס ${year}${senderName ? ` — ${senderName}` : ''}`)}`);
   const body = [

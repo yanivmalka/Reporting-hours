@@ -11,7 +11,7 @@ import { EXTRA_SESSION_LABELS, type ExtraSessionKind } from '../../lib/reports';
 import { SelectField } from '../SelectField';
 import { courseScheduleLabel } from '../../lib/courses';
 import { formatShekels } from '../../lib/travel';
-import { formatDuration } from '../../lib/time';
+import { END_BEFORE_START, endNotAfterStart, formatDuration } from '../../lib/time';
 import type { ReportWizard } from './useReportWizard';
 
 /** שלב 3: שעות, הפסקות ותצוגה מקדימה של נטו, שעות ושכר. */
@@ -55,9 +55,10 @@ export function TimesStep({ w }: { w: ReportWizard }) {
         {/* שעת התחלה משמאל ושעת סיום מימין — כמו "12:05–15:00". */}
         <View style={styles.timesRow}>
           <View style={styles.timeCol}>
-            <FormField label="שעת סיום" error={errors.end}>
+            <FormField label="שעת סיום" error={errors.end ?? (endNotAfterStart(start, end) ? END_BEFORE_START : undefined)}>
               <TimeInput
                 ref={endRef}
+                min={start}
                 value={end}
                 onChange={(v) => {
                   setEnd(v);

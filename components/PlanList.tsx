@@ -71,6 +71,8 @@ export function PlanList({
   after,
   collapseBefore,
   onShowEarlier,
+  expandedBefore,
+  onHideEarlier,
 }: {
   courses: readonly Course[];
   workplaces: readonly Workplace[];
@@ -90,6 +92,9 @@ export function PlanList({
   /** ימים שלפני התאריך (בחודש הנוכחי — היום) מקופלים, כך שאריח היום בראש הרשימה */
   collapseBefore?: string | null;
   onShowEarlier?: () => void;
+  /** הימים שלפני התאריך הורחבו — קישור לקיפול חוזר */
+  expandedBefore?: string | null;
+  onHideEarlier?: () => void;
 }) {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
@@ -107,6 +112,7 @@ export function PlanList({
   const allDays = [...days];
   const shownDays = collapseBefore ? allDays.filter(([d]) => d >= collapseBefore) : allDays;
   const collapsedDays = allDays.length - shownDays.length;
+  const expandedDays = expandedBefore ? allDays.filter(([d]) => d < expandedBefore).length : 0;
 
   const period = { start: from, end: to };
   const potential = active.reduce((n, w) => n + plannedFor(w, courses, period, basis), 0);
@@ -161,6 +167,13 @@ export function PlanList({
             <Icon name="chevron-up" size={18} color={colors.brand} />
             <Text style={styles.earlierText}>
               {collapsedDays === 1 ? 'יום קודם החודש' : `${collapsedDays} ימים קודמים החודש`} · הצגה
+            </Text>
+          </Pressable>
+        ) : expandedDays > 0 && onHideEarlier ? (
+          <Pressable onPress={onHideEarlier} accessibilityRole="button" hitSlop={8} style={styles.earlier}>
+            <Icon name="chevron-down" size={18} color={colors.brand} />
+            <Text style={styles.earlierText}>
+              {expandedDays === 1 ? 'יום קודם החודש' : `${expandedDays} ימים קודמים החודש`} · הסתרה
             </Text>
           </Pressable>
         ) : null}

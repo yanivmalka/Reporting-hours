@@ -75,6 +75,7 @@ export function WheelNumber({
 }
 
 const styles = StyleSheet.create({
-  // בצד השמאלי של התיבה (סוף השורה ב־RTL), לא על הטקסט
-  mark: { position: 'absolute', top: 0, bottom: 0, left: 10, justifyContent: 'center', opacity: 0.55 },
+  // בסוף השורה (בעברית — שמאל), לא על הטקסט המיושר לימין. `end` ולא `left`: באנדרואיד ב־RTL
+  // left מוחלף ל־right, והסימן ישב על המספר.
+  mark: { position: 'absolute', top: 0, bottom: 0, end: 10, justifyContent: 'center', opacity: 0.55 },
 });

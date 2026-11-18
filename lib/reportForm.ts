@@ -14,7 +14,7 @@ import type { Course } from './courses';
 import { payableHours, reportPay } from './pay';
 import { basisFor, type PayBasis } from './payBasis';
 import type { ExtraSessionKind, WorkReport, WorkReportDraft } from './reports';
-import { isValidISODate, parseTime } from './time';
+import { END_BEFORE_START, isValidISODate, parseTime } from './time';
 import { travelCostForDay } from './travel';
 import type { Workplace } from './workplaces';
 
@@ -65,7 +65,7 @@ export function validateReportForm(f: ReportFormFields): ReportFormErrors {
   if (startMin == null) next.start = 'שעה בפורמט HH:MM';
   if (endMin == null) next.end = 'שעה בפורמט HH:MM';
   if (startMin != null && endMin != null && endMin <= startMin) {
-    next.end = 'שעת הסיום חייבת להיות אחרי ההתחלה';
+    next.end = END_BEFORE_START;
   }
 
   for (const row of f.breaks) {

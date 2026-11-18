@@ -23,7 +23,7 @@ import { BreakField } from '../components/course/BreakField';
 import { EndTimeCalculatorButton } from '../components/course/EndTimeCalculator';
 import { ExtraSessionsCard, type ExtraSessions } from '../components/course/ExtraSessionsCard';
 import { formatHours } from '../lib/pay';
-import { formatISODate, parseTime, todayISO } from '../lib/time';
+import { endNotAfterStart, formatISODate, parseTime, todayISO } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
 import { loadReports } from '../lib/reports';
 import { deleteOrEndCourse } from '../lib/trash';
@@ -572,9 +572,13 @@ function CourseFormScreenInner() {
           </FormField>
         </View>
         <View style={styles.timeCol}>
-          <FormField label="שעת סיום" error={errors.end}>
+          <FormField
+            label="שעת סיום"
+            error={errors.end ?? (endNotAfterStart(form.start, form.end) ? 'הסיום חייב להיות אחרי ההתחלה' : undefined)}
+          >
             <TimeInput
               ref={endRef}
+              min={form.start}
               value={form.end}
               onChange={(v) => set('end', v)}
               onComplete={() => Keyboard.dismiss()}
@@ -626,7 +630,7 @@ function CourseFormScreenInner() {
                 <TimeInput value={d.start} onChange={(v) => setMoreDay(d.key, { start: v })} label="שעת התחלה" />
               </View>
               <View style={styles.timeCol}>
-                <TimeInput value={d.end} onChange={(v) => setMoreDay(d.key, { end: v })} label="שעת סיום" />
+                <TimeInput value={d.end} min={d.start} onChange={(v) => setMoreDay(d.key, { end: v })} label="שעת סיום" />
               </View>
             </View>
           </View>
@@ -783,9 +787,10 @@ const makeStyles = (colors: AppColors) =>
     },
     viewRowLast: { borderBottomWidth: 0 },
     viewValue: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
-    // שורה לחיצה: הערך (שם מקום העבודה / מועד) ולצדו ‹ — המכל תופס את הרוחב, כך שהשם לא נעלם
-    viewLinkValue: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 4 },
-    viewValueLink: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
+    // שורה לחיצה: הערך (שם מקום העבודה / מועד) ממלא את הרוחב, וה־‹ בקצה השורה (בעברית — שמאל),
+    // כמו בתצוגת דיווח ובדוח שכר.
+    viewLinkValue: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+    viewValueLink: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     moreDay: {
       gap: spacing.sm,
       padding: spacing.sm,

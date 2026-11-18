@@ -168,6 +168,7 @@ export function ExtraSessionsCard({
                     <Text style={styles.label}>סיום</Text>
                     <TimeInput
                       value={edit.draft.end}
+                      min={edit.draft.start}
                       onChange={(v) => setEdit((e) => (e ? { ...e, draft: { ...e.draft, end: v } } : e))}
                       label="שעת סיום"
                     />

@@ -98,6 +98,8 @@ export default function ReportsScreen() {
           before={<MonthLink w={w} at="top" />}
           collapseBefore={w.collapseBefore}
           onShowEarlier={() => w.setEarlierShown(true)}
+          expandedBefore={w.expandedBefore}
+          onHideEarlier={() => w.setEarlierShown(false)}
           after={<MonthLink w={w} at="bottom" />}
         />
         </View>
