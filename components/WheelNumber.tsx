@@ -4,7 +4,9 @@
  * מעל התיבה (`WheelOverlay`) עם `label` ו־`unit`. משמש לדקות ההפסקה באשף.
  */
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Icon } from './Icon';
+import { useTheme } from '../theme/ThemeContext';
 import { TextField } from './TextField';
 import { useWheel } from './useWheel';
 import { hideWheelOverlay, showWheelOverlay } from './WheelOverlay';
@@ -28,6 +30,7 @@ export function WheelNumber({
   /** יחידה שמוצגת בשכבת הגלגלת */
   unit?: string;
 }) {
+  const { colors } = useTheme();
   const [top, setTop] = useState<number | null>(null);
   const wheel = useWheel(
     (d) => {
@@ -63,6 +66,15 @@ export function WheelNumber({
         placeholder={placeholder}
         numeric
       />
+      {/* סימן גלגלת: גרירה למעלה / למטה משנה את הערך */}
+      <View pointerEvents="none" style={styles.mark}>
+        <Icon name="unfold-more-horizontal" size={18} color={colors.textMuted} />
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  // בצד השמאלי של התיבה (סוף השורה ב־RTL), לא על הטקסט
+  mark: { position: 'absolute', top: 0, bottom: 0, left: 10, justifyContent: 'center', opacity: 0.55 },
+});

@@ -45,3 +45,21 @@ describe('פרטי מפגש — תזכורות', () => {
     expect(moved[0]).toMatchObject({ date: '2026-12-01', remindAt: '2026-11-30T18:30', note: 'א' });
   });
 });
+
+describe('פרטי מפגש — סיכום והיסטוריה', () => {
+  it('המפגשים הקודמים עם טקסט, מהחדש לישן', async () => {
+    const { previousNotes, hasContent } = await import('../lib/sessionNotes');
+    const list = [
+      note({ date: '2026-11-03', summary: 'מבוא' }),
+      note({ date: '2026-11-10', content: 'פרק 2' }),
+      note({ date: '2026-11-17', flag: 'test' }),
+      note({ date: '2026-11-24', summary: 'עתידי' }),
+      note({ courseId: 'c2', date: '2026-11-16', summary: 'קורס אחר' }),
+    ];
+    expect(previousNotes(list, 'c1', '2026-11-24').map((n) => n.date)).toEqual(['2026-11-10', '2026-11-03']);
+    expect(hasContent({ courseId: 'c1', date: '2026-11-24', summary: 'סיכום' })).toBe(true);
+  });
+  it('סימון "מבחן" — תזכורת אוטומטית בערב שלפני', () => {
+    expect(effectiveReminder(note({ flag: 'test' }))).toBe('2026-11-23T20:00');
+  });
+});

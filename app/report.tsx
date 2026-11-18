@@ -7,6 +7,7 @@ import { Screen } from '../components/Screen';
 import { reportWizardView, useReportWizard, type ReportWizard } from '../components/report/useReportWizard';
 import { WizardStepper } from '../components/report/WizardStepper';
 import { ReportContextCard } from '../components/report/ReportContextCard';
+import { SessionDetailsCard } from '../components/report/SessionDetailsCard';
 import { DateStep } from '../components/report/DateStep';
 import { CourseStep } from '../components/report/CourseStep';
 import { WorkplaceStep } from '../components/report/WorkplaceStep';
@@ -79,6 +80,7 @@ function ReportScreenInner() {
       {direct && step !== 'done' ? <Stack.Screen options={{ title: 'דיווח מפגש' }} /> : null}
       <WizardStepper w={w} />
       <ReportContextCard w={w} />
+      <SessionDetailsCard w={w} />
 
       <Animated.View {...pan.panHandlers} style={[styles.swipeArea, stepFade]}>
         <DateStep w={w} />
