@@ -49,3 +49,13 @@ describe('שכר לדיווח', () => {
     expect(reportPay(report('09:00', '12:00'), { ...hourly, paymentType: 'monthly' }, 'academic')).toBeNull();
   });
 });
+
+describe('מחשבון שעת סיום', () => {
+  it('שעות אקדמיות + הפסקה', async () => {
+    const { computeEnd } = await import('../lib/academic');
+    expect(computeEnd('09:00', 4, 'academic', 15)).toBe('12:15');
+    expect(computeEnd('16:30', 2, 'regular', 0)).toBe('18:30');
+    expect(computeEnd('', 4, 'academic', 0)).toBeNull();
+    expect(computeEnd('22:00', 4, 'regular', 0)).toBeNull();
+  });
+});

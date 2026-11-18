@@ -123,6 +123,6 @@ export function inviteMessage(email: string, role: ShareRole): string {
   return [
     `${name} שיתף/ה איתך את אפליקציית "דיווח שעות" (${ROLE_LABELS[role]}).`,
     `להיכנס: ${APP_URL}`,
-    `בתפריט ☰ ← "חשבון וסנכרון" ← התחברות עם Google בחשבון ${emailKey(email)}, ואז לבחור את החשבון ששותף.`,
+    `בתפריט ☰ ← "הגדרות" ← "חשבון" ← התחברות עם Google בחשבון ${emailKey(email)}, ואז לבחור את החשבון ששותף.`,
   ].join('\n');
 }

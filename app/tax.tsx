@@ -9,6 +9,8 @@ import { DateField } from '../components/DatePicker';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
 import { todayISO } from '../lib/time';
+import { loadCourses, workplacesWithActiveCourse } from '../lib/courses';
+import { useTrackingStart } from '../lib/trackingStart';
 import { loadWorkplaces, setTaxCoordination, taxStatus, type Workplace } from '../lib/workplaces';
 import { deleteTaxFile, markTaxSent, pickAndUploadTaxFile, TAX_FILE_ERROR, taxFileUrl, taxMailto } from '../lib/taxFiles';
 import { authUser } from '../lib/sync';
@@ -51,10 +53,24 @@ function TaxScreen() {
   const { showToast } = useToast();
   const { colors } = useTheme();
 
-  useScreenData(loadWorkplaces, [], setList);
+  /** מקומות עם קורס פעיל — רק הם מוצגים (ועוד מקום שכבר יש לו טופס / סימון לשנה הנבחרת) */
+  const [withActive, setWithActive] = useState<Set<string>>(new Set());
+  useScreenData(
+    () => Promise.all([loadWorkplaces(), loadCourses()]),
+    [],
+    ([wps, courses]) => {
+      setList(wps);
+      setWithActive(workplacesWithActiveCourse(courses, todayISO()));
+    },
+  );
 
-  const done = list.filter((w) => w.taxCoordination?.[year]);
-  const missing = list.filter((w) => !w.taxCoordination?.[year]);
+  const trackStart = useTrackingStart();
+  const trackYear = trackStart ? Number(trackStart.slice(0, 4)) : null;
+  const shown = list.filter(
+    (w) => w.taxCoordination?.[year] || w.taxFiles?.[year] || (!w.archivedAt && withActive.has(w.id)),
+  );
+  const done = shown.filter((w) => w.taxCoordination?.[year]);
+  const missing = shown.filter((w) => !w.taxCoordination?.[year]);
 
   async function mark(id: string, d: string | null) {
     setList(await setTaxCoordination(id, year, d));
@@ -198,13 +214,18 @@ function TaxScreen() {
       <View style={styles.intro}>
         <Text style={styles.title}>תיאום מס</Text>
         <Text style={styles.subtitle}>
-          לכל מקום עבודה ושנה: טוענים את טופס התיאום, צופים בו ושולחים במייל למחלקת השכר. מקום עבודה
-          שלא נכלל בתיאום השנה — תזכורת במסך הבית.
+          לכל מקום עבודה עם קורס פעיל: טוענים את טופס התיאום לשנה, צופים בו ושולחים במייל למחלקת
+          השכר. מקום שלא נכלל בתיאום השנה — תזכורת במסך הבית.
         </Text>
       </View>
 
       <View style={styles.yearRow}>
-        <Pressable onPress={() => setYear(String(Number(year) - 1))} style={styles.nav}>
+        {/* לא לפני שנת תחילת העבודה עם המערכת */}
+        <Pressable
+          onPress={() => setYear(String(Number(year) - 1))}
+          disabled={trackYear != null && Number(year) - 1 < trackYear}
+          style={[styles.nav, trackYear != null && Number(year) - 1 < trackYear && { opacity: 0.3 }]}
+        >
           <Text style={styles.navText}>{isRTL ? '→' : '←'}</Text>
         </Pressable>
         <Text style={styles.year}>{year}</Text>
@@ -216,7 +237,11 @@ function TaxScreen() {
       <Text style={styles.section}>
         טרם נכללו ({missing.length})
       </Text>
-      {missing.length === 0 ? <Text style={styles.meta}>כל מקומות העבודה נכללו 🎉</Text> : null}
+      {missing.length === 0 ? (
+        <Text style={styles.meta}>
+          {shown.length ? 'כל מקומות העבודה נכללו 🎉' : 'אין מקומות עבודה עם קורס פעיל.'}
+        </Text>
+      ) : null}
       {missing.map((w) => (
         <Row key={w.id} w={w} />
       ))}

@@ -18,6 +18,7 @@ import { StyleSheet, View } from 'react-native';
 import { TextInput } from './Text';
 import type { TextInput as RNTextInput } from 'react-native';
 import { useWheel } from './useWheel';
+import { Icon } from './Icon';
 import { hideWheelOverlay, showWheelOverlay } from './WheelOverlay';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -40,6 +41,8 @@ type TimeInputProps = {
   onOverflow?: (digits: string) => void;
   invalid?: boolean;
   placeholder?: string;
+  /** בכניסה לשדה (למשל גלילה כדי שהמקלדת לא תסתיר אותו) */
+  onFocus?: () => void;
 };
 
 const onlyDigits = (text: string) => text.replace(/\D/g, '');
@@ -73,7 +76,7 @@ function fromValue(value: string): [string, string] {
 }
 
 export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function TimeInput(
-  { value, onChange, label = 'שעה', onComplete, onOverflow, invalid, placeholder = '00:00' },
+  { value, onChange, label = 'שעה', onComplete, onOverflow, invalid, placeholder = '00:00', onFocus },
   ref,
 ) {
   const styles = useThemedStyles(makeStyles);
@@ -226,6 +229,7 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         onChangeText={onText}
         onFocus={() => {
           hideWheelOverlay();
+          onFocus?.();
           if (programmatic.current) {
             programmatic.current = false;
             return;
@@ -242,6 +246,13 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         onSubmitEditing={() => onComplete?.()}
         style={[styles.input, drag && styles.dragging, invalid && styles.invalid]}
       />
+      {/* סימן גלגלת בשני הצדדים: גרירה למעלה / למטה משנה שעות (שמאל) ודקות (ימין) */}
+      <View pointerEvents="none" style={[styles.wheelMark, styles.wheelMarkLeft]}>
+        <Icon name="unfold-more-horizontal" size={18} color={colors.textMuted} />
+      </View>
+      <View pointerEvents="none" style={[styles.wheelMark, styles.wheelMarkRight]}>
+        <Icon name="unfold-more-horizontal" size={18} color={colors.textMuted} />
+      </View>
     </View>
   );
 });
@@ -266,6 +277,10 @@ const makeStyles = (colors: AppColors) =>
       // "09:30" תמיד משמאל לימין.
       writingDirection: 'ltr',
     },
+    wheelMark: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center', opacity: 0.55 },
+    // מיקום פיזי (לא start/end): שעות תמיד משמאל, דקות מימין
+    wheelMarkLeft: { left: 8 },
+    wheelMarkRight: { right: 8 },
     dragging: {
       borderColor: colors.brand,
       borderWidth: 2,

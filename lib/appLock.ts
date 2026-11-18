@@ -94,6 +94,20 @@ export function unlockFinance(): Promise<boolean> {
   return pending;
 }
 
+/** נעילה מיידית של המידע הכספי (בלי לכבות את ההגדרה) — מדף הבית או מקבוצה כספית פתוחה. */
+export function lockFinance(): void {
+  if (state.enabled && state.unlocked) set({ unlocked: false });
+}
+
+/** האם ההגדרה מופעלת והמידע פתוח כרגע (לסימן מנעול פתוח). */
+export function useFinanceUnlocked(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.enabled && state.unlocked,
+    () => state.enabled && state.unlocked,
+  );
+}
+
 /** הפעלה (רק אחרי זיהוי מוצלח) / כיבוי. מחזיר את המצב שנקבע. */
 export async function setAppLockEnabled(on: boolean): Promise<boolean> {
   if (on && !(await authenticate('אישור נעילת המידע הכספי'))) return state.enabled;

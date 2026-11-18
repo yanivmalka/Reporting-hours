@@ -13,7 +13,7 @@ import type { Journal } from './useJournal';
 
 /** לשונית "דיווחים": סיכום התקופה ורשימת הדיווחים, כולל מפגשים של היום ושעברו שלא דווחו. */
 export function ReportsTab({ w }: { w: Journal }) {
-  const { router, styles, colors, reports, params, setWpFilter, setRange, setPeriodMode, listTop, filtered, onDayLayout, workplaceOf, nameOf, payOf, totals, travelOf, lockOf, items, missingCount, pendingCount, isFiltered, timeLabel, continuous } = w;
+  const { router, styles, colors, reports, params, setWpFilter, setRange, setPeriodMode, listTop, filtered, onDayLayout, workplaceOf, nameOf, payOf, totals, travelOf, lockOf, items, missingCount, pendingCount, isFiltered, timeLabel, continuous, today } = w;
   return (
     <>
     <View style={styles.summary}>
@@ -60,13 +60,24 @@ export function ReportsTab({ w }: { w: Journal }) {
             continuous && (prevDate == null || prevDate.slice(0, 7) !== date.slice(0, 7)) ? (
               <MonthDivider month={date.slice(0, 7)} />
             ) : null;
+          // היום מסומן בבירור: כותרת "היום" לפני הפריט הראשון שלו, ומסגרת בצבע המערכת.
+          const isToday = date === today;
+          const todayHead =
+            isToday && prevDate !== date ? (
+              <View style={styles.todayHead}>
+                <View style={styles.todayChip}>
+                  <Text style={styles.todayChipText}>היום</Text>
+                </View>
+              </View>
+            ) : null;
           return (
           <Fragment key={item.kind === 'session' ? `s:${item.row.course.id}@${item.row.date}` : item.report.id}>
           {divider}
+          {todayHead}
           {item.kind === 'session' ? (
             <View
               key={`s:${item.row.course.id}@${item.row.date}`}
-              style={styles.dueCard}
+              style={[styles.dueCard, isToday && styles.todayFrame]}
               onLayout={(e) => onDayLayout(item.row.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height, `s:${item.row.course.id}@${item.row.date}`)}
             >
               <SessionRow row={item.row} showDate onPress={() => openSession(router, item.row)} />
@@ -74,6 +85,7 @@ export function ReportsTab({ w }: { w: Journal }) {
           ) : (
             <View
               key={item.report.id}
+              style={isToday ? styles.todayFrame : undefined}
               onLayout={(e) =>
                 onDayLayout(item.report.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height, item.report.id)
               }

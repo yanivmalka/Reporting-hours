@@ -45,6 +45,7 @@ const he = {
     payments: 'מעקב תשלומים',
     tax: 'תיאום מס',
     profile: 'פרטים אישיים',
+    preferences: 'הגדרות',
   },
   home: {
     welcome: 'ברוך הבא 👋',
@@ -214,6 +215,7 @@ const en: StringTree = {
     payments: 'Payments',
     tax: 'Tax coordination',
     profile: 'Personal details',
+    preferences: 'Settings',
   },
   home: {
     welcome: 'Welcome 👋',

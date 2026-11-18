@@ -96,6 +96,8 @@ export default function ReportsScreen() {
           onChanged={() => setReloadTick((n) => n + 1)}
           monthDividers={continuous}
           before={<MonthLink w={w} at="top" />}
+          collapseBefore={w.collapseBefore}
+          onShowEarlier={() => w.setEarlierShown(true)}
           after={<MonthLink w={w} at="bottom" />}
         />
         </View>

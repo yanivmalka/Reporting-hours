@@ -76,6 +76,8 @@ export function useJournal() {
   function resetWindow(m: string) {
     setWin((w) => ({ from: m, to: m, epoch: w.epoch + 1 }));
   }
+  /** בחודש הנוכחי הימים שלפני היום מקופלים (אריח היום בראש התכנון) — עד "הצגה" */
+  const [earlierShown, setEarlierShown] = useState(false);
   /** טווח שנבחר בלוח (רק במצב "בחירת טווח"); null = כל החודש */
   const [range, setRange] = useState<DateRangeValue>(null);
   /** מצב "בחירת טווח" — רק כשהתיבה מסומנת לחיצה על ימים בוחרת טווח ומסננת */
@@ -242,6 +244,7 @@ export function useJournal() {
     const today = todayISO();
     setRange(null);
     setFocusDay(null);
+    setEarlierShown(false);
     setCalMonth(today.slice(0, 7));
     setWeekStart(weekStartOf(today));
   }
@@ -326,6 +329,7 @@ export function useJournal() {
   /** הוספת חודש בראש הרשימה (בתכנון — הקודם; בדיווחים, שממוינים מהחדש — הבא), וגלילה אליו. */
   function extendTop() {
     if (tab === 'plan') {
+      setEarlierShown(true);
       if (!canEarlier) return;
       setWin((w) => ({ ...w, from: prevMonth, epoch: w.epoch + 1 }));
       requestScroll('day', `${prevMonth}-01`);
@@ -455,6 +459,8 @@ export function useJournal() {
     goToday,
     win,
     resetWindow,
+    earlierShown,
+    setEarlierShown,
     canEarlier,
     canLater,
     prevMonth,
@@ -524,6 +530,16 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
   const planTo = range ? range.to : monthEnd(win.to);
   /** פסי חודש ברשימה — כשהיא רציפה (לא טווח ולא תקופת שכר) */
   const continuous = !range && !periodMode;
+  /** תכנון בחודש הנוכחי: הימים שלפני היום מקופלים — אריח היום בראש הרשימה */
+  const todayIso = todayISO();
+  const collapseBefore =
+    tab === 'plan' &&
+    continuous &&
+    !core.earlierShown &&
+    win.from === todayIso.slice(0, 7) &&
+    !(focusDay && focusDay < todayIso)
+      ? todayIso
+      : null;
 
   // "דיווחים": גם מפגשים שעוד לא דווחו — של היום ("ממתין") ושעברו ("חסר").
   // מפגשים עתידיים שייכים ל"תכנון" ולא מוצגים כאן.
@@ -540,7 +556,7 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
         : planFrom > today
           ? []
           : buildSessionRows(courses, dueWorkplaces, reports, planFrom, planTo > today ? today : planTo);
-  const due = dueRows.filter((r) => r.status === 'pending' || r.status === 'missing');
+  const due = dueRows.filter((r) => r.status === 'pending' || r.status === 'now' || r.status === 'missing');
   type Item = { kind: 'report'; report: WorkReport } | { kind: 'session'; row: SessionRowData };
   const items: Item[] = [
     ...filtered.map((report) => ({ kind: 'report' as const, report })),
@@ -611,6 +627,7 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     dayPress,
     showCalendar,
     continuous,
+    collapseBefore,
   };
 }
 

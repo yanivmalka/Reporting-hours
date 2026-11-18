@@ -11,18 +11,22 @@ import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
 import { dateFromIso, isoDate } from './dates';
 
-export type SessionFlag = 'submission' | 'midSubmission';
+export type SessionFlag = 'submission' | 'midSubmission' | 'test';
 
 export const FLAG_LABEL: Record<SessionFlag, string> = {
   submission: 'הגשה',
   midSubmission: 'הגשת ביניים',
+  test: 'מבחן',
 };
 
 /** אייקון הסימון (MaterialCommunityIcons) — בלו״ז, ביומן ובגיליון. */
 export const FLAG_ICON: Record<SessionFlag, string> = {
   submission: 'flag-checkered',
   midSubmission: 'flag-outline',
+  test: 'file-document-edit-outline',
 };
+
+export const FLAGS: readonly SessionFlag[] = ['submission', 'midSubmission', 'test'];
 
 export type SessionNote = {
   courseId: string;
@@ -30,6 +34,8 @@ export type SessionNote = {
   note?: string;
   arrival?: string;
   content?: string;
+  /** סיכום קצר של המפגש (אחרי שהתקיים — מדף דיווח המפגש) */
+  summary?: string;
   flag?: SessionFlag;
   /** תזכורת מפורשת: "YYYY-MM-DDTHH:MM" */
   remindAt?: string;
@@ -54,7 +60,9 @@ export function noteFor(list: readonly SessionNote[], courseId: string, date: st
 
 /** האם יש בפרטים תוכן כלשהו (אחרת לא נשמרת רשומה). */
 export function hasContent(n: Omit<SessionNote, 'at'>): boolean {
-  return Boolean(n.note?.trim() || n.arrival?.trim() || n.content?.trim() || n.flag || n.remindAt);
+  return Boolean(
+    n.note?.trim() || n.arrival?.trim() || n.content?.trim() || n.summary?.trim() || n.flag || n.remindAt,
+  );
 }
 
 /** "YYYY-MM-DDTHH:MM" של ערב היום שלפני המפגש. */
@@ -81,6 +89,7 @@ export async function saveSessionNote(n: Omit<SessionNote, 'at'>): Promise<void>
     note: n.note?.trim() || undefined,
     arrival: n.arrival?.trim() || undefined,
     content: n.content?.trim() || undefined,
+    summary: n.summary?.trim() || undefined,
     flag: n.flag,
     remindAt: n.remindAt || undefined,
     reminderOff: n.flag && !n.remindAt ? n.reminderOff || undefined : undefined,
@@ -111,6 +120,26 @@ export async function moveNote(courseId: string, from: string, to: string): Prom
   const list = await loadSessionNotes();
   if (!noteFor(list, courseId, from)) return;
   await writeJSON(KEY, moveNoteIn(list, courseId, from, to));
+}
+
+/** עדכון חלקי של פרטי מפגש (למשל רק "הערה למפגש הבא"), בלי לגעת בשאר השדות. */
+export async function patchSessionNote(
+  courseId: string,
+  date: string,
+  patch: Partial<Omit<SessionNote, 'courseId' | 'date' | 'at'>>,
+): Promise<void> {
+  const prev = noteFor(await loadSessionNotes(), courseId, date);
+  await saveSessionNote({ ...(prev ?? {}), ...patch, courseId, date });
+}
+
+/**
+ * פרטי המפגשים הקודמים של קורס (לפני התאריך), מהחדש לישן — רק כאלה שיש בהם טקסט
+ * (סיכום, תוכן או הערה). להצגת "מה היה במפגש האחרון" בדף דיווח המפגש.
+ */
+export function previousNotes(list: readonly SessionNote[], courseId: string, before: string): SessionNote[] {
+  return list
+    .filter((n) => n.courseId === courseId && n.date < before && (n.summary || n.content || n.note))
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /** "YYYY-MM-DDTHH:MM" מקומי של רגע נתון. */

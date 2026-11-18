@@ -16,8 +16,12 @@ import { TimeInput, type TimeInputHandle } from '../components/TimeInput';
 import { VacationsCard } from '../components/Vacations';
 import { SessionDots, SessionDotsByMonth, SessionDotsLegend, dotDescription, sessionDots, type SessionDot } from '../components/SessionDots';
 import { removeCanceledFromPotential, removeFromPlan, returnToPlan } from '../lib/sessions';
-import { WEEKDAY_NAMES, courseScheduleLabel, loadCourses, occurrences, periodPresets, sessionAcademicHours, upsertCourse } from '../lib/courses';
-import { dateRange } from '../lib/dashboard';
+import { WEEKDAY_NAMES, WEEKDAY_SHORT, courseScheduleLabel, courseSiblings, loadCourses, occurrences, periodPresets, saveCourseGroup, sessionAcademicHours, upsertCourse, type ExtraSessionInfo } from '../lib/courses';
+import { hebrewRange } from '../lib/hebrewDate';
+import { Icon } from '../components/Icon';
+import { BreakField } from '../components/course/BreakField';
+import { EndTimeCalculatorButton } from '../components/course/EndTimeCalculator';
+import { ExtraSessionsCard, type ExtraSessions } from '../components/course/ExtraSessionsCard';
 import { formatHours } from '../lib/pay';
 import { formatISODate, parseTime, todayISO } from '../lib/time';
 import { loadWorkplaces } from '../lib/workplaces';
@@ -43,13 +47,17 @@ type Form = {
   to: string;
   /** מפגשים פרטניים נוספים */
   extraDates: string[];
+  /** פרטי המפגשים הנוספים (שם, תיאור, שעות) */
+  extraInfo: Record<string, ExtraSessionInfo>;
+  /** ימים נוספים בשבוע שיישמרו כקורסים אחים (עם שעות משלהם) */
+  moreDays: { key: string; weekday: number; start: string; end: string }[];
 };
 
 type Errors = Partial<Record<keyof Form, string>>;
 
-const BREAK_OPTIONS = [0, 10, 15, 20, 30];
-
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+void MONTH_NAMES;
+let dayKey = 0;
 
 /** טופס קורס מחזורי: שם, יום בשבוע, שעות קבועות, הפסקה ותקופה. */
 function CourseFormScreenInner() {
@@ -85,16 +93,17 @@ function CourseFormScreenInner() {
           start: '',
           end: '',
           breakMinutes: '0',
-          from: presets[2].from,
-          to: presets[2].to,
+          from: presets[1].from,
+          to: presets[1].to,
           extraDates: [],
+          extraInfo: {},
+          moreDays: [],
         },
   );
+  /** הקורס בימים נוספים בשבוע (אותה קבוצה) */
+  const [siblings, setSiblings] = useState<Course[]>([]);
   /** מפגש שנבחר בעיגולים (תצוגה) — מציג את פרטיו */
   const [picked, setPicked] = useState<SessionDot | null>(null);
-  /** תאריך למפגש נוסף (בעריכה) */
-  const [extraDate, setExtraDate] = useState(todayISO());
-  const [extraError, setExtraError] = useState<string | null>(null);
   /** רענון אחרי שינוי סימוני מפגשים ("עדכן פוטנציאל") */
   const [marksTick, setMarksTick] = useState(0);
   // ב־web הדף מרונדר מראש בלי פרמטרים (תמיד "קורס חדש"). הרינדור הראשון
@@ -114,6 +123,7 @@ function CourseFormScreenInner() {
       if (!active) return;
       const course = id ? courses.find((c) => c.id === id) : undefined;
       setLoaded(course ?? null);
+      setSiblings(course ? courseSiblings(course, courses) : []);
       const mine = course ? reportsOfCourse(course, reports) : [];
       setCourseReports(mine);
       setAllReports(reports);
@@ -131,6 +141,8 @@ function CourseFormScreenInner() {
           from: course.from,
           to: course.to,
           extraDates: course.extraDates ?? [],
+          extraInfo: course.extraInfo ?? {},
+          moreDays: [],
         };
         setForm({
           name: course.name,
@@ -141,6 +153,8 @@ function CourseFormScreenInner() {
           from: course.from,
           to: course.to,
           extraDates: course.extraDates ?? [],
+          extraInfo: course.extraInfo ?? {},
+          moreDays: [],
         });
       }
     });
@@ -171,6 +185,19 @@ function CourseFormScreenInner() {
     return <LoadingScreen />;
   }
 
+  function setMoreDay(key: string, patch: Partial<Form['moreDays'][number]>) {
+    set(
+      'moreDays',
+      (form?.moreDays ?? []).map((d) => (d.key === key ? { ...d, ...patch } : d)),
+    );
+  }
+  function addMoreDay() {
+    if (!form) return;
+    const used = new Set([form.weekday, ...siblings.map((c) => c.weekday), ...form.moreDays.map((d) => d.weekday)]);
+    const weekday = [1, 2, 3, 4, 5, 6, 0].map((i) => (form.weekday + i) % 7).find((d) => !used.has(d)) ?? form.weekday;
+    set('moreDays', [...form.moreDays, { key: `d${++dayKey}`, weekday, start: form.start, end: form.end }]);
+  }
+
   function validate(f: Form): Errors {
     const next: Errors = {};
     if (!f.name.trim()) next.name = 'יש להזין שם לקורס';
@@ -183,6 +210,11 @@ function CourseFormScreenInner() {
       next.breakMinutes = 'ההפסקה ארוכה מהמפגש';
     }
     if (f.to < f.from) next.to = 'סוף התקופה לפני ההתחלה';
+    for (const d of f.moreDays) {
+      const ds = parseTime(d.start);
+      const de = parseTime(d.end);
+      if (ds == null || de == null || de <= ds) next.moreDays = 'שעות לא תקינות ביום נוסף';
+    }
     return next;
   }
 
@@ -201,6 +233,8 @@ function CourseFormScreenInner() {
       from: form.from,
       to: form.to,
       extraDates: [...new Set(form.extraDates)].sort(),
+      extraInfo: Object.keys(form.extraInfo).length ? form.extraInfo : undefined,
+      groupId: loaded?.groupId,
     };
     // שינוי מועד (יום, שעות, תקופה) בקורס קיים — מתריעים לפני שמירה על שני דברים:
     //  1. דיווחים ישנים בלי `courseId` שמשויכים לפי יום ושעות, ויתנתקו מהקורס.
@@ -247,11 +281,19 @@ function CourseFormScreenInner() {
   }
 
   async function save(draft: CourseDraft) {
+    if (!form) return;
     setSaving(true);
-    await upsertCourse({ id, ...draft });
+    // ימים נוספים בשבוע — קורסים אחים באותה קבוצה; שם, הפסקה ותקופה מתעדכנים בכולם.
+    const all = await saveCourseGroup(
+      { id, ...draft },
+      form.moreDays.map(({ weekday, start, end }) => ({ weekday, start, end })),
+    );
+    const self = all.find((c) => c.id === id);
+    if (self) setSiblings(courseSiblings(self, all));
+    setForm((f) => (f ? { ...f, moreDays: [] } : f));
     setSaving(false);
     if (fromView) {
-      savedRef.current = form;
+      savedRef.current = { ...form, moreDays: [] };
       setViewing(true);
     } else router.back();
   }
@@ -292,6 +334,7 @@ function CourseFormScreenInner() {
     from: form.from,
     to: form.to,
     extraDates: form.extraDates,
+    extraInfo: form.extraInfo,
   };
   const sessions = occurrences(asCourse, form.from, form.to).length;
   // טווח העיגולים: מתחילת הקורס ועד המפגש האחרון (כולל נוספים / מועברים אחרי הסוף).
@@ -359,20 +402,6 @@ function CourseFormScreenInner() {
       </View>
     ) : null;
 
-  function addExtra() {
-    if (!form) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(extraDate)) {
-      setExtraError('בחר תאריך');
-      return;
-    }
-    if (form.extraDates.includes(extraDate) || occursOn({ ...asCourse, extraDates: [] }, extraDate)) {
-      setExtraError('כבר יש מפגש בתאריך הזה');
-      return;
-    }
-    setExtraError(null);
-    set('extraDates', [...form.extraDates, extraDate].sort());
-  }
-
   /** מחיקת מפגש מהתכנון / החזרה לתכנון — מהעיגול שנבחר. */
   function planAction(dot: SessionDot, remove: boolean) {
     if (!id) return;
@@ -398,6 +427,44 @@ function CourseFormScreenInner() {
     });
   }
 
+  /** מפגשים נוספים: בעריכה — בטופס; בתצוגה — נשמרים מיד בקורס. */
+  function changeExtras(next: ExtraSessions) {
+    setForm((f) => (f ? { ...f, ...next } : f));
+    if (viewing && loaded) {
+      const updated = { ...loaded, extraDates: next.extraDates, extraInfo: next.extraInfo };
+      void upsertCourse(updated).then(() => {
+        setLoaded(updated);
+        if (savedRef.current) savedRef.current = { ...savedRef.current, ...next };
+        setMarksTick((t) => t + 1);
+        showToast('המפגשים הנוספים נשמרו');
+      });
+    }
+  }
+  const extrasCard = (
+    <ExtraSessionsCard
+      course={asCourse}
+      value={{ extraDates: form.extraDates, extraInfo: form.extraInfo }}
+      onChange={changeExtras}
+      editable={canEdit}
+    />
+  );
+
+  /** הקורס בימים נוספים — שורות מעבר לכל אחד */
+  const siblingRows = siblings.map((c) => (
+    <Pressable
+      key={c.id}
+      onPress={() => router.push({ pathname: '/course-form', params: { id: c.id, view: '1' } })}
+      accessibilityRole="link"
+      style={({ pressed }) => [styles.viewRow, pressed && { opacity: 0.7 }]}
+    >
+      <Text style={styles.dateLabel}>גם ב</Text>
+      <View style={styles.viewLinkValue}>
+        <Text style={styles.viewValueLink}>{courseScheduleLabel(c)}</Text>
+        <EnterChevron />
+      </View>
+    </Pressable>
+  ));
+
   function updatePotential() {
     if (!id) return;
     confirm({
@@ -418,7 +485,7 @@ function CourseFormScreenInner() {
       ['מקום עבודה', workplaceName || '—'],
       ['מועד', courseScheduleLabel(form)],
       ['הפסקה', Number(form.breakMinutes) > 0 ? `${form.breakMinutes} דק׳` : 'ללא'],
-      ['תקופה', dateRange(form.from, form.to, true)],
+      ['תקופה', `\u2066${formatISODate(form.from)}–${formatISODate(form.to)}\u2069\n${hebrewRange(form.from, form.to)}`],
       [
         'שעות אקדמיות',
         `${formatHours(Math.round(perSession * 100) / 100)} למפגש · ${sessions} מפגשים`,
@@ -438,8 +505,8 @@ function CourseFormScreenInner() {
                 style={({ pressed }) => [styles.viewRow, pressed && { opacity: 0.7 }]}
               >
                 <Text style={styles.dateLabel}>{label}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
-                  <Text style={styles.viewValue}>{value}</Text>
+                <View style={styles.viewLinkValue}>
+                  <Text style={styles.viewValueLink}>{value}</Text>
                   <EnterChevron />
                 </View>
               </Pressable>
@@ -450,8 +517,10 @@ function CourseFormScreenInner() {
               </View>
             ),
           )}
+          {siblingRows}
         </View>
         {sessionsCard}
+        {extrasCard}
         {id && workplaceId ? <VacationsCard target={{ kind: 'course', id, workplaceId }} onChanged={refreshMarks} /> : null}
         {canEdit ? <Button label="עריכה" onPress={() => setViewing(false)} /> : null}
         <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
@@ -475,7 +544,7 @@ function CourseFormScreenInner() {
 
       <FormField label="יום בשבוע">
         <View style={styles.chips}>
-          {WEEKDAY_NAMES.slice(0, 6).map((name, day) => {
+          {WEEKDAY_NAMES.map((name, day) => {
             const on = form.weekday === day;
             return (
               <Pressable
@@ -512,46 +581,67 @@ function CourseFormScreenInner() {
               invalid={Boolean(errors.end)}
             />
           </FormField>
+          <EndTimeCalculatorButton
+            start={form.start}
+            breakMinutes={Number(form.breakMinutes) || 0}
+            onApply={(v) => set('end', v)}
+          />
         </View>
       </View>
 
-      <FormField label="הפסקה קבועה" error={errors.breakMinutes}>
-        <View style={styles.chips}>
-          {BREAK_OPTIONS.map((n) => {
-            const on = form.breakMinutes === String(n);
-            return (
+      <FormField
+        label="ימים נוספים בשבוע"
+        hint="קורס שמתקיים בכמה ימים — לכל יום שעות משלו. נשמר כקורס לכל יום, עם שם, הפסקה ותקופה משותפים."
+        error={errors.moreDays}
+      >
+        {siblings.length ? <View style={styles.viewCard}>{siblingRows}</View> : null}
+        {form.moreDays.map((d) => (
+          <View key={d.key} style={styles.moreDay}>
+            <View style={styles.moreDayHead}>
+              <View style={[styles.chips, { flex: 1 }]}>
+                {WEEKDAY_SHORT.map((n, day) => {
+                  const on = d.weekday === day;
+                  return (
+                    <Pressable
+                      key={day}
+                      onPress={() => setMoreDay(d.key, { weekday: day })}
+                      style={[styles.dayChip, on && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{n}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
               <Pressable
-                key={n}
-                onPress={() => set('breakMinutes', String(n))}
-                style={[styles.chip, on && styles.chipOn]}
+                onPress={() => set('moreDays', form.moreDays.filter((x) => x.key !== d.key))}
+                accessibilityRole="button"
+                accessibilityLabel="הסרת היום הנוסף"
+                hitSlop={8}
               >
-                <Text style={[styles.chipText, on && styles.chipTextOn]}>
-                  {n === 0 ? 'בלי' : `${n} דק׳`}
-                </Text>
+                <Icon name="close" size={20} color={colors.textMuted} />
               </Pressable>
-            );
-          })}
-        </View>
+            </View>
+            <View style={styles.timesRow}>
+              <View style={styles.timeCol}>
+                <TimeInput value={d.start} onChange={(v) => setMoreDay(d.key, { start: v })} label="שעת התחלה" />
+              </View>
+              <View style={styles.timeCol}>
+                <TimeInput value={d.end} onChange={(v) => setMoreDay(d.key, { end: v })} label="שעת סיום" />
+              </View>
+            </View>
+          </View>
+        ))}
+        <Pressable onPress={addMoreDay} accessibilityRole="button" hitSlop={8} style={styles.addDay}>
+          <Icon name="plus" size={18} color={colors.brand} />
+          <Text style={styles.addDayText}>יום נוסף בשבוע</Text>
+        </Pressable>
       </FormField>
 
-      <FormField label="תקופה" hint="חודש־חודש, או לפי סמסטר" error={errors.to}>
-        <View style={styles.chips}>
-          {presets.map((p) => {
-            const on = form.from === p.from && form.to === p.to;
-            return (
-              <Pressable
-                key={p.key}
-                onPress={() => {
-                  set('from', p.from);
-                  set('to', p.to);
-                }}
-                style={[styles.chip, on && styles.chipOn]}
-              >
-                <Text style={[styles.chipText, on && styles.chipTextOn]}>{p.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      <FormField label="הפסקה קבועה" hint="זמן ההפסקה אינו בתשלום" error={errors.breakMinutes}>
+        <BreakField value={form.breakMinutes} onChange={(v) => set('breakMinutes', v)} />
+      </FormField>
+
+      <FormField label="תאריכי הקורס" error={errors.to}>
         <View style={styles.dates}>
           <View style={styles.dateCol}>
             <Text style={styles.dateLabel}>מתאריך</Text>
@@ -573,39 +663,8 @@ function CourseFormScreenInner() {
         </View>
       ) : null}
 
-      <FormField label="מפגשים נוספים" hint="מפגש פרטני מעבר ליום הקבוע, בשעות הקורס">
-        {form.extraDates.length > 0 ? (
-          <View style={styles.chips}>
-            {form.extraDates.map((d) => (
-              <Pressable
-                key={d}
-                onPress={() => set('extraDates', form.extraDates.filter((x) => x !== d))}
-                accessibilityRole="button"
-                accessibilityLabel={`הסרת המפגש הנוסף ב־${formatISODate(d)}`}
-                style={styles.chip}
-              >
-                <Text style={styles.chipText}>{formatISODate(d)} ✕</Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        <View style={styles.dates}>
-          <View style={styles.dateCol}>
-            <DateField
-              value={extraDate}
-              onChange={(v) => {
-                setExtraDate(v);
-                setExtraError(null);
-              }}
-              invalid={Boolean(extraError)}
-            />
-          </View>
-          <Button label="הוספת מפגש" variant="secondary" onPress={addExtra} />
-        </View>
-        {extraError ? <Text style={styles.error}>{extraError}</Text> : null}
-      </FormField>
-
       {sessionsCard}
+      {extrasCard}
 
       {id && workplaceId ? (
         <VacationsCard target={{ kind: 'course', id, workplaceId }} editable onChanged={refreshMarks} />
@@ -724,6 +783,31 @@ const makeStyles = (colors: AppColors) =>
     },
     viewRowLast: { borderBottomWidth: 0 },
     viewValue: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
+    // שורה לחיצה: הערך (שם מקום העבודה / מועד) ולצדו ‹ — המכל תופס את הרוחב, כך שהשם לא נעלם
+    viewLinkValue: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 4 },
+    viewValueLink: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
+    moreDay: {
+      gap: spacing.sm,
+      padding: spacing.sm,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: spacing.sm,
+    },
+    moreDayHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+    dayChip: {
+      minWidth: 34,
+      height: 34,
+      paddingHorizontal: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    addDay: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 4 },
+    addDayText: { fontSize: 14, fontWeight: '700', color: colors.brand },
     cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT, paddingTop: 12 },
     monthRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingTop: spacing.sm },
     monthName: { width: 56, fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT, paddingTop: 7 },

@@ -173,7 +173,7 @@ function SharingScreenInner() {
     return (
       <Screen>
         <Text style={styles.body}>
-          כדי לשתף את הנתונים צריך להתחבר עם חשבון Google (תפריט ☰ ← "הגדרות ותצוגה" ← "חשבון וסנכרון").
+          כדי לשתף את הנתונים צריך להתחבר עם חשבון Google (תפריט ☰ ← "הגדרות" ← "חשבון").
         </Text>
       </Screen>
     );

@@ -33,6 +33,8 @@ import { EnterChevron } from '../components/Chevrons';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { ViaEmail } from '../components/ViaEmail';
+import { useSessionNotes } from '../components/useSessionNotes';
+import { FLAG_LABEL, noteFor } from '../lib/sessionNotes';
 
 const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
@@ -42,6 +44,7 @@ export default function ReportViewScreen() {
   const { colors } = useTheme();
   const { basis } = usePayBasis();
   const { id } = useLocalSearchParams<{ id?: string }>();
+  const sessionNotes = useSessionNotes();
   const [data, setData] = useState<{
     report: WorkReport | null;
     workplace?: Workplace;
@@ -107,6 +110,8 @@ export default function ReportViewScreen() {
     );
   }
 
+  // פרטי המפגש (סיכום, סימון) — נשמרים לפי קורס + תאריך (lib/sessionNotes.ts).
+  const sessionNote = report.courseId ? noteFor(sessionNotes, report.courseId, report.date) : undefined;
   const [y, m, d] = report.date.split('-').map(Number);
   const weekday = WEEKDAYS[new Date(y, m - 1, d).getDay()];
   const breaks = totalBreakMinutes(report.breaks);
@@ -127,6 +132,8 @@ export default function ReportViewScreen() {
     ['מקום עבודה', workplace?.name ?? 'מקום עבודה שנמחק'],
     ['תאריך', `יום ${weekday} · ${formatISODate(report.date)} · ${hebrewDate(report.date, false)}`],
     ...(report.note ? ([['קורס / נושא', report.note]] as [string, string][]) : []),
+    ...(sessionNote?.flag ? ([['סימון', FLAG_LABEL[sessionNote.flag]]] as [string, string][]) : []),
+    ...(sessionNote?.summary ? ([['סיכום המפגש', sessionNote.summary]] as [string, string][]) : []),
     ...(report.extraKind ? ([['סוג מפגש', `מפגש נוסף · ${EXTRA_SESSION_LABELS[report.extraKind]}`]] as [string, string][]) : []),
     ['שעות', `⁦${report.start}–${report.end}⁩`],
     ['הפסקות', breaks > 0 ? formatDuration(breaks) : 'ללא'],

@@ -102,6 +102,7 @@
 | `payments.tsx`, `tax.tsx`, `profile.tsx` | תשלומים, מס, פרטים אישיים |
 | `archive.tsx`, `trash.tsx` | ארכיון ואשפה |
 | `settings.tsx`, `data.tsx` | דקות מצטברות (מונה ובסיס חישוב שכר); ניהול נתונים וגיבוי |
+| `preferences.tsx` | "הגדרות": חשבון, כללי (תחילת עבודה, שפה), תצוגה, נעילה, קישורים למסכי ההגדרה, אודות ועדכונים |
 | `sharing.tsx` | שיתוף והרשאות: הוספת מורשה (מייל + רמה), שינוי רמה, הסרה, שליחת הודעה (בעלים בלבד) |
 | `holidays.tsx` | חגים וחופשות: מתגי הביטול האוטומטי, לוח החופשות (`VacationBoard`) וסיבות הביטול |
 
@@ -123,4 +124,6 @@
 - תצוגה: `Charts`, `ForecastChart`, `WorkplaceTile`, `ReportCard`, `RangeCalendar`, `WeekStrip`, `TrashList`, `PlanList`.
 - טעינה: `useScreenData` (טעינת נתוני מסך: פוקוס, תוצאה ישנה, רענון אחרי החלפת נתונים, `reload`), `LoadingScreen`.
 - משותפים: `Checkbox`, `FoldSection` (קבוצה מתקפלת), `MonthSlide` (החלקת חודש בתאריכון), `DateText` (לועזי + עברי בלי שבירה), `Chevrons` (חץ כניסה ‹ וחץ קיפול ⌄/⌃), `DayDot` (נקודות מצב יום ומקרא, לפי `lib/dayStatus.ts`), `useFlash` / `useFade` (הבהוב / עמעום קצר).
-- קלט: `TimeInput`, `DatePicker`, `SelectField`, `TextField`. את `Text` ו־`TextInput` מייבאים תמיד מ־`components/Text`.
+- קלט: `TimeInput`, `DatePicker`, `SelectField`, `TextField`.
+- טופס קורס (`components/course/`): `BreakField` (הפסקה בשורה אחת), `EndTimeCalculator` (מחשבון שעת סיום, `computeEnd` ב־`lib/academic.ts`), `ExtraSessionsCard` (מפגשים נוספים עם שם, שעות ותיאור).
+- אשף הדיווח: `components/report/SessionDetailsCard.tsx` — סיכום המפגש, הערה למפגש הבא והמפגשים הקודמים. את `Text` ו־`TextInput` מייבאים תמיד מ־`components/Text`.

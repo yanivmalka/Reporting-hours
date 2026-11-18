@@ -17,7 +17,7 @@ import { APP_ID, firestore } from './firebase';
 import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
 import { authUser, getAccess, isDemoActive } from './sync';
-import { courseReported, coursesOn, loadCourses, type Course } from './courses';
+import { courseReported, coursesOn, loadCourses, sessionTimes, type Course } from './courses';
 import { loadReports, type WorkReport } from './reports';
 import { activeWorkplaces, loadWorkplaces, type Workplace } from './workplaces';
 import { loadCancelIndex } from './sessions';
@@ -77,9 +77,7 @@ export function buildPlanDays(
         courseName: c.name,
         workplaceId: w.id,
         workplaceName: w.name,
-        start: c.start,
-        end: c.end,
-        breakMinutes: c.breakMinutes,
+        ...sessionTimes(c, date),
       });
     }
     if (items.length) out[date] = items;

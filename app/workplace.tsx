@@ -296,7 +296,10 @@ export default function WorkplaceDetailScreen() {
           <InfoRow label="אחוז מס" value={`${tax}%`} />
           <InfoRow label="תנאי תשלום" value={paymentTermsLabel(w)} />
           <InfoRow label="יום אחרון לדיווח שכר" value={deadlineLabel(w)} />
-          <InfoRow label="תקופת שכר" value={w.payday === 1 ? '1 עד סוף החודש' : `מה־${w.payday} בחודש עד ה־${w.payday - 1} בחודש הבא`} />
+          <InfoRow
+            label="תקופת שכר"
+            value={w.payday === 1 ? '1 עד סוף החודש' : `מה־${w.payday} בחודש\nעד ה־${w.payday - 1} בחודש הבא`}
+          />
           <InfoRow label="אופן הגעה" value={ARRIVAL_MODE_LABELS[w.arrivalMode]} last={!w.address} />
           {w.address ? <InfoRow label="כתובת" value={w.address} last /> : null}
         </View>
@@ -388,6 +391,7 @@ export default function WorkplaceDetailScreen() {
         {lastClosed ? (
           <Button
             label={`דוח השכר של ${monthName(periodMonthKey(lastClosed.period))}`}
+            variant="secondary"
             onPress={() =>
               router.push({ pathname: '/payroll-report', params: { wp: w.id, start: lastClosed.period.start } })
             }
@@ -395,7 +399,6 @@ export default function WorkplaceDetailScreen() {
         ) : null}
         <Button
           label="עריכת מקום העבודה והקורסים"
-          variant="secondary"
           onPress={() => router.push({ pathname: '/workplace-form', params: { id: w.id } })}
         />
         <Button
@@ -506,7 +509,8 @@ const makeStyles = (colors: AppColors) =>
     },
     infoRowLast: { borderBottomWidth: 0 },
     infoLabel: { fontSize: 15, color: colors.textMuted },
-    infoValue: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: TEXT_RIGHT },
+    // הערך צמוד לתווית (כמו בתצוגת דיווח וקורס), לא לקצה השמאלי של השורה
+    infoValue: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     courseCard: { paddingVertical: 12, gap: 3 },
     courseName: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
 

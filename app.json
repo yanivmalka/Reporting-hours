@@ -20,7 +20,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "REQUEST_INSTALL_PACKAGES"
+        "REQUEST_INSTALL_PACKAGES",
+        "android.permission.READ_CONTACTS"
       ]
     },
     "web": {

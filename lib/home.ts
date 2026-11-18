@@ -7,7 +7,7 @@
  */
 import type { Href } from 'expo-router';
 import { accumulatedTotal, redeemableHours, entryOf, type AccumulatedState } from './accumulated';
-import { courseReport, courseReported, coursesOn, sessionCancel, timeRange, type Course } from './courses';
+import { courseReport, courseReported, coursesOn, sessionCancel, timeRange, workplacesWithActiveCourse, type Course } from './courses';
 import { currentPayPeriod, currentPeriods, daysUntil, isoDate } from './dashboard';
 import type { PayBasis } from './payBasis';
 import { isLocked, overduePayments, payrollItems, pendingPayroll, statusKey, type StatusMap } from './payroll';
@@ -275,6 +275,8 @@ export type HomeAlert = {
   tone: AlertTone;
   title: string;
   body: string;
+  /** שורה נוספת מתחת לגוף (למשל שמות המוסדות) — בשורה אחת שמתקצרת, ולצדה (משמאל) הפעולה */
+  detail?: string;
   action?: { label: string; href?: Href; tel?: string };
 };
 
@@ -315,6 +317,9 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
     if (!isTaxi(w.arrivalMode) || !w.taxi) continue;
     const reminder = w.taxi.reminder;
     const tel = w.taxi.phone || undefined;
+    // איש קשר שנבחר — מוצג כאיש קשר שאפשר לחייג אליו.
+    const contact = w.taxi.contactName ? `${w.taxi.contactName} · ${w.taxi.phone}` : undefined;
+    const action = tel ? { label: w.taxi.contactName ? `חיוג ל${w.taxi.contactName}` : 'חיוג להזמנה', tel } : undefined;
     const kind = w.arrivalMode === 'taxi_voucher' ? 'מונית פתק' : 'מונית';
     if (reminder.kind === 'hoursBefore') {
       const first = coursesOn(courses, today, w.id)[0];
@@ -326,7 +331,8 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
           tone: 'warn',
           title: `להזמין ${kind} ל${w.name}`,
           body: `${first.name} מתחיל ב־${first.start}.${w.address ? `\nיעד: ${w.address}` : ''}`,
-          action: tel ? { label: 'חיוג להזמנה', tel } : undefined,
+          detail: contact,
+          action,
         });
       }
     } else if (reminder.kind === 'nightBefore') {
@@ -339,7 +345,8 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
           tone: 'warn',
           title: `להזמין ${kind} למחר — ${w.name}`,
           body: `${first.name} מחר ב־${first.start}.${w.address ? `\nיעד: ${w.address}` : ''}`,
-          action: tel ? { label: 'חיוג להזמנה', tel } : undefined,
+          detail: contact,
+          action,
         });
       }
     }
@@ -453,6 +460,8 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
     const left = daysUntil(p.end, now); // ימים עד סוף התקופה (0 = היום)
     if (left > 3) continue;
     if (isLocked(input.payroll[statusKey(w.id, p.start)])) continue;
+    // תקופה שהסתיימה לפני תחילת העבודה עם המערכת — לא רלוונטית.
+    if (beforeTracking(p.end)) continue;
     const any =
       reports.some((r) => r.workplaceId === w.id && r.date >= p.start && r.date <= p.end) ||
       courses.some((c) => c.workplaceId === w.id && c.from <= p.end && c.to >= p.start);
@@ -503,14 +512,17 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
         icon: 'timer-sand',
         tone: 'info',
         title: `${minutes} דקות במונה המצטבר`,
-        body: `אפשר לפדות שעות אקדמיות שלמות: ${names(ready.map((w) => w.name))}`,
+        body: 'אפשר לפדות שעות אקדמיות שלמות:',
+        detail: names(ready.map((w) => w.name)),
         action: { label: 'לפדיון', href: '/settings' },
       });
     }
   }
 
   const year = String(now.getFullYear());
-  const noTax = missingTaxCoordination(active, year);
+  // רק מקומות עם קורס פעיל — מקום בלי קורסים כרגע לא צריך תיאום מס.
+  const withActive = workplacesWithActiveCourse(courses, isoDate(now));
+  const noTax = missingTaxCoordination(active.filter((w) => withActive.has(w.id)), year);
   if (noTax.length) {
     out.push({
       key: `tax|${year}|${noTax.map((w) => w.id).join(',')}`,

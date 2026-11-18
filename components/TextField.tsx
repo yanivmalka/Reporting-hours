@@ -17,7 +17,7 @@ type TextFieldProps = {
   onFocus?: () => void;
 };
 
-/** שדה טקסט אחיד. `numeric` מפעיל מקלדת מספרית ומיישר לשמאל. */
+/** שדה טקסט אחיד. `numeric` מפעיל מקלדת מספרית (כתיבה משמאל לימין, יישור לימין כמו כל התיבות). */
 export function TextField({
   value,
   onChangeText,
@@ -63,8 +63,8 @@ const makeStyles = (colors: AppColors) =>
       color: colors.text,
       textAlign: 'right',
     },
+    // מספרים, מייל וטלפון נכתבים משמאל לימין, אבל מיושרים לימין כמו כל התיבות (אחידות).
     numeric: {
-      textAlign: 'left',
       writingDirection: 'ltr',
     },
     invalid: {

@@ -14,7 +14,7 @@ import { loadLeftoverMode } from '../../lib/leftover';
 import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../../lib/accumulated';
 import { usePayBasis } from '../../lib/payBasis';
 import { addReport, deleteReport, loadReports, makeBreakId, updateReport, type ExtraSessionKind, type WorkReport } from '../../lib/reports';
-import { courseReported, canceledOn, coursesOn, loadCourses, timeRange, type Course } from '../../lib/courses';
+import { courseReported, canceledOn, coursesOn, loadCourses, sessionTimes, timeRange, type Course } from '../../lib/courses';
 import { currentPayPeriod } from '../../lib/dashboard';
 import { isLocked, loadPayrollStatus, statusKey } from '../../lib/payroll';
 import { isValidISODate, todayISO } from '../../lib/time';
@@ -140,15 +140,16 @@ export function useReportWizard() {
     const open = unreportedOn(crs, list, reports, d);
     if (open.length === 1) {
       const c = open[0];
-      const breakMin = c.breakMinutes > 0 ? c.breakMinutes : 0;
+      const t = sessionTimes(c, d);
+      const breakMin = t.breakMinutes > 0 ? t.breakMinutes : 0;
       setCourseId(c.id);
       setExtraKind(null);
       setWorkplaceId(c.workplaceId);
       setNote(c.name);
-      setStart(c.start);
-      setEnd(c.end);
+      setStart(t.start);
+      setEnd(t.end);
       setBreaks(breakMin ? [{ id: makeBreakId(), minutes: String(breakMin) }] : []);
-      setBaseline({ start: c.start, end: c.end, note: c.name, breaks: breakMin ? 1 : 0 });
+      setBaseline({ start: t.start, end: t.end, note: c.name, breaks: breakMin ? 1 : 0 });
       setViaCourse(true);
       setSkippedCourse(true);
       setStep('times');
@@ -203,15 +204,17 @@ export function useReportWizard() {
         // קורס שנבחר מראש (מסך הבית): ממלאים הכול ומדלגים ישר לשעות.
         const pc = presetCourse ? crs.find((c) => c.id === presetCourse) : undefined;
         if (pc && list.some((w) => w.id === pc.workplaceId)) {
-          const breakMin = pc.breakMinutes > 0 ? pc.breakMinutes : 0;
-          if (presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate)) setDate(presetDate);
+          const validPreset = presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate);
+          const t = sessionTimes(pc, validPreset ? presetDate : todayISO());
+          const breakMin = t.breakMinutes > 0 ? t.breakMinutes : 0;
+          if (validPreset) setDate(presetDate);
           setCourseId(pc.id);
           setWorkplaceId(pc.workplaceId);
           setNote(pc.name);
-          setStart(pc.start);
-          setEnd(pc.end);
+          setStart(t.start);
+          setEnd(t.end);
           setBreaks(breakMin ? [{ id: makeBreakId(), minutes: String(breakMin) }] : []);
-          setBaseline({ start: pc.start, end: pc.end, note: pc.name, breaks: breakMin ? 1 : 0 });
+          setBaseline({ start: t.start, end: t.end, note: pc.name, breaks: breakMin ? 1 : 0 });
           setViaCourse(true);
           setStep('times');
           return;
@@ -510,9 +513,10 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
       }
       return;
     }
-    setStart(c.start);
-    setEnd(c.end);
-    setBreaks(c.breakMinutes > 0 ? [{ id: makeBreakId(), minutes: String(c.breakMinutes) }] : []);
+    const t = sessionTimes(c, date);
+    setStart(t.start);
+    setEnd(t.end);
+    setBreaks(t.breakMinutes > 0 ? [{ id: makeBreakId(), minutes: String(t.breakMinutes) }] : []);
   }
   // הדיווח החסר הקרוב (מהיום אחורה) — לקישור "הדיווח החסר הבא".
   const nextMissingAll = nextRelevantDay(courses, workplaces, existing);

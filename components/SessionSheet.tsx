@@ -1,7 +1,9 @@
 /**
- * גיליון "פרטי המפגש" — לחיצה על מפגש עתידי בדף הבית: הערה, תוכן מתוכנן,
- * מידע על ההגעה, סימון הגשה / הגשת ביניים, תזכורת, וקישור לביטול המפגש
- * (פותח את דיאלוג הביטול הקיים). הנתונים — lib/sessionNotes.ts.
+ * גיליון "פרטי המפגש" — לחיצה על מפגש עתידי בדף הבית, ומדף דיווח המפגש: סימון
+ * (הגשה / הגשת ביניים / מבחן), ומקטעים לבחירה — הערה, תוכן מתוכנן, הגעה, תזכורת,
+ * ובמפגש שהתקיים גם "סיכום קצר". מוצג רק מקטע שנבחר או שיש בו תוכן, כדי שהגיליון
+ * לא יהיה עמוס. קישור לביטול המפגש (פותח את דיאלוג הביטול הקיים).
+ * הנתונים — lib/sessionNotes.ts. מי שאינו רשאי לערוך (`canEdit`) — צפייה בלבד.
  *
  * שימוש:
  *   const sheet = useSessionSheet();
@@ -9,8 +11,10 @@
  *   …
  *   {sheet.dialog}
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { WheelOverlayHost } from './WheelOverlay';
+import { useAccess } from './Access';
 import { Text, TextInput } from './Text';
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -28,6 +32,7 @@ import {
   eveningBefore,
   FLAG_ICON,
   FLAG_LABEL,
+  FLAGS,
   loadSessionNotes,
   noteFor,
   saveSessionNote,
@@ -45,6 +50,27 @@ export type SessionSheetRequest = {
   onDone?: () => void;
   /** "ביטול המפגש" — הגיליון נסגר ונפתח דיאלוג הביטול */
   onCancelSession?: () => void;
+  /** מקטעים שנפתחים מראש (למשל "הערה" — מ"הערה למפגש הבא") */
+  open?: Section[];
+  /** כותרת אחרת (למשל "הערה למפגש הבא") */
+  title?: string;
+};
+
+export type Section = 'note' | 'content' | 'arrival' | 'summary' | 'reminder';
+
+const SECTION_LABEL: Record<Section, string> = {
+  summary: 'סיכום המפגש',
+  note: 'הערה',
+  content: 'תוכן מתוכנן',
+  arrival: 'הגעה',
+  reminder: 'תזכורת',
+};
+const SECTION_ICON: Record<Section, string> = {
+  summary: 'text-box-check-outline',
+  note: 'note-text-outline',
+  content: 'book-open-outline',
+  arrival: 'map-marker-outline',
+  reminder: 'bell-outline',
 };
 
 export function useSessionSheet() {
@@ -89,6 +115,13 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
   const [customDate, setCustomDate] = useState(() => eveningBefore(date).slice(0, 10));
   const [customTime, setCustomTime] = useState(DEFAULT_REMINDER_TIME);
   const [busy, setBusy] = useState(false);
+  const [summary, setSummary] = useState('');
+  const { canEdit, canReport } = useAccess();
+  const scrollRef = useRef<ScrollView>(null);
+  /** מפגש שכבר התחיל / עבר — אפשר לכתוב סיכום */
+  const past = date <= isoDate(new Date());
+  /** מקטעים שנפתחו בבחירה (בנוסף לאלה שיש בהם תוכן) */
+  const [opened, setOpened] = useState<Section[]>(request.open ?? []);
 
   const presets: Record<Exclude<ReminderChoice, 'none' | 'custom'>, string> = {
     evening: eveningBefore(date),
@@ -105,6 +138,7 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
         setNote(n.note ?? '');
         setContent(n.content ?? '');
         setArrival(n.arrival ?? '');
+        setSummary(n.summary ?? '');
         setFlag(n.flag ?? null);
         if (n.remindAt) {
           const preset = (Object.keys(presets) as (keyof typeof presets)[]).find((k) => presets[k] === n.remindAt);
@@ -127,9 +161,21 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
 
   function chooseFlag(f: SessionFlag | null) {
     setFlag(f);
-    // סימון הגשה מוסיף תזכורת בערב שלפני — אם עוד לא נבחרה תזכורת.
-    if (f && !remTouched && rem === 'none') setRem('evening');
+    // סימון (הגשה / מבחן) מוסיף תזכורת בערב שלפני — אם עוד לא נבחרה תזכורת. במפגש שעבר — לא.
+    if (f && !past && !remTouched && rem === 'none') setRem('evening');
   }
+
+  /** מקטע מוצג: נבחר, או שיש בו תוכן */
+  const shown = (sec: Section): boolean =>
+    opened.includes(sec) ||
+    (sec === 'note' && !!note) ||
+    (sec === 'content' && !!content) ||
+    (sec === 'arrival' && !!arrival) ||
+    (sec === 'summary' && !!summary) ||
+    (sec === 'reminder' && rem !== 'none');
+  const toggle = (sec: Section) =>
+    setOpened((o) => (o.includes(sec) ? o.filter((x) => x !== sec) : [...o, sec]));
+  const sections: Section[] = past ? ['summary', 'note', 'content', 'arrival'] : ['note', 'content', 'arrival', 'reminder'];
 
   function chooseRem(r: ReminderChoice) {
     setRem(r);
@@ -155,6 +201,7 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
         note,
         content,
         arrival,
+        summary,
         flag: flag ?? undefined,
         remindAt: auto ? undefined : remindAt,
         reminderOff: flag != null && rem === 'none',
@@ -178,11 +225,14 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
   const fixedArrival = [ARRIVAL_MODE_LABELS[workplace.arrivalMode], workplace.address].filter(Boolean).join(' · ');
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+    <Modal transparent animationType="fade" visible onRequestClose={onClose} statusBarTranslucent>
+      <KeyboardAvoidingView
+        style={styles.backdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <View style={styles.dialog}>
-          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>פרטי המפגש</Text>
+          <ScrollView ref={scrollRef} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+            <Text style={styles.title}>{request.title ?? 'פרטי המפגש'}</Text>
             <View style={styles.headRow}>
               {flag ? <Icon name={FLAG_ICON[flag]} size={18} color={colors.warning} /> : null}
               <Text style={styles.subject}>{course.name}</Text>
@@ -196,10 +246,11 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
               <>
                 <Text style={styles.label}>סימון</Text>
                 <View style={styles.chips}>
-                  {([null, 'submission', 'midSubmission'] as const).map((f) => (
+                  {([null, ...FLAGS] as const).map((f) => (
                     <Pressable
                       key={f ?? 'none'}
-                      onPress={() => chooseFlag(f)}
+                      onPress={() => canEdit && chooseFlag(f)}
+                      disabled={!canEdit}
                       accessibilityRole="radio"
                       accessibilityState={{ checked: flag === f }}
                       style={[styles.chip, flag === f && styles.chipOn]}
@@ -210,72 +261,137 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
                   ))}
                 </View>
 
-                <Text style={styles.label}>הערה</Text>
-                <TextInput
-                  value={note}
-                  onChangeText={setNote}
-                  multiline
-                  placeholder="למשל: להביא את המבחנים הבדוקים"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
-                />
-
-                <Text style={styles.label}>תוכן מתוכנן</Text>
-                <TextInput
-                  value={content}
-                  onChangeText={setContent}
-                  multiline
-                  placeholder="מה מתוכנן לשיעור"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
-                />
-
-                <Text style={styles.label}>הגעה</Text>
-                {fixedArrival ? <Text style={styles.hint}>קבוע: {fixedArrival}</Text> : null}
-                <TextInput
-                  value={arrival}
-                  onChangeText={setArrival}
-                  multiline
-                  placeholder="למפגש הזה: חדר, חניה, שינוי מיקום"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
-                />
-
-                <Text style={styles.label}>תזכורת</Text>
-                <View style={styles.chips}>
-                  {reminderOptions.map((o) => (
-                    <Pressable
-                      key={o.value}
-                      onPress={() => chooseRem(o.value)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: rem === o.value }}
-                      style={[styles.chip, rem === o.value && styles.chipOn]}
-                    >
-                      <Text style={[styles.chipText, rem === o.value && styles.chipTextOn]}>{o.label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                {rem === 'custom' ? (
-                  <View style={styles.customRow}>
-                    <View style={styles.customDate}>
-                      <DateField value={customDate} onChange={setCustomDate} />
+                {canEdit ? (
+                  <>
+                    <Text style={styles.label}>הוספת פרטים</Text>
+                    <View style={styles.chips}>
+                      {sections.map((sec) => {
+                        const on = shown(sec);
+                        return (
+                          <Pressable
+                            key={sec}
+                            onPress={() => toggle(sec)}
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: on }}
+                            style={[styles.chip, on && styles.chipOn]}
+                          >
+                            <Icon name={on ? SECTION_ICON[sec] : 'plus'} size={14} color={on ? colors.brand : colors.textMuted} />
+                            <Text style={[styles.chipText, on && styles.chipTextOn]}>{SECTION_LABEL[sec]}</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
-                    <View style={styles.customTime}>
-                      <TimeInput value={customTime} onChange={setCustomTime} label="שעת התזכורת" />
-                    </View>
-                  </View>
+                  </>
                 ) : null}
-                {rem !== 'none' ? (
-                  <Text style={styles.hint}>התזכורת מופיעה בדף הבית מהמועד שנבחר ועד סוף המפגש.</Text>
+
+                {past && shown('summary') ? (
+                  <>
+                    <Text style={styles.label}>סיכום קצר של המפגש</Text>
+                    <TextInput
+                      value={summary}
+                      onChangeText={setSummary}
+                      editable={canEdit}
+                      multiline
+                      placeholder="מה עשינו במפגש, מה נשאר להמשך"
+                      placeholderTextColor={colors.textMuted}
+                      style={styles.input}
+                    />
+                  </>
+                ) : null}
+
+                {shown('note') ? (
+                  <>
+                    <Text style={styles.label}>הערה</Text>
+                    <TextInput
+                      value={note}
+                      onChangeText={setNote}
+                      editable={canEdit}
+                      multiline
+                      autoFocus={request.open?.includes('note')}
+                      placeholder="למשל: להביא את המבחנים הבדוקים"
+                      placeholderTextColor={colors.textMuted}
+                      style={styles.input}
+                    />
+                  </>
+                ) : null}
+
+                {shown('content') ? (
+                  <>
+                    <Text style={styles.label}>תוכן מתוכנן</Text>
+                    <TextInput
+                      value={content}
+                      onChangeText={setContent}
+                      editable={canEdit}
+                      multiline
+                      placeholder="מה מתוכנן לשיעור"
+                      placeholderTextColor={colors.textMuted}
+                      style={styles.input}
+                    />
+                  </>
+                ) : null}
+
+                {shown('arrival') ? (
+                  <>
+                    <Text style={styles.label}>הגעה</Text>
+                    {fixedArrival ? <Text style={styles.hint}>קבוע: {fixedArrival}</Text> : null}
+                    <TextInput
+                      value={arrival}
+                      onChangeText={setArrival}
+                      editable={canEdit}
+                      multiline
+                      placeholder="למפגש הזה: חדר, חניה, שינוי מיקום"
+                      placeholderTextColor={colors.textMuted}
+                      style={styles.input}
+                    />
+                  </>
+                ) : null}
+
+                {!past && shown('reminder') ? (
+                  <>
+                    <Text style={styles.label}>תזכורת</Text>
+                    <View style={styles.chips}>
+                      {reminderOptions.map((o) => (
+                        <Pressable
+                          key={o.value}
+                          onPress={() => canEdit && chooseRem(o.value)}
+                          disabled={!canEdit}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: rem === o.value }}
+                          style={[styles.chip, rem === o.value && styles.chipOn]}
+                        >
+                          <Text style={[styles.chipText, rem === o.value && styles.chipTextOn]}>{o.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    {rem === 'custom' ? (
+                      <View style={styles.customRow}>
+                        <View style={styles.customDate}>
+                          <DateField value={customDate} onChange={setCustomDate} />
+                        </View>
+                        <View style={styles.customTime}>
+                          <TimeInput
+                            value={customTime}
+                            onChange={setCustomTime}
+                            label="שעת התזכורת"
+                            // המקלדת לא תסתיר את השדה
+                            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 250)}
+                          />
+                        </View>
+                      </View>
+                    ) : null}
+                    {rem !== 'none' ? (
+                      <Text style={styles.hint}>התזכורת מופיעה בדף הבית מהמועד שנבחר ועד סוף המפגש.</Text>
+                    ) : null}
+                  </>
                 ) : null}
               </>
             )}
 
             <View style={styles.stack}>
-              <Button label="שמירה" loading={busy} disabled={!loaded} onPress={save} />
+              {canEdit ? <Button label="שמירה" loading={busy} disabled={!loaded} onPress={save} /> : null}
               <Button label="סגירה" variant="secondary" onPress={onClose} disabled={busy} />
             </View>
-            {request.onCancelSession ? (
+            {request.onCancelSession && canReport ? (
               <Pressable
                 onPress={() => {
                   onClose();
@@ -290,7 +406,9 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
             ) : null}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
+      {/* שכבת הגלגלת בתוך הדיאלוג — המארח הכללי מרונדר מאחורי ה־Modal */}
+      <WheelOverlayHost />
     </Modal>
   );
 }
