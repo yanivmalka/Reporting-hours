@@ -113,6 +113,7 @@
 - טופס הדיווח: `reportForm.ts` — אימות, תצוגה מקדימה חיה ובניית הדיווח שנשמר (טהור, עם בדיקות; משמש את `components/report/useReportWizard.tsx`).
 - כסף: `pay.ts`, `payBasis.tsx`, `travel.ts`, `payroll.ts`, `forecast.ts`.
 - לוח שנה: `hebrewDate.ts`, `holidays.ts`, `sessions.ts`, `vacations.ts`.
+- ייצוא: `exportReports.ts` (שורות, CSV עם BOM, HTML ל־PDF — טהור, עם בדיקות); השמירה והשיתוף — `components/exportFile.ts`, המסך — `app/export.tsx`.
 - התראות לטלפון: `pushPlan.ts` (מה לתזמן — טהור, עם בדיקות), `push.ts` (הגדרה, הרשאה ותזמון ב־expo-notifications).
 - מסכים: `home.ts` (כולל `nextRelevantDay`), `dashboard.ts` (כולל `deadlineRelative`), `recommend.ts`, `dayStatus.ts`.
 - תשתית: `keys.ts` (מרשם המפתחות), `dates.ts` (המרות ISO), `storage.ts`, `sync.ts`, `firebase.ts`, `authPlatform(.web).ts`, `backup.ts`, `update.ts`, `rtl.ts`, `i18n.tsx`, `strings.ts`, `demo.ts`.
