@@ -25,6 +25,8 @@ export type UpdateInfo = {
   latestBuild: number;
   /** קישור ישיר להורדת ה־APK */
   apkUrl: string | null;
+  /** גודל ה־APK בבתים (לפי GitHub) — לאימות שההורדה שלמה; null כשלא ידוע */
+  apkSize: number | null;
   notes: string;
 };
 
@@ -56,7 +58,7 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   const data = (await res.json()) as {
     tag_name: string;
     body?: string;
-    assets?: { name: string; browser_download_url: string }[];
+    assets?: { name: string; browser_download_url: string; size?: number }[];
   };
   const latestBuild = buildFromTag(data.tag_name);
   const apk = data.assets?.find((a) => a.name.endsWith('.apk'));
@@ -65,6 +67,7 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
     latestVersion: data.tag_name.replace(/^v/, ''),
     latestBuild,
     apkUrl: apk?.browser_download_url ?? null,
+    apkSize: typeof apk?.size === 'number' && apk.size > 0 ? apk.size : null,
     notes: data.body ?? '',
   };
 }
@@ -84,6 +87,8 @@ const FLAG_GRANT_READ_URI_PERMISSION = 1;
  *  - קריאה נוספת לאותה גרסה מצטרפת להורדה שכבר רצה, לא מתחילה מחדש.
  *  - ההתקדמות מדווחת בצעדים של אחוז (לא בכל חבילת נתונים), כדי לא להעמיס על הממשק.
  * קובץ שכבר הורד במלואו — לא יורד שוב.
+ * הקובץ נבדק מול הגודל שמדווח ב־GitHub: הורדה פגומה (למשל המשך שלא הצליח אחרי השהיה) נמחקת
+ * ויורדת מחדש מההתחלה, ולא מועברת למתקין ("יש בעיה בקובץ האפליקציה").
  */
 type Saved = { build: number; url: string; target: string; resumeData?: string };
 
@@ -145,15 +150,41 @@ if (updatesSupported) {
 const whenActive = () =>
   AppState.currentState === 'active' && !paused ? Promise.resolve() : new Promise<void>((r) => resumeWaiters.push(r));
 
+/** האם הקובץ קיים ובגודל הצפוי (כשהגודל ידוע). */
+async function complete(uri: string, size: number | null): Promise<boolean> {
+  const st = await FileSystem.getInfoAsync(uri);
+  if (!st.exists) return false;
+  return size == null || st.size === size;
+}
+
 async function runDownload(info: UpdateInfo): Promise<string> {
-  const url = info.apkUrl as string;
   const target = `${FileSystem.cacheDirectory}reporting-hours-${info.latestBuild}.apk`;
   const done = `${target}.done`;
   if ((await FileSystem.getInfoAsync(done)).exists) {
-    report(1);
-    return target;
+    if (await complete(target, info.apkSize)) {
+      report(1);
+      return target;
+    }
+    // סומן כהושלם אבל פגום / חסר — מורידים מחדש.
+    await FileSystem.deleteAsync(done, { idempotent: true });
+    await FileSystem.deleteAsync(target, { idempotent: true });
+    await saveResume(null);
   }
-  const saved = await loadResume(info.latestBuild);
+  try {
+    return await downloadOnce(info, target, done, true);
+  } catch (e) {
+    if (!(e instanceof IncompleteDownload)) throw e;
+    // ההמשך יצר קובץ פגום — פעם אחת מההתחלה, בלי המשך.
+    lastPercent = -1;
+    return downloadOnce(info, target, done, false);
+  }
+}
+
+class IncompleteDownload extends Error {}
+
+async function downloadOnce(info: UpdateInfo, target: string, done: string, allowResume: boolean): Promise<string> {
+  const url = info.apkUrl as string;
+  const saved = allowResume ? await loadResume(info.latestBuild) : null;
   const canResume = !!saved && (await FileSystem.getInfoAsync(target)).exists;
   if (!canResume) await FileSystem.deleteAsync(target, { idempotent: true });
 
@@ -174,6 +205,7 @@ async function runDownload(info: UpdateInfo): Promise<string> {
       result = await task.resumeAsync();
     }
     if (result.status !== 200 && result.status !== 206) throw new Error(`download ${result.status}`);
+    if (!(await complete(result.uri, info.apkSize))) throw new IncompleteDownload('incomplete download');
     await FileSystem.writeAsStringAsync(done, '1');
     await saveResume(null);
     report(1);

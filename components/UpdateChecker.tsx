@@ -167,6 +167,15 @@ function UpdateDialog({
             <>
               <Text style={styles.hint}>{t('update.installHint')}</Text>
               <Button label={t('update.retryInstall')} onPress={() => install(phase.fileUri)} />
+              {/* המתקין דיווח על בעיה בקובץ — הורדה מהדפדפן עוקפת את ההורדה שבתוך האפליקציה */}
+              <Button
+                label={t('update.openBrowser')}
+                variant="secondary"
+                onPress={() => {
+                  void openReleasesPage();
+                  close();
+                }}
+              />
               <Button label={t('update.later')} variant="secondary" onPress={close} />
             </>
           ) : null}
