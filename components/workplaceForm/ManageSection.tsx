@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { Text } from '../Text';
 import { Pressable } from '../Pressable';
 import { Button } from '../Button';
-import { currentPayPeriod } from '../../lib/dashboard';
+import { currentPayPeriod, previousPayPeriod } from '../../lib/dashboard';
 import { periodTitle } from '../../lib/payroll';
 import { canDeleteWorkplace } from '../../lib/trash';
 import { EnterChevron } from '../Chevrons';
@@ -14,13 +14,21 @@ export function ManageSection({ w }: { w: WorkplaceFormModel }) {
   return (
     <>
           <>
-            {isEdit ? (
+            {isEdit && original ? (
+              // דוח השכר של מקום העבודה הזה — של התקופה האחרונה שהסתיימה.
               <Pressable
-                onPress={() => router.push({ pathname: '/workplace', params: { id } })}
+                onPress={() =>
+                  router.push({
+                    pathname: '/payroll-report',
+                    params: { wp: original.id, start: previousPayPeriod(original.payday).start },
+                  })
+                }
                 accessibilityRole="link"
                 style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
               >
-                <Text style={styles.linkRowText}>דוחות השכר של מקום העבודה</Text>
+                <Text style={styles.linkRowText}>
+                  דוח השכר של מקום העבודה · {periodTitle(previousPayPeriod(original.payday))}
+                </Text>
                 <EnterChevron />
               </Pressable>
             ) : null}

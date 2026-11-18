@@ -317,6 +317,9 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
     if (!isTaxi(w.arrivalMode) || !w.taxi) continue;
     const reminder = w.taxi.reminder;
     const tel = w.taxi.phone || undefined;
+    // איש קשר שנבחר — מוצג כאיש קשר שאפשר לחייג אליו.
+    const contact = w.taxi.contactName ? `${w.taxi.contactName} · ${w.taxi.phone}` : undefined;
+    const action = tel ? { label: w.taxi.contactName ? `חיוג ל${w.taxi.contactName}` : 'חיוג להזמנה', tel } : undefined;
     const kind = w.arrivalMode === 'taxi_voucher' ? 'מונית פתק' : 'מונית';
     if (reminder.kind === 'hoursBefore') {
       const first = coursesOn(courses, today, w.id)[0];
@@ -328,7 +331,8 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
           tone: 'warn',
           title: `להזמין ${kind} ל${w.name}`,
           body: `${first.name} מתחיל ב־${first.start}.${w.address ? `\nיעד: ${w.address}` : ''}`,
-          action: tel ? { label: 'חיוג להזמנה', tel } : undefined,
+          detail: contact,
+          action,
         });
       }
     } else if (reminder.kind === 'nightBefore') {
@@ -341,7 +345,8 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
           tone: 'warn',
           title: `להזמין ${kind} למחר — ${w.name}`,
           body: `${first.name} מחר ב־${first.start}.${w.address ? `\nיעד: ${w.address}` : ''}`,
-          action: tel ? { label: 'חיוג להזמנה', tel } : undefined,
+          detail: contact,
+          action,
         });
       }
     }

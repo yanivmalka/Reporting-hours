@@ -784,7 +784,7 @@ const makeStyles = (colors: AppColors) =>
     viewRowLast: { borderBottomWidth: 0 },
     viewValue: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     // שורה לחיצה: הערך (שם מקום העבודה / מועד) ולצדו ‹ — המכל תופס את הרוחב, כך שהשם לא נעלם
-    viewLinkValue: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+    viewLinkValue: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 4 },
     viewValueLink: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     moreDay: {
       gap: spacing.sm,

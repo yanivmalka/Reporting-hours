@@ -10,10 +10,13 @@ import { isTaxi } from '../../lib/workplaces';
 import type { WorkplaceFormModel } from './useWorkplaceForm';
 import { ARRIVAL_OPTIONS, TAXI_REMINDER_OPTIONS } from './shared';
 import { FinanceSection } from '../AppLock';
+import { Icon } from '../Icon';
+import { useTheme } from '../../theme/ThemeContext';
 
 /** קבוצת "הגעה": אופן הגעה, נסיעות ותזכורת מונית. */
 export function ArrivalSection({ w }: { w: WorkplaceFormModel }) {
   const { styles, form, errors, set, chooseContact, isPublicTransport } = w;
+  const { colors } = useTheme();
   return (
     <>
           <>
@@ -50,36 +53,60 @@ export function ArrivalSection({ w }: { w: WorkplaceFormModel }) {
                 label="טלפון להזמנת מונית"
                 hint={
                   form.taxiContact
-                    ? `מאנשי הקשר: ${form.taxiContact}`
+                    ? undefined
                     : form.arrivalMode === 'taxi_voucher'
-                      ? 'תחנה / רכז ההסעות שמזמינים דרכו את הפתק'
-                      : 'תחנת מוניות או נהג קבוע'
+                      ? 'תחנה / רכז ההסעות שמזמינים דרכו את הפתק — או בחירה מאנשי הקשר'
+                      : 'תחנת מוניות או נהג קבוע — או בחירה מאנשי הקשר'
                 }
                 error={errors.taxiPhone}
               >
-                <View style={styles.phoneRow}>
-                  <View style={{ flex: 1 }}>
-                    <TextField
-                      value={form.taxiPhone}
-                      onChangeText={(t) => {
-                        set('taxiPhone', t);
-                        set('taxiContact', '');
-                      }}
-                      phone
-                      placeholder="050-0000000"
-                      invalid={Boolean(errors.taxiPhone)}
-                    />
-                  </View>
-                  {contactsSupported ? (
+                {form.taxiContact ? (
+                  // איש קשר שנבחר — מוצג כאיש קשר (שם וטלפון); בתזכורת אפשר לחייג אליו.
+                  <View style={styles.taxiContactCard}>
+                    <Icon name="account-circle-outline" size={28} color={colors.brand} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.contactName} numberOfLines={1}>
+                        {form.taxiContact}
+                      </Text>
+                      <Text style={styles.contactPhone}>{form.taxiPhone}</Text>
+                    </View>
+                    {contactsSupported ? (
+                      <Pressable onPress={chooseContact} accessibilityRole="button" hitSlop={8}>
+                        <Text style={styles.contactAction}>החלפה</Text>
+                      </Pressable>
+                    ) : null}
                     <Pressable
-                      onPress={chooseContact}
-                      style={({ pressed }) => [styles.termsChip, styles.contactBtn, pressed && { opacity: 0.7 }]}
+                      onPress={() => set('taxiContact', '')}
                       accessibilityRole="button"
+                      accessibilityLabel="הקלדת מספר במקום איש הקשר"
+                      hitSlop={8}
                     >
-                      <Text style={styles.termsChipText}>מאנשי הקשר</Text>
+                      <Icon name="pencil-outline" size={20} color={colors.textMuted} />
                     </Pressable>
-                  ) : null}
-                </View>
+                  </View>
+                ) : (
+                  <View style={styles.phoneRow}>
+                    <View style={{ flex: 1 }}>
+                      <TextField
+                        value={form.taxiPhone}
+                        onChangeText={(t) => set('taxiPhone', t)}
+                        phone
+                        placeholder="050-0000000"
+                        invalid={Boolean(errors.taxiPhone)}
+                      />
+                    </View>
+                    {contactsSupported ? (
+                      <Pressable
+                        onPress={chooseContact}
+                        style={({ pressed }) => [styles.termsChip, styles.contactBtn, pressed && { opacity: 0.7 }]}
+                        accessibilityRole="button"
+                      >
+                        <Icon name="account-box-outline" size={18} color={colors.text} />
+                        <Text style={styles.termsChipText}>מאנשי הקשר</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                )}
               </FormField>
 
               <FormField label="תזכורת להזמנת מונית">

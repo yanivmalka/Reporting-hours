@@ -225,7 +225,10 @@ export function useWorkplaceForm() {
 
   async function chooseContact() {
     const picked = await pickContactPhone();
-    if (!picked) return;
+    if (!picked) {
+      showToast('לא נבחר איש קשר עם טלפון (או שאין הרשאה לאנשי הקשר)');
+      return;
+    }
     set('taxiPhone', picked.phone);
     set('taxiContact', picked.name);
   }
