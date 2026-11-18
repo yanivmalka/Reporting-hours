@@ -4,13 +4,16 @@
  * `apps/reporting-hours/users/{uid}/files/tax/{workplaceId}-{year}.{ext}` (רק הבעלים —
  * storage.rules בריפו apps-platform), והפרטים שלו ב־`Workplace.taxFiles[year]`.
  *
- * שליחה: עד שהשליחה מהשרת תעלה (docs/fixes-spec-2026-11-17.md סעיף 3) — טיוטת
- * מייל במכשיר לנמען דוחות השכר, עם קישור הורדה לקובץ. השליחה מסמנת "נשלח".
+ * שליחה (docs/fixes-spec-2026-11-17.md סעיף 3): למייל מחלקת השכר — מהשרת (`sendTaxFromServer`,
+ * הפונקציה `taxSend` בריפו apps-platform): הקובץ מצורף, עותק למשתמש, ו־Reply-To שלו. הנמענים נלקחים
+ * בשרת מהנתונים השמורים של מקום העבודה. בלי מייל מחלקת שכר, או כשהשליחה מהשרת נכשלה — טיוטת מייל
+ * במכשיר עם קישור הורדה לקובץ (`taxMailto`). שליחה מוצלחת מסמנת "נשלח".
  */
 import * as DocumentPicker from 'expo-document-picker';
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { APP_ID, cloudStorage } from './firebase';
-import { authUser, getAccess } from './sync';
+import { httpsCallable } from 'firebase/functions';
+import { APP_ID, cloudFunctions, cloudStorage } from './firebase';
+import { authUser, flush, getAccess } from './sync';
 import { setTaxCoordination, setTaxFile, type TaxFile, type Workplace } from './workplaces';
 import { todayISO } from './time';
 
@@ -125,4 +128,32 @@ export function taxMailto(
 /** סימון "נשלח" היום (אחרי פתיחת טיוטת המייל). */
 export function markTaxSent(w: Workplace, year: string): Promise<Workplace[]> {
   return setTaxCoordination(w.id, year, todayISO());
+}
+
+export type ServerSendResult =
+  | { ok: true; to: string; cc: string[] }
+  /** quota — הגעת למגבלת השליחות היומית; draft — לנסות בטיוטה מהמכשיר (רשת / שרת / אין נמען) */
+  | { ok: false; reason: 'quota' | 'draft' };
+
+/**
+ * שליחת הטופס מהשרת למייל מחלקת השכר של מקום העבודה (עם העתק למשתמש).
+ * השרת קורא את מקום העבודה מהנתונים המסונכרנים — לכן מסנכרנים קודם (`flush`) כדי שהקובץ החדש
+ * ושינויי המייל יהיו שם.
+ */
+export async function sendTaxFromServer(w: Workplace, year: string): Promise<ServerSendResult> {
+  const fns = cloudFunctions();
+  if (!fns || !authUser() || getAccess()) return { ok: false, reason: 'draft' };
+  try {
+    await flush().catch(() => {});
+    const call = httpsCallable<{ workplaceId: string; year: string }, { ok: boolean; to: string; cc: string[] }>(
+      fns,
+      'taxSend',
+      { timeout: 60_000 },
+    );
+    const res = await call({ workplaceId: w.id, year });
+    return res.data?.ok ? { ok: true, to: res.data.to, cc: res.data.cc ?? [] } : { ok: false, reason: 'draft' };
+  } catch (e) {
+    const code = (e as { code?: string })?.code ?? '';
+    return { ok: false, reason: code.endsWith('resource-exhausted') ? 'quota' : 'draft' };
+  }
 }

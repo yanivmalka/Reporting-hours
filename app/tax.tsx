@@ -13,7 +13,15 @@ import { todayISO } from '../lib/time';
 import { loadCourses, workplacesWithActiveCourse } from '../lib/courses';
 import { useTrackingStart } from '../lib/trackingStart';
 import { loadWorkplaces, setTaxCoordination, taxStatus, type Workplace } from '../lib/workplaces';
-import { deleteTaxFile, markTaxSent, pickAndUploadTaxFile, TAX_FILE_ERROR, taxFileUrl, taxMailto } from '../lib/taxFiles';
+import {
+  deleteTaxFile,
+  markTaxSent,
+  pickAndUploadTaxFile,
+  sendTaxFromServer,
+  TAX_FILE_ERROR,
+  taxFileUrl,
+  taxMailto,
+} from '../lib/taxFiles';
 import { authUser } from '../lib/sync';
 import { Icon } from '../components/Icon';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -123,14 +131,31 @@ function TaxScreen() {
     if (!file) return;
     setBusy(w.id);
     try {
+      let fallback = false;
+      if (toPayroll(w)) {
+        // מהשרת: הקובץ מצורף, עותק אליך, ותשובות מחלקת השכר מגיעות אליך.
+        const res = await sendTaxFromServer(w, year);
+        if (res.ok) {
+          setList(await markTaxSent(w, year));
+          showToast(`נשלח ל־${res.to} · עותק אליך · סומן "נשלח"`);
+          return;
+        }
+        if (res.reason === 'quota') {
+          showToast('הגעת למגבלת השליחות להיום. אפשר לנסות שוב מחר.');
+          return;
+        }
+        fallback = true;
+      }
       const url = await taxFileUrl(file);
       if (!url) {
-        showToast('לא ניתן להכין קישור לקובץ כרגע.');
+        showToast(fallback ? 'השליחה נכשלה. כדאי לבדוק את החיבור ולנסות שוב.' : 'לא ניתן להכין קישור לקובץ כרגע.');
         return;
       }
       await Linking.openURL(taxMailto(w, year, url, authUser()?.name, toPayroll(w)));
       setList(await markTaxSent(w, year));
-      showToast('נפתחה טיוטת מייל · סומן "נשלח"');
+      showToast(
+        fallback ? 'השליחה מהשרת נכשלה — נפתחה טיוטת מייל במכשיר · סומן "נשלח"' : 'נפתחה טיוטת מייל · סומן "נשלח"',
+      );
     } finally {
       setBusy(null);
     }
@@ -189,7 +214,7 @@ function TaxScreen() {
                 label="שליחה למייל מחלקת השכר"
                 hint={
                   toPayroll(w)
-                    ? [w.payrollEmail, ...(w.ccEmails ?? [])].join(' · ')
+                    ? `${[w.payrollEmail, ...(w.ccEmails ?? [])].join(' · ')} — הקובץ מצורף, עותק אליך`
                     : 'הטיוטה תיפתח בלי נמען — בוחרים למי לשלוח'
                 }
               />
