@@ -4,7 +4,7 @@
 
 ## תהליך עבודה
 
-- כל שינוי בענף חדש מ־`main` ← PR ← **מיזוג אוטומטי** אחרי שעוברים `npm run check` (טיפוסים + בדיקות יחידה) ו־`npx expo export --platform web`. אין צורך לחכות לאישור. אותן בדיקות רצות ב־CI על כל PR (`.github/workflows/check.yml`).
+- כל שינוי בענף חדש מ־`main` ← PR ← **מיזוג אוטומטי** (auto-merge של GitHub, `enable_pr_auto_merge` בשיטת MERGE) אחרי שעוברים מקומית `npm run check` (טיפוסים + בדיקות יחידה) ו־`npx expo export --platform web`. אין צורך לחכות לאישור. `main` מוגן (הגנת ענף): מיזוג רק אחרי שבדיקת ה־CI ‏`check` עוברת (`.github/workflows/check.yml`), ולכן לא ממזגים ישירות — מפעילים מיזוג אוטומטי, וה־PR מתמזג לבד כשהבדיקה עוברת. בדיקה שנכשלה — מתקנים בענף ודוחפים שוב.
 - **מסך גדול** מפוצל לתיקייה ב־`components/` (ראו `components/report/`, `components/workplaceForm/`, `components/journal/`): hook של מצב ופעולות, פונקציית נגזרות אחרי הטעינה, רכיב לכל חלק שמקבל `w`, `styles.ts` ו־`shared.ts`. שינוי במסך כזה נעשה ברכיב או ב־hook, לא בקובץ ב־`app/`.
 - **טעינת נתונים במסך:** `useScreenData(load, deps, onData?)` (`components/useScreenData.ts`), לא `useFocusEffect` ידני. הוא טוען בכניסה למסך, מתעלם מתוצאה ישנה, טוען מחדש כשהנתונים מוחלפים (הדגמה / איפוס) ומחזיר `reload()`. מסך טעינה: `<LoadingScreen />`. טופס שמחזיק עריכה נטען פעם אחת ב־`useEffect`.
 - **בדיקות** (`test/`, Vitest): שינוי בחישוב ב־`lib/` (שכר, שעות, חגים, ביטולים, גיבוי) מגיע עם בדיקה. סקירת הארכיטקטורה והמלצות ההמשך ב־[docs/architecture.md](./docs/architecture.md).
