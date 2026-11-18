@@ -9,11 +9,11 @@
  *   {confirm.dialog}
  */
 import { useCallback, useMemo, useState } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Text } from './Text';
-import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { Button } from './Button';
+import { Dialog } from './Dialog';
 
 export type ConfirmRequest = {
   title: string;
@@ -68,69 +68,35 @@ function ConfirmDialog({
   onConfirm: () => void;
 }) {
   const styles = useStyles(makeStyles);
+  // הפעולה הראשית למעלה, והביטול מתחתיה — בתחתית הקבועה של הדיאלוג.
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onCancel}>
-      <View style={styles.backdrop}>
-        <View style={styles.dialog} accessibilityRole="alert">
-          <Text style={styles.title}>{request.title}</Text>
-          {request.message ? <Text style={styles.message}>{request.message}</Text> : null}
-          <View style={styles.actions}>
-            <View style={styles.action}>
-              <Button
-                label={request.cancelLabel ?? 'ביטול'}
-                variant="secondary"
-                onPress={onCancel}
-                disabled={busy}
-              />
-            </View>
-            <View style={styles.action}>
-              <Button
-                label={request.confirmLabel ?? 'מחיקה'}
-                variant={request.destructive === false ? 'primary' : 'danger'}
-                onPress={onConfirm}
-                loading={busy}
-              />
-            </View>
-          </View>
-        </View>
-      </View>
-    </Modal>
+    <Dialog
+      title={request.title}
+      onClose={onCancel}
+      maxWidth={400}
+      alert
+      actions={[
+        <Button
+          key="ok"
+          label={request.confirmLabel ?? 'מחיקה'}
+          variant={request.destructive === false ? 'primary' : 'danger'}
+          onPress={onConfirm}
+          loading={busy}
+        />,
+        <Button key="cancel" label={request.cancelLabel ?? 'ביטול'} variant="secondary" onPress={onCancel} disabled={busy} />,
+      ]}
+    >
+      {request.message ? <Text style={styles.message}>{request.message}</Text> : null}
+    </Dialog>
   );
 }
 
 const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   StyleSheet.create({
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: spacing.lg,
-    },
-    dialog: {
-      width: '100%',
-      maxWidth: 400,
-      backgroundColor: c.surface,
-      borderRadius: radius.md,
-      padding: spacing.lg,
-      gap: spacing.md,
-    },
-    title: {
-      fontSize: 18,
-      fontWeight: '800',
-      color: c.text,
-      textAlign: layout.textStart,
-    },
     message: {
       fontSize: 14,
       lineHeight: 21,
       color: c.textMuted,
       textAlign: layout.textStart,
     },
-    // כפתורים זה מתחת לזה, ברוחב מלא; הפעולה הראשית (האחרונה בקוד) למעלה.
-    actions: {
-      flexDirection: 'column-reverse',
-      gap: spacing.sm,
-    },
-    action: {},
   });

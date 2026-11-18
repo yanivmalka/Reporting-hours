@@ -8,11 +8,12 @@
  * הנתונים — lib/sessionNotes.ts.
  */
 import { useState } from 'react';
-import { Modal, ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Text } from '../Text';
 import { Pressable } from '../Pressable';
 import { Icon } from '../Icon';
 import { Button } from '../Button';
+import { Dialog } from '../Dialog';
 import { EnterChevron } from '../Chevrons';
 import { useSessionSheet } from '../SessionSheet';
 import { useSessionNotes } from '../useSessionNotes';
@@ -132,30 +133,26 @@ function Card({ course, workplace, date }: { course: Course; workplace: Workplac
       {sheet.dialog}
 
       {history ? (
-        <Modal transparent animationType="fade" visible onRequestClose={() => setHistory(false)}>
-          <View style={styles.backdrop}>
-            <View style={styles.dialog}>
-              <Text style={styles.dialogTitle}>המפגשים הקודמים · {course.name}</Text>
-              <ScrollView style={styles.list} contentContainerStyle={styles.listBody}>
-                {prev.map((n) => (
-                  <View key={n.date} style={styles.item}>
-                    <View style={styles.itemHead}>
-                      {n.flag ? <Icon name={FLAG_ICON[n.flag]} size={16} color={colors.warning} /> : null}
-                      <Text style={styles.itemDate}>
-                        {dayLabel(n.date)}
-                        {n.flag ? ` · ${FLAG_LABEL[n.flag]}` : ''}
-                      </Text>
-                    </View>
-                    {n.summary ? <Text style={styles.itemText}>{n.summary}</Text> : null}
-                    {n.content ? <Text style={styles.itemSub}>תוכן: {n.content}</Text> : null}
-                    {n.note ? <Text style={styles.itemSub}>הערה: {n.note}</Text> : null}
-                  </View>
-                ))}
-              </ScrollView>
-              <Button label="סגירה" variant="secondary" onPress={() => setHistory(false)} />
+        <Dialog
+          title={`המפגשים הקודמים · ${course.name}`}
+          onClose={() => setHistory(false)}
+          actions={[<Button key="close" label="סגירה" variant="secondary" onPress={() => setHistory(false)} />]}
+        >
+          {prev.map((n) => (
+            <View key={n.date} style={styles.item}>
+              <View style={styles.itemHead}>
+                {n.flag ? <Icon name={FLAG_ICON[n.flag]} size={16} color={colors.warning} /> : null}
+                <Text style={styles.itemDate}>
+                  {dayLabel(n.date)}
+                  {n.flag ? ` · ${FLAG_LABEL[n.flag]}` : ''}
+                </Text>
+              </View>
+              {n.summary ? <Text style={styles.itemText}>{n.summary}</Text> : null}
+              {n.content ? <Text style={styles.itemSub}>תוכן: {n.content}</Text> : null}
+              {n.note ? <Text style={styles.itemSub}>הערה: {n.note}</Text> : null}
             </View>
-          </View>
-        </Modal>
+          ))}
+        </Dialog>
       ) : null}
     </View>
   );
@@ -195,25 +192,6 @@ const makeStyles = (colors: AppColors) =>
     rowTexts: { flex: 1, minWidth: 0, gap: 1 },
     rowTitle: { fontSize: 14, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     rowSub: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: spacing.lg,
-    },
-    dialog: {
-      width: '100%',
-      maxWidth: 440,
-      maxHeight: '85%',
-      backgroundColor: colors.surface,
-      borderRadius: radius.md,
-      padding: spacing.lg,
-      gap: spacing.sm,
-    },
-    dialogTitle: { fontSize: 17, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
-    list: { flexGrow: 0 },
-    listBody: { gap: spacing.sm },
     item: {
       gap: 2,
       paddingBottom: spacing.sm,

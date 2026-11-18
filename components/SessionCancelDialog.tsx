@@ -12,7 +12,7 @@
  *   {sessionDialog.dialog}
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { hebrewDate } from '../lib/hebrewDate';
 import { longDayLabel } from '../lib/home';
@@ -31,6 +31,7 @@ import type { Course } from '../lib/courses';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 import { Button } from './Button';
+import { Dialog } from './Dialog';
 import { Pressable } from './Pressable';
 import { TextField } from './TextField';
 import { useToast } from './Toast';
@@ -103,14 +104,111 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
     }
   }
 
+  /** מפגש שכבר בוטל: "המפגש התקיים", מחיקה מהתכנון / החזרה אליו, סגירה */
+  const heldActions = [
+    <Button
+      key="held"
+      label="המפגש התקיים"
+      loading={busy}
+      onPress={async () => {
+        setBusy(true);
+        try {
+          await restoreSession(request.course.id, request.date);
+          if (request.onHeld) request.onHeld();
+          else {
+            showToast('המפגש הוחזר ללו״ז');
+            request.onDone?.(false);
+          }
+        } finally {
+          setBusy(false);
+          onClose();
+        }
+      }}
+    />,
+    ...(canceled?.kind === 'canceled'
+      ? [
+          <Button
+            key="remove"
+            label="מחיקת המפגש מהתכנון"
+            variant="danger"
+            disabled={busy}
+            onPress={() =>
+              run(
+                () => removeFromPlan(request.course.id, request.date, canceled.reason, canceled.reasonId),
+                'המפגש נמחק מהתכנון',
+                true,
+              )
+            }
+          />,
+        ]
+      : canceled?.kind === 'removed'
+        ? [
+            <Button
+              key="return"
+              label="החזרה לתכנון"
+              variant="secondary"
+              disabled={busy}
+              onPress={() =>
+                run(
+                  () => returnToPlan(request.course.id, request.date, canceled.reason, canceled.reasonId),
+                  'המפגש הוחזר לתכנון',
+                  true,
+                )
+              }
+            />,
+          ]
+        : []),
+    <Button key="close" label="סגירה" variant="secondary" onPress={onClose} disabled={busy} />,
+  ];
+
+  /** ביטול: סימון כבוטל (או דחיית השיעורים), חזרה */
+  const cancelActions = [
+    <Button
+      key="cancel"
+      label={mode === 'push' ? 'ביטול ודחיית השיעורים' : 'סימון כבוטל'}
+      variant="danger"
+      loading={busy}
+      onPress={() =>
+        mode === 'push'
+          ? run(
+              async () => {
+                await pushSession(request.course.id, request.date, reason, reasonId);
+              },
+              pushTo ? `השיעורים נדחו · הקורס מתארך עד ${shortDay(pushTo)}` : 'המפגש סומן כבוטל',
+              true,
+            )
+          : run(
+              () =>
+                setSessionMark(
+                  request.course.id,
+                  request.date,
+                  mode === 'remove' ? 'removed' : 'canceled',
+                  reason,
+                  undefined,
+                  reasonId,
+                ),
+              mode === 'remove' ? 'המפגש נמחק מהתכנון' : 'המפגש סומן כבוטל',
+              true,
+            )
+      }
+    />,
+    <Button key="back" label="חזרה" variant="secondary" onPress={onClose} disabled={busy} />,
+  ];
+
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.dialog} accessibilityRole="alert">
-          <Text style={styles.title}>{canceled ? 'המפגש בוטל' : 'ביטול מפגש'}</Text>
+    <Dialog
+      title={canceled ? 'המפגש בוטל' : 'ביטול מפגש'}
+      compactTitle={`${canceled ? 'המפגש בוטל' : 'ביטול מפגש'} · ${request.course.name}`}
+      onClose={onClose}
+      alert
+      head={
+        <>
           <Text style={styles.subject}>{request.course.name}</Text>
           <Text style={styles.message}>{dateLabel(request.date)}</Text>
-
+        </>
+      }
+      actions={canceled ? heldActions : cancelActions}
+    >
           {canceled ? (
             <Text style={styles.reason}>
               {canceled.auto
@@ -166,92 +264,7 @@ function SessionCancelDialog({ request, onClose }: { request: SessionCancelReque
               ))}
             </>
           )}
-
-          {canceled ? (
-            <View style={styles.stack}>
-              <Button
-                label="המפגש התקיים"
-                loading={busy}
-                onPress={async () => {
-                  setBusy(true);
-                  try {
-                    await restoreSession(request.course.id, request.date);
-                    if (request.onHeld) request.onHeld();
-                    else {
-                      showToast('המפגש הוחזר ללו״ז');
-                      request.onDone?.(false);
-                    }
-                  } finally {
-                    setBusy(false);
-                    onClose();
-                  }
-                }}
-              />
-              {canceled.kind === 'canceled' ? (
-                <Button
-                  label="מחיקת המפגש מהתכנון"
-                  variant="danger"
-                  disabled={busy}
-                  onPress={() =>
-                    run(
-                      () => removeFromPlan(request.course.id, request.date, canceled.reason, canceled.reasonId),
-                      'המפגש נמחק מהתכנון',
-                      true,
-                    )
-                  }
-                />
-              ) : canceled.kind === 'removed' ? (
-                <Button
-                  label="החזרה לתכנון"
-                  variant="secondary"
-                  disabled={busy}
-                  onPress={() =>
-                    run(
-                      () => returnToPlan(request.course.id, request.date, canceled.reason, canceled.reasonId),
-                      'המפגש הוחזר לתכנון',
-                      true,
-                    )
-                  }
-                />
-              ) : null}
-              <Button label="סגירה" variant="secondary" onPress={onClose} disabled={busy} />
-            </View>
-          ) : (
-            <View style={styles.stack}>
-              <Button
-                label={mode === 'push' ? 'ביטול ודחיית השיעורים' : 'סימון כבוטל'}
-                variant="danger"
-                loading={busy}
-                onPress={() =>
-                  mode === 'push'
-                    ? run(
-                        async () => {
-                          await pushSession(request.course.id, request.date, reason, reasonId);
-                        },
-                        pushTo ? `השיעורים נדחו · הקורס מתארך עד ${shortDay(pushTo)}` : 'המפגש סומן כבוטל',
-                        true,
-                      )
-                    : run(
-                        () =>
-                          setSessionMark(
-                            request.course.id,
-                            request.date,
-                            mode === 'remove' ? 'removed' : 'canceled',
-                            reason,
-                            undefined,
-                            reasonId,
-                          ),
-                        mode === 'remove' ? 'המפגש נמחק מהתכנון' : 'המפגש סומן כבוטל',
-                        true,
-                      )
-                }
-              />
-              <Button label="חזרה" variant="secondary" onPress={onClose} disabled={busy} />
-            </View>
-          )}
-        </View>
-      </View>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -296,50 +309,30 @@ function SessionMoveDialog({ request, onClose }: { request: SessionMoveRequest; 
   }
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.dialog} accessibilityRole="alert">
-          <Text style={styles.title}>העברת השיעור</Text>
-          <Text style={styles.subject}>{request.course.name}</Text>
-          <Text style={styles.message}>מ־{dateLabel(request.date)}, לתאריך:</Text>
-          <DateField value={to} onChange={setTo} invalid={tried && same} />
-          {tried && same ? <Text style={styles.error}>בחר תאריך אחר</Text> : null}
-          <Text style={styles.message}>
-            הפוטנציאל עובר עם המפגש. בתאריך המקורי יוצג "הועבר ל…", ובחדש "הועבר מ…".
-          </Text>
-          <View style={styles.actions}>
-            <View style={styles.action}>
-              <Button label="חזרה" variant="secondary" onPress={onClose} disabled={busy} />
-            </View>
-            <View style={styles.action}>
-              <Button label="העברה" loading={busy} onPress={submit} />
-            </View>
-          </View>
-        </View>
-      </View>
-    </Modal>
+    <Dialog
+      title="העברת השיעור"
+      onClose={onClose}
+      alert
+      head={<Text style={styles.subject}>{request.course.name}</Text>}
+      actionsRow
+      actions={[
+        <Button key="back" label="חזרה" variant="secondary" onPress={onClose} disabled={busy} />,
+        <Button key="move" label="העברה" loading={busy} onPress={submit} />,
+      ]}
+    >
+      <Text style={styles.message}>מ־{dateLabel(request.date)}, לתאריך:</Text>
+      <DateField value={to} onChange={setTo} invalid={tried && same} />
+      {tried && same ? <Text style={styles.error}>בחר תאריך אחר</Text> : null}
+      <Text style={styles.message}>
+        הפוטנציאל עובר עם המפגש. בתאריך המקורי יוצג "הועבר ל…", ובחדש "הועבר מ…".
+      </Text>
+    </Dialog>
   );
 }
 
 const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   StyleSheet.create({
     pressed: { opacity: 0.85 },
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: spacing.lg,
-    },
-    dialog: {
-      width: '100%',
-      maxWidth: 420,
-      backgroundColor: c.surface,
-      borderRadius: radius.md,
-      padding: spacing.lg,
-      gap: spacing.sm,
-    },
-    title: { fontSize: 18, fontWeight: '800', color: c.text, textAlign: layout.textStart },
     subject: { fontSize: 16, fontWeight: '700', color: c.text, textAlign: layout.textStart },
     message: { fontSize: 14, lineHeight: 21, color: c.textMuted, textAlign: layout.textStart },
     error: { fontSize: 13, color: c.danger, textAlign: layout.textStart },
@@ -356,8 +349,6 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     chipOn: { backgroundColor: c.brandLight, borderColor: c.brand },
     chipText: { fontSize: 13, color: c.textMuted },
     chipTextOn: { color: c.brand, fontWeight: '700' },
-    // כפתורים זה מתחת לזה, ברוחב מלא; הפעולה הראשית (האחרונה בקוד) למעלה.
-    actions: { flexDirection: 'column-reverse', gap: spacing.sm, marginTop: spacing.sm },
     option: {
       flexDirection: layout.rowStart,
       alignItems: 'center',
@@ -373,6 +364,4 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     optionTexts: { flex: 1 },
     optionTitle: { fontSize: 14, fontWeight: '700', color: c.text, textAlign: layout.textStart },
     optionSub: { fontSize: 12, color: c.textMuted, textAlign: layout.textStart },
-    action: {},
-    stack: { gap: spacing.sm, marginTop: spacing.sm },
   });

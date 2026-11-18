@@ -117,7 +117,7 @@
 
 ## רכיבים בולטים (`components/`)
 
-- דיאלוגים: `ConfirmDialog`, `SessionCancelDialog`, `PaymentDialog`.
+- דיאלוגים: המסגרת המשותפת `Dialog` (כותרת וכפתורים קבועים, אמצע נגלל, מצב מקלדת), ועליה `ConfirmDialog`, `SessionCancelDialog`, `PaymentDialog`, `SessionSheet`.
 - חופשות: `Vacations` — `VacationBoard` (הלוח המרכזי), `VacationsCard` (בדף קורס / מקום עבודה, עם "התעלם" בעריכה), `useVacationEditor`.
 - ניווט וכותרות: `AppDrawer`, `Screen`, `ExitGuard`.
 - תשתית: `CloudSync` (סנכרון), `BackupScheduler` / `BackupSection`, `UpdateChecker`, `DemoSeeder`.

@@ -426,27 +426,6 @@ export const makeReportStyles = (colors: AppColors) =>
     color: colors.textMuted,
     textDecorationLine: 'underline',
   },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  dialog: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  dialogTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.text,
-    textAlign: TEXT_RIGHT,
-  },
   dialogBody: {
     fontSize: 14,
     color: colors.textMuted,

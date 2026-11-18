@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
@@ -5,6 +6,9 @@ import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
+
+/** כפתורים נמוכים — בשורת הכפתורים של `Dialog` כשהמקלדת פתוחה. */
+export const CompactActions = createContext(false);
 
 type ButtonProps = {
   label: string;
@@ -35,12 +39,14 @@ export function Button({
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const isDisabled = disabled || loading;
+  const compact = useContext(CompactActions);
   return (
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
+        compact && styles.compact,
         styles[variant],
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
@@ -70,7 +76,12 @@ export function Button({
               }
             />
           ) : null}
-          <Text style={[styles.label, styles[`${variant}Label`]]}>{label}</Text>
+          <Text
+            numberOfLines={compact ? 1 : undefined}
+            style={[styles.label, compact && styles.compactLabel, styles[`${variant}Label`]]}
+          >
+            {label}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -87,6 +98,8 @@ const makeStyles = (colors: AppColors) =>
       justifyContent: 'center',
       borderWidth: 1,
     },
+    compact: { minHeight: 40, borderRadius: 14, paddingHorizontal: spacing.sm },
+    compactLabel: { fontSize: 14 },
     pressed: {
       opacity: 0.85,
     },

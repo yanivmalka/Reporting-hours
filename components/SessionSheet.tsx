@@ -12,11 +12,11 @@
  *   {sheet.dialog}
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { WheelOverlayHost } from './WheelOverlay';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useAccess } from './Access';
 import { Text, TextInput } from './Text';
 import { Button } from './Button';
+import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import { Pressable } from './Pressable';
 import { DateField } from './DatePicker';
@@ -93,6 +93,12 @@ function hourBefore(date: string, start: string): string {
   d.setHours(h - 1, m);
   const p = (x: number) => String(x).padStart(2, '0');
   return `${isoDate(d)}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** "17.11" — לכותרת המקוצרת כשהמקלדת פתוחה */
+function shortDate(iso: string): string {
+  const [, m, d] = iso.split('-').map(Number);
+  return `${d}.${m}`;
 }
 
 function dateLabel(iso: string): string {
@@ -226,22 +232,28 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
   const fixedArrival = [ARRIVAL_MODE_LABELS[workplace.arrivalMode], workplace.address].filter(Boolean).join(' · ');
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.dialog}>
-          <ScrollView ref={scrollRef} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>{request.title ?? 'פרטי המפגש'}</Text>
-            <View style={styles.headRow}>
-              {flag ? <Icon name={FLAG_ICON[flag]} size={18} color={colors.warning} /> : null}
-              <Text style={styles.subject}>{course.name}</Text>
-            </View>
-            <Text style={styles.message}>{dateLabel(date)}</Text>
-            <Text style={styles.message}>
-              {timeRange(course.start, course.end)} · {workplace.name}
-            </Text>
+    <Dialog
+      title={request.title ?? 'פרטי המפגש'}
+      compactTitle={`${course.name} · ${shortDate(date)} · ${course.start}`}
+      onClose={onClose}
+      scrollRef={scrollRef}
+      head={
+        <>
+          <View style={styles.headRow}>
+            {flag ? <Icon name={FLAG_ICON[flag]} size={18} color={colors.warning} /> : null}
+            <Text style={styles.subject}>{course.name}</Text>
+          </View>
+          <Text style={styles.message}>{dateLabel(date)}</Text>
+          <Text style={styles.message}>
+            {timeRange(course.start, course.end)} · {workplace.name}
+          </Text>
+        </>
+      }
+      actions={[
+        ...(canEdit ? [<Button key="save" label="שמירה" loading={busy} disabled={!loaded} onPress={save} />] : []),
+        <Button key="close" label="סגירה" variant="secondary" onPress={onClose} disabled={busy} />,
+      ]}
+    >
 
             {!loaded ? null : (
               <>
@@ -382,8 +394,6 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
                             value={customTime}
                             onChange={setCustomTime}
                             label="שעת התזכורת"
-                            // המקלדת לא תסתיר את השדה
-                            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 250)}
                           />
                         </View>
                       </View>
@@ -396,10 +406,6 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
               </>
             )}
 
-            <View style={styles.stack}>
-              {canEdit ? <Button label="שמירה" loading={busy} disabled={!loaded} onPress={save} /> : null}
-              <Button label="סגירה" variant="secondary" onPress={onClose} disabled={busy} />
-            </View>
             {request.onCancelSession && canReport ? (
               <Pressable
                 onPress={() => {
@@ -413,33 +419,12 @@ function SessionSheet({ request, onClose }: { request: SessionSheetRequest; onCl
                 <Text style={styles.cancelText}>ביטול המפגש</Text>
               </Pressable>
             ) : null}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-      {/* שכבת הגלגלת בתוך הדיאלוג — המארח הכללי מרונדר מאחורי ה־Modal */}
-      <WheelOverlayHost />
-    </Modal>
+    </Dialog>
   );
 }
 
 const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
   StyleSheet.create({
-    backdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: spacing.lg,
-    },
-    dialog: {
-      width: '100%',
-      maxWidth: 440,
-      maxHeight: '90%',
-      backgroundColor: c.surface,
-      borderRadius: radius.md,
-    },
-    body: { padding: spacing.lg, gap: spacing.sm },
-    title: { fontSize: 18, fontWeight: '800', color: c.text, textAlign: layout.textStart },
     headRow: { flexDirection: layout.rowStart, alignItems: 'center', gap: 6 },
     subject: { flexShrink: 1, fontSize: 16, fontWeight: '700', color: c.text, textAlign: layout.textStart },
     message: { fontSize: 14, lineHeight: 21, color: c.textMuted, textAlign: layout.textStart },
@@ -480,7 +465,6 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     customRow: { flexDirection: layout.rowStart, gap: spacing.sm, alignItems: 'center' },
     customDate: { flex: 2 },
     customTime: { flex: 1 },
-    stack: { gap: spacing.sm, marginTop: spacing.md },
     cancelLink: { alignSelf: 'center', paddingVertical: spacing.sm },
     cancelText: { fontSize: 14, fontWeight: '700', color: c.danger, textDecorationLine: 'underline' },
   });
