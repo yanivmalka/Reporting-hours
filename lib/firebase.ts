@@ -13,6 +13,7 @@ import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { onAuthStateChanged, signOut, type Auth, type User } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
+import { getFunctions, type Functions } from 'firebase/functions';
 import { createAuth, platformSignIn, platformSignOut } from './authPlatform';
 
 export const APP_ID = 'reporting-hours';
@@ -51,6 +52,11 @@ export function firestore(): Firestore | null {
 /** Cloud Storage (קבצים פרטיים: apps/reporting-hours/users/{uid}/files/…, storage.rules ב־apps-platform). */
 export function cloudStorage(): FirebaseStorage | null {
   return ensure() && app ? getStorage(app) : null;
+}
+
+/** Cloud Functions של malka-apps (ריפו apps-platform, functions/) — אזור ברירת המחדל us-central1. */
+export function cloudFunctions(): Functions | null {
+  return ensure() && app ? getFunctions(app) : null;
 }
 
 export type CloudUser = { uid: string; name: string | null; email: string | null };
