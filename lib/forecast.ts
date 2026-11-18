@@ -18,6 +18,7 @@
 import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { potentialSessions, sessionMinutes, sessionTimes, type Course } from './courses';
+import { currentPlan, type PlanIndex } from './sessions';
 import { currentPayPeriod, expectedPaymentDate, isoDate, periodMonthKey, totalsFor, type PayPeriod } from './dashboard';
 import { basisFor, type PayBasis } from './payBasis';
 import { expectedPayment, reportLate, statusKey, type StatusMap } from './payroll';
@@ -86,13 +87,14 @@ function amountFor(
   period: Pick<PayPeriod, 'start' | 'end'>,
   basis: PayBasis,
   withoutCanceled: boolean,
+  plan: PlanIndex,
 ): number {
   basis = basisFor(w, basis);
   const dates = new Set<string>();
   let pay = 0;
   for (const c of courses) {
     if (c.workplaceId !== w.id) continue;
-    for (const s of potentialSessions(c, period.start, period.end)) {
+    for (const s of potentialSessions(c, period.start, period.end, plan.cancel, plan.moves)) {
       // צפי: מפגש שבוטל יורד — חוץ מהחלק שהמוסד משלם עליו לפי סיבת הביטול.
       if (withoutCanceled && s.canceled) {
         pay += canceledSessionPay(w, c, s.date, s.cancel, basis);
@@ -121,8 +123,9 @@ export function plannedFor(
   courses: readonly Course[],
   period: Pick<PayPeriod, 'start' | 'end'>,
   basis: PayBasis,
+  plan: PlanIndex = currentPlan(),
 ): number {
-  return amountFor(w, courses, period, basis, false);
+  return amountFor(w, courses, period, basis, false, plan);
 }
 
 /** צפי לתקופה — הפוטנציאל בלי המפגשים שסומנו "בוטל". */
@@ -131,8 +134,9 @@ export function expectedFor(
   courses: readonly Course[],
   period: Pick<PayPeriod, 'start' | 'end'>,
   basis: PayBasis,
+  plan: PlanIndex = currentPlan(),
 ): number {
-  return amountFor(w, courses, period, basis, true);
+  return amountFor(w, courses, period, basis, true, plan);
 }
 
 /** המפגשים שבוטלו (ונשארו בפוטנציאל) של מקום עבודה בתקופה. */
@@ -140,11 +144,12 @@ export function canceledSessions(
   w: Workplace,
   courses: readonly Course[],
   period: Pick<PayPeriod, 'start' | 'end'>,
+  plan: PlanIndex = currentPlan(),
 ): { courseId: string; date: string }[] {
   const out: { courseId: string; date: string }[] = [];
   for (const c of courses) {
     if (c.workplaceId !== w.id) continue;
-    for (const s of potentialSessions(c, period.start, period.end)) if (s.canceled) out.push({ courseId: c.id, date: s.date });
+    for (const s of potentialSessions(c, period.start, period.end, plan.cancel, plan.moves)) if (s.canceled) out.push({ courseId: c.id, date: s.date });
   }
   return out;
 }
@@ -158,6 +163,7 @@ export function periodForecast(
   statuses: StatusMap,
   basis: PayBasis,
   today: Date = new Date(),
+  plan: PlanIndex = currentPlan(),
 ): PeriodForecast {
   basis = basisFor(w, basis);
   const todayIso = isoDate(today);
@@ -187,9 +193,9 @@ export function periodForecast(
     reported: t.pay + redeemedPay + t.travel,
     reportedPay: t.pay + redeemedPay,
     reportCount: mine.length,
-    planned: plannedFor(w, courses, period, basis),
-    forecast: expectedFor(w, courses, period, basis),
-    canceled: canceledSessions(w, courses, period),
+    planned: plannedFor(w, courses, period, basis, plan),
+    forecast: expectedFor(w, courses, period, basis, plan),
+    canceled: canceledSessions(w, courses, period, plan),
     status,
     paidAt: st.paidAt,
     sentAt: st.sentAt,
@@ -206,6 +212,7 @@ export function forecastYear(
   year: number,
   mode: ForecastMode,
   today: Date = new Date(),
+  plan: PlanIndex = currentPlan(),
 ): ForecastMonth[] {
   const months: ForecastMonth[] = Array.from({ length: 12 }, (_, m) => ({
     key: `${year}-${String(m + 1).padStart(2, '0')}`,
@@ -224,7 +231,7 @@ export function forecastYear(
   for (const w of workplaces) {
     for (let m = fromMonth; m < 12; m++) {
       const period = periodInMonth(w, year, m);
-      const f = periodForecast(w, period, reports, courses, statuses, basis, today);
+      const f = periodForecast(w, period, reports, courses, statuses, basis, today, plan);
       const key = mode === 'work' ? periodMonthKey(period) : monthKey(f.expected);
       const i = index.get(key);
       if (i == null) continue;
@@ -250,11 +257,12 @@ export function recentForecasts(
   statuses: StatusMap,
   basis: PayBasis,
   today: Date = new Date(),
+  plan: PlanIndex = currentPlan(),
 ): PeriodForecast[] {
   const out: PeriodForecast[] = [];
   let p = currentPayPeriod(w.payday, today);
   for (let i = 0; i <= count; i++) {
-    out.push(periodForecast(w, p, reports, courses, statuses, basis, today));
+    out.push(periodForecast(w, p, reports, courses, statuses, basis, today, plan));
     const [y, m, d] = p.start.split('-').map(Number);
     p = currentPayPeriod(w.payday, new Date(y, m - 1, d - 1));
   }
@@ -319,12 +327,13 @@ export function forecastMonths(
   basis: PayBasis,
   mode: ForecastMode,
   today: Date = new Date(),
+  plan: PlanIndex = currentPlan(),
 ): ForecastMonth[] {
   const years = new Map<number, ForecastMonth[]>();
   return refs.map((r) => {
     let y = years.get(r.year);
     if (!y) {
-      y = forecastYear(workplaces, reports, courses, statuses, basis, r.year, mode, today);
+      y = forecastYear(workplaces, reports, courses, statuses, basis, r.year, mode, today, plan);
       years.set(r.year, y);
     }
     return y[r.month0];

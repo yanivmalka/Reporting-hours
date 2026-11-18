@@ -11,6 +11,7 @@
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { hebrewDate, hebrewRange } from './hebrewDate';
 import { plannedMinutes, type Course } from './courses';
+import { currentPlan, type PlanIndex } from './sessions';
 import { workplacePay } from './pay';
 import type { PayBasis } from './payBasis';
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
@@ -384,6 +385,7 @@ export function workplaceMonthStats(
   reports: readonly WorkReport[],
   courses: readonly Course[],
   today: Date = new Date(),
+  plan: PlanIndex = currentPlan(),
 ): WorkplaceMonthStats {
   const mine = reports.filter((r) => r.workplaceId === workplace.id);
   const hoursIn = (start: string, end: string) =>
@@ -408,8 +410,8 @@ export function workplaceMonthStats(
   return {
     period,
     actual: hoursIn(period.start, period.end),
-    planned: plannedMinutes(courses, workplace.id, period.start, period.end) / ACADEMIC_HOUR_MINUTES,
-    plannedToDate: plannedMinutes(courses, workplace.id, period.start, toDate) / ACADEMIC_HOUR_MINUTES,
+    planned: plannedMinutes(courses, workplace.id, period.start, period.end, plan.cancel, plan.moves) / ACADEMIC_HOUR_MINUTES,
+    plannedToDate: plannedMinutes(courses, workplace.id, period.start, toDate, plan.cancel, plan.moves) / ACADEMIC_HOUR_MINUTES,
     average: past.length ? past.reduce((a, b) => a + b, 0) / past.length : null,
   };
 }

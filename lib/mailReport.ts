@@ -20,7 +20,7 @@ import { authUser, getAccess, isDemoActive } from './sync';
 import { courseReported, coursesOn, loadCourses, sessionTimes, type Course } from './courses';
 import { loadReports, type WorkReport } from './reports';
 import { activeWorkplaces, loadWorkplaces, type Workplace } from './workplaces';
-import { loadCancelIndex } from './sessions';
+import { currentPlan, loadPlanIndex, type PlanIndex } from './sessions';
 import { beforeTracking } from './trackingStart';
 import { dateFromIso, isoDate } from './dates';
 
@@ -61,6 +61,7 @@ export function buildPlanDays(
   reports: readonly WorkReport[],
   from: string,
   days = PLAN_DAYS,
+  plan: PlanIndex = currentPlan(),
 ): Record<string, MailPlanItem[]> {
   const byId = new Map(activeWorkplaces(workplaces).map((w) => [w.id, w]));
   const out: Record<string, MailPlanItem[]> = {};
@@ -69,7 +70,7 @@ export function buildPlanDays(
     const date = isoDate(d);
     if (beforeTracking(date)) continue;
     const items: MailPlanItem[] = [];
-    for (const c of coursesOn(courses, date)) {
+    for (const c of coursesOn(courses, date, undefined, plan.cancel, plan.moves)) {
       const w = byId.get(c.workplaceId);
       if (!w || courseReported(c, date, reports)) continue;
       items.push({
@@ -98,14 +99,15 @@ export async function pushMailPlan(): Promise<void> {
   const uid = await ownerUid();
   if (!db || !uid) return;
   const settings = await loadMailSettings();
-  await loadCancelIndex();
   const [courses, workplaces, reports] = await Promise.all([loadCourses(), loadWorkplaces(), loadReports()]);
+  // אחרי טעינת הקורסים — תמונה טרייה של הביטולים וההעברות.
+  const plan = await loadPlanIndex();
   const today = isoDate(new Date());
   await setDoc(doc(db, 'apps', APP_ID, 'users', uid, 'mail', 'plan'), {
     enabled: settings.enabled,
     email: authUser()?.email?.toLowerCase() ?? '',
     sendTime: settings.sendTime,
-    days: settings.enabled ? buildPlanDays(courses, workplaces, reports, today) : {},
+    days: settings.enabled ? buildPlanDays(courses, workplaces, reports, today, PLAN_DAYS, plan) : {},
     updated: Date.now(),
   });
 }

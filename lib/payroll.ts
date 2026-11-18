@@ -9,6 +9,7 @@
 import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
 import { courseReport, courseSessions, occursOn, type Course } from './courses';
+import { currentPlan, type PlanIndex } from './sessions';
 import { currentPayPeriod, type PayPeriod } from './dashboard';
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
@@ -191,7 +192,7 @@ export type PayrollReport = {
 export const NO_COURSE = 'עבודה שלא במסגרת קורס קבוע';
 
 /** לאיזה קורס שייך דיווח: קורס של אותו מקום שמתקיים בתאריך וחופף בשעות; אחרת לפי הנושא. */
-function courseOf(report: WorkReport, courses: readonly Course[]): string {
+function courseOf(report: WorkReport, courses: readonly Course[], plan: PlanIndex): string {
   if (report.courseId) {
     const byId = courses.find((c) => c.id === report.courseId);
     if (byId) return byId.name;
@@ -199,7 +200,7 @@ function courseOf(report: WorkReport, courses: readonly Course[]): string {
   const s = parseTime(report.start) ?? 0;
   const e = parseTime(report.end) ?? 0;
   const match = courses.find((c) => {
-    if (c.workplaceId !== report.workplaceId || !occursOn(c, report.date)) return false;
+    if (c.workplaceId !== report.workplaceId || !occursOn(c, report.date, plan.moves)) return false;
     const cs = parseTime(c.start) ?? 0;
     const ce = parseTime(c.end) ?? 0;
     return cs < e && ce > s;
@@ -217,6 +218,8 @@ export function buildPayrollReport(
   basis: PayBasis = 'academic',
   /** דקות שנפדו מהמונה לתוך הדוח (מצב הדוח, `redeemedMinutes`) */
   redeemedMinutes = 0,
+  /** תמונת מצב של הביטולים וההעברות — נלקחת פעם אחת לכל הדוח */
+  plan: PlanIndex = currentPlan(),
 ): PayrollReport {
   basis = basisFor(workplace, basis);
   const mine = reports
@@ -225,7 +228,7 @@ export function buildPayrollReport(
 
   const groups = new Map<string, PayrollGroup>();
   for (const r of mine) {
-    const name = courseOf(r, courses);
+    const name = courseOf(r, courses, plan);
     const g = groups.get(name) ?? { name, sessions: [], netMinutes: 0 };
     // בשעות אקדמיות — הדקות שהועברו למונה אינן חלק מהדוח (הן ייכנסו כשייפדו).
     const net = Math.max(0, (netMinutes(r) ?? 0) - (basis === 'academic' ? r.carriedMinutes ?? 0 : 0));
@@ -254,7 +257,7 @@ export function buildPayrollReport(
   const canceled: PayrollCanceled[] = [];
   for (const c of courses) {
     if (c.workplaceId !== workplace.id) continue;
-    for (const s of courseSessions(c, period.start, period.end)) {
+    for (const s of courseSessions(c, period.start, period.end, plan.cancel, plan.moves)) {
       if (s.cancel?.kind !== 'canceled' || courseReport(c, s.date, mine)) continue;
       canceled.push({
         date: s.date,

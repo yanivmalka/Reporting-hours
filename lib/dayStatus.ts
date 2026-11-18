@@ -6,6 +6,7 @@
  * ימים בלי מפגשים ובלי דיווחים — בלי נקודה. טהור, בלי React ובלי אחסון.
  */
 import { courseReported, coursesOn, type Course } from './courses';
+import { currentPlan, type PlanIndex } from './sessions';
 import type { WorkReport } from './reports';
 import { parseTime } from './time';
 import { activeWorkplaces, type Workplace } from './workplaces';
@@ -18,6 +19,8 @@ export type DayStatusInput = {
   courses: readonly Course[];
   workplaces: readonly Workplace[];
   reports: readonly WorkReport[];
+  /** תמונת מצב של הביטולים וההעברות (ברירת מחדל: הנוכחית) */
+  plan?: PlanIndex;
 };
 
 const isoOf = isoDate;
@@ -27,7 +30,8 @@ export function dayStatus(date: string, input: DayStatusInput, now: Date = new D
   const today = isoOf(now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const ids = new Set(activeWorkplaces(input.workplaces).map((w) => w.id));
-  const sessions = coursesOn(input.courses, date).filter((c) => ids.has(c.workplaceId));
+  const plan = input.plan ?? currentPlan();
+  const sessions = coursesOn(input.courses, date, undefined, plan.cancel, plan.moves).filter((c) => ids.has(c.workplaceId));
   let missing = false;
   let planned = false;
   for (const c of sessions) {
@@ -48,8 +52,10 @@ export function dayStatus(date: string, input: DayStatusInput, now: Date = new D
 /** פונקציית מצב מוכנה לתאריכון (עם מטמון לכל תאריך). */
 export function dayStatusIndex(input: DayStatusInput, now: Date = new Date()): (date: string) => DayStatus | null {
   const cache = new Map<string, DayStatus | null>();
+  // תמונה אחת לכל התאריכון — כל הימים מחושבים מול אותם ביטולים והעברות.
+  const fixed = { ...input, plan: input.plan ?? currentPlan() };
   return (date) => {
-    if (!cache.has(date)) cache.set(date, dayStatus(date, input, now));
+    if (!cache.has(date)) cache.set(date, dayStatus(date, fixed, now));
     return cache.get(date) ?? null;
   };
 }
