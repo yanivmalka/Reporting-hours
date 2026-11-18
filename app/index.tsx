@@ -12,6 +12,7 @@ import { Pressable } from '../components/Pressable';
 import { Icon } from '../components/Icon';
 import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
+import { FinanceLockToggle } from '../components/AppLock';
 import { useSessionCancel } from '../components/SessionCancelDialog';
 import { useSessionSheet } from '../components/SessionSheet';
 import { FLAG_ICON, loadSessionNotes, noteFor, type SessionNote } from '../lib/sessionNotes';
@@ -190,10 +191,13 @@ export default function HomeScreen() {
   return (
     <Screen>
       <View style={styles.greeting}>
-        <Text style={styles.hello}>
-          {now ? greetingFor(now.getHours()) : 'שלום'}
-          {name ? `, ${name}` : ''}
-        </Text>
+        <View style={styles.helloRow}>
+          <Text style={styles.hello}>
+            {now ? greetingFor(now.getHours()) : 'שלום'}
+            {name ? `, ${name}` : ''}
+          </Text>
+          <FinanceLockToggle />
+        </View>
         {today && todayIso ? (
           <Text style={styles.date}>
             {today.dayLabel} · {hebrewDate(todayIso, false)}
@@ -466,7 +470,7 @@ function dayDot(
  * מזהה הסתרה של התראה: המפתח ועוד התוכן. התראה מוסתרת חוזרת לבד כשהתוכן
  * שלה משתנה (מפתח זהה, כותרת או גוף אחרים).
  */
-const dismissId = (a: HomeAlert) => `${a.key}#${a.title}|${a.body}`;
+const dismissId = (a: HomeAlert) => `${a.key}#${a.title}|${a.body}${a.detail ? `|${a.detail}` : ""}`;
 
 const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
@@ -559,7 +563,21 @@ function AlertCard({
       <View style={styles.alertTexts}>
         <Text style={styles.alertTitle}>{alert.title}</Text>
         <Text style={styles.alertBody}>{alert.body}</Text>
-        {alert.action ? (
+        {alert.detail ? (
+          // שורת פירוט (שמות מוסדות) שמתקצרת, והפעולה צמודה לשמאל באותה שורה
+          <View style={styles.alertDetailRow}>
+            <Text style={styles.alertDetail} numberOfLines={1} ellipsizeMode="tail">
+              {alert.detail}
+            </Text>
+            {alert.action ? (
+              <View style={styles.alertActionInline}>
+                {alert.action.tel ? <Icon name="phone" size={16} color={colors.brand} /> : null}
+                <Text style={styles.alertActionText}>{alert.action.label}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+        {alert.action && !alert.detail ? (
           <View style={styles.alertAction}>
             {alert.action.tel ? <Icon name="phone" size={16} color={colors.brand} /> : null}
             <Text style={styles.alertActionText}>{alert.action.label}</Text>
@@ -583,7 +601,8 @@ const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
     pressed: { opacity: 0.85 },
     greeting: { gap: 2 },
-    hello: { fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -0.5, color: colors.text, textAlign: TEXT_RIGHT },
+    helloRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+    hello: { flexShrink: 1, fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -0.5, color: colors.text, textAlign: TEXT_RIGHT },
     date: { fontSize: 15, color: colors.textMuted, textAlign: TEXT_RIGHT },
     context: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
 
@@ -754,6 +773,9 @@ const makeStyles = (colors: AppColors) =>
     alertTexts: { flex: 1, gap: 3, paddingTop: 1 },
     alertTitle: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     alertBody: { fontSize: 14, lineHeight: 20, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    alertDetailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    alertDetail: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
+    alertActionInline: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     alertAction: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingTop: 4 },
     alertActionText: { fontSize: 14, fontWeight: '700', color: colors.brand },
     alertClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },

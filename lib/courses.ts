@@ -24,6 +24,7 @@ import {
 import { parseTime } from './time';
 import { KEYS } from './keys';
 import { dateFromIso, isoDate } from './dates';
+import { getTrackingStart } from './trackingStart';
 
 export type Course = {
   id: string;
@@ -122,6 +123,20 @@ export type CourseSession = {
  * הוסרו, הועברו או חלים בחג (עם `cancel`). לתצוגה מלאה ולחישובי פוטנציאל.
  */
 export function courseSessions(
+  course: Course,
+  start: string,
+  end: string,
+  cancel: CancelIndex = currentCancel(),
+  moves: MovesIndex = currentMoves(),
+): CourseSession[] {
+  // המערכת מתחילה בתאריך תחילת העבודה (lib/trackingStart.ts): מפגשים לפניו אינם בתכנון,
+  // בפוטנציאל, בצפי, בתחזית ובדוחות השכר. דיווח שנעשה בכל זאת על מפגש כזה נספר כרגיל (לפי הדיווחים).
+  const tracked = getTrackingStart();
+  return allCourseSessions(course, tracked && tracked > start ? tracked : start, end, cancel, moves);
+}
+
+/** כמו `courseSessions`, בלי חיתוך לפי תאריך תחילת העבודה — לרשימת התכנון (ספירת "לפני המעקב"). */
+export function allCourseSessions(
   course: Course,
   start: string,
   end: string,
@@ -376,4 +391,11 @@ export function courseStatus(course: Course, today: string): CourseStatus {
   const weekEnd = iso(new Date(t.getFullYear(), t.getMonth(), t.getDate() - t.getDay() + 6));
   if (course.from >= weekStart && course.from <= weekEnd) return 'active';
   return 'planned';
+}
+
+/** מזהי מקומות העבודה שיש להם קורס פעיל (`courseStatus` = פעיל) — לתיאום מס ולדקות מצטברות. */
+export function workplacesWithActiveCourse(courses: readonly Course[], today: string): Set<string> {
+  const out = new Set<string>();
+  for (const c of courses) if (!out.has(c.workplaceId) && courseStatus(c, today) === 'active') out.add(c.workplaceId);
+  return out;
 }

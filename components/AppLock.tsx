@@ -15,6 +15,8 @@ import { Checkbox } from './Checkbox';
 import {
   appLockPlatform,
   lockAvailable,
+  lockFinance,
+  useFinanceUnlocked,
   setAppLockEnabled,
   unlockFinance,
   useAppLockEnabled,
@@ -37,7 +39,7 @@ export function FinanceGate({ children }: { children: ReactNode }) {
   if (!locked) return <>{children}</>;
   return (
     <View style={[styles.gate, { backgroundColor: colors.background }]}>
-      <Icon name="fingerprint" size={56} color={colors.brand} />
+      <Icon name="lock-outline" size={56} color={colors.brand} />
       <Text style={[styles.title, { color: colors.text }]}>מידע כספי נעול</Text>
       <Text style={[styles.body, { color: colors.textMuted }]}>
         {failed ? 'הזיהוי לא הושלם. אפשר לנסות שוב.' : 'פתיחה בטביעת אצבע או בקוד המכשיר.'}
@@ -51,8 +53,27 @@ export function FinanceGate({ children }: { children: ReactNode }) {
 
 export function FinanceSection({ children }: { children: ReactNode }) {
   const locked = useFinanceLocked();
+  const unlocked = useFinanceUnlocked();
   const { colors } = useTheme();
-  if (!locked) return <>{children}</>;
+  if (!locked) {
+    if (!unlocked) return <>{children}</>;
+    // ההגדרה מופעלת והמידע פתוח — מנעול פתוח קטן מעל הקבוצה, ולחיצה נועלת שוב.
+    return (
+      <View style={styles.openWrap}>
+        <Pressable
+          onPress={lockFinance}
+          accessibilityRole="button"
+          accessibilityLabel="מידע כספי פתוח — נעילה"
+          hitSlop={8}
+          style={styles.openRow}
+        >
+          <Icon name="lock-open-variant-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.openText, { color: colors.textMuted }]}>מידע כספי פתוח · נעילה</Text>
+        </Pressable>
+        {children}
+      </View>
+    );
+  }
   return (
     <Pressable
       onPress={() => void unlockFinance()}
@@ -60,9 +81,32 @@ export function FinanceSection({ children }: { children: ReactNode }) {
       accessibilityLabel="מידע כספי נעול — פתיחה"
       style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
-      <Icon name="fingerprint" size={24} color={colors.brand} />
+      <Icon name="lock-outline" size={24} color={colors.brand} />
       <Text style={[styles.sectionText, { color: colors.textMuted }]}>מידע כספי נעול</Text>
       <Text style={[styles.sectionLink, { color: colors.brand }]}>פתיחה</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * מתג קטן בדף הבית (לא בולט): מנעול סגור — לחיצה פותחת בזיהוי; מנעול פתוח — לחיצה נועלת.
+ * מוצג רק כשההגדרה מופעלת.
+ */
+export function FinanceLockToggle() {
+  const enabled = useAppLockEnabled();
+  const locked = useFinanceLocked();
+  const { colors } = useTheme();
+  if (!appLockPlatform || !enabled) return null;
+  return (
+    <Pressable
+      onPress={() => (locked ? void unlockFinance() : lockFinance())}
+      accessibilityRole="button"
+      accessibilityLabel={locked ? 'מידע כספי נעול — הצגה' : 'מידע כספי מוצג — נעילה'}
+      hitSlop={10}
+      style={styles.toggle}
+    >
+      <Icon name={locked ? 'lock-outline' : 'lock-open-variant-outline'} size={18} color={colors.textMuted} />
+      <Text style={[styles.toggleText, { color: colors.textMuted }]}>{locked ? 'הצגת סכומים' : 'נעילה'}</Text>
     </Pressable>
   );
 }
@@ -110,5 +154,10 @@ const styles = StyleSheet.create({
   },
   sectionText: { flex: 1, fontSize: 15, textAlign: TEXT_RIGHT },
   sectionLink: { fontSize: 15, fontWeight: '700' },
+  openWrap: { gap: spacing.xs },
+  openRow: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  openText: { fontSize: 12 },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.8 },
+  toggleText: { fontSize: 12 },
   hint: { fontSize: 13, lineHeight: 19, textAlign: TEXT_RIGHT },
 });

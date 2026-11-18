@@ -98,6 +98,10 @@ export const makeJournalStyles = (colors: AppColors) =>
     paddingVertical: spacing.xs,
     ...cardShadow,
   },
+  todayFrame: { borderWidth: 2, borderColor: colors.brand, borderRadius: radius.md },
+  todayHead: { flexDirection: 'row' },
+  todayChip: { backgroundColor: colors.brand, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 2 },
+  todayChipText: { fontSize: 12, fontWeight: '700', color: colors.textOnBrand },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'center',

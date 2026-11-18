@@ -19,6 +19,8 @@ import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels } from '../lib/travel';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
+import { loadCourses, workplacesWithActiveCourse } from '../lib/courses';
+import { todayISO } from '../lib/time';
 import { basisFor, usePayBasis } from '../lib/payBasis';
 import { Checkbox } from '../components/Checkbox';
 import { FoldSection } from '../components/FoldSection';
@@ -38,6 +40,7 @@ export default function SettingsScreen() {
   const { basis } = usePayBasis();
   const [state, setState] = useState<AccumulatedState | null>(null);
   const [workplaces, setWorkplaces] = useState<Workplace[]>([]);
+  const [withActive, setWithActive] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [statuses, setStatuses] = useState<StatusMap>({});
@@ -48,9 +51,10 @@ export default function SettingsScreen() {
   const confirm = useConfirm();
 
   useScreenData(
-    () => Promise.all([loadAccumulated(), loadWorkplaces(), loadReports(), loadPayrollStatus()]),
+    () => Promise.all([loadAccumulated(), loadWorkplaces(), loadReports(), loadPayrollStatus(), loadCourses()]),
     [],
-    ([next, list, reps, st]) => {
+    ([next, list, reps, st, courses]) => {
+      setWithActive(workplacesWithActiveCourse(courses, todayISO()));
       setState(next);
       setWorkplaces(list);
       setReports(reps);
@@ -114,9 +118,10 @@ export default function SettingsScreen() {
   const total = accumulatedTotal(state);
   const anyAcademic = workplaces.some((w) => w.paymentType === 'hourly' && basisFor(w, basis) === 'academic');
   // כל מקומות העבודה הפעילים, וגם מונים של מקומות שנמחקו — מהגדול לקטן.
+  // רק מקומות עם קורס פעיל — ומונה שיש בו דקות שלא נפדו, גם בלי קורס פעיל (כדי שלא יאבדו).
   const ids = [
     ...new Set([...workplaces.map((w) => w.id), ...Object.keys(state.byWorkplace)]),
-  ];
+  ].filter((id) => withActive.has(id) || entryOf(state, id).minutes > 0);
   const rows = ids
     .map((id) => ({ id, entry: entryOf(state, id), workplace: workplaces.find((w) => w.id === id) }))
     .sort((a, b) => b.entry.minutes - a.entry.minutes || b.entry.redeemedHours - a.entry.redeemedHours)

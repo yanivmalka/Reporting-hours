@@ -12,7 +12,7 @@ import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { EnterChevron } from './Chevrons';
 import { useSessionCancel } from './SessionCancelDialog';
-import { courseReport, courseSessions, timeRange, type Course } from '../lib/courses';
+import { allCourseSessions, courseReport, timeRange, type Course } from '../lib/courses';
 import { expectedFor, plannedFor } from '../lib/forecast';
 import type { PayBasis } from '../lib/payBasis';
 import type { WorkReport } from '../lib/reports';
@@ -28,10 +28,10 @@ import { beforeTracking, getTrackingStart } from '../lib/trackingStart';
 import { MonthDivider } from './MonthDivider';
 import { useSessionNotes } from './useSessionNotes';
 import { FLAG_ICON, noteFor } from '../lib/sessionNotes';
-import { todayISO } from '../lib/time';
+import { parseTime, todayISO } from '../lib/time';
 
-/** planned — עתידי; pending — היום ולא דווח; missing — עבר ולא דווח */
-export type SessionStatus = 'planned' | 'pending' | 'missing' | 'reported' | 'canceled' | 'moved' | 'untracked';
+/** planned — עתידי; pending — היום ולא דווח; now — מתקיים כעת; missing — עבר ולא דווח */
+export type SessionStatus = 'planned' | 'pending' | 'now' | 'missing' | 'reported' | 'canceled' | 'moved' | 'untracked';
 type Status = SessionStatus;
 
 export type SessionRowData = {
@@ -69,6 +69,8 @@ export function PlanList({
   monthDividers,
   before,
   after,
+  collapseBefore,
+  onShowEarlier,
 }: {
   courses: readonly Course[];
   workplaces: readonly Workplace[];
@@ -85,6 +87,9 @@ export function PlanList({
   /** תוכן לפני הימים (מתחת לסיכום) ואחריהם — למשל קישור לחודש הקודם / הבא */
   before?: ReactNode;
   after?: ReactNode;
+  /** ימים שלפני התאריך (בחודש הנוכחי — היום) מקופלים, כך שאריח היום בראש הרשימה */
+  collapseBefore?: string | null;
+  onShowEarlier?: () => void;
 }) {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
@@ -98,13 +103,17 @@ export function PlanList({
   const trackingStart = getTrackingStart();
   const days = new Map<string, SessionRowData[]>();
   for (const r of rows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
+  const today = todayISO();
+  const allDays = [...days];
+  const shownDays = collapseBefore ? allDays.filter(([d]) => d >= collapseBefore) : allDays;
+  const collapsedDays = allDays.length - shownDays.length;
 
   const period = { start: from, end: to };
   const potential = active.reduce((n, w) => n + plannedFor(w, courses, period, basis), 0);
   const expected = active.reduce((n, w) => n + expectedFor(w, courses, period, basis), 0);
   const counts = {
     reported: rows.filter((r) => r.status === 'reported').length,
-    pending: rows.filter((r) => r.status === 'pending' || r.status === 'missing').length,
+    pending: rows.filter((r) => r.status === 'pending' || r.status === 'now' || r.status === 'missing').length,
     planned: rows.filter((r) => r.status === 'planned').length,
     canceled: rows.filter((r) => r.status === 'canceled').length,
   };
@@ -146,26 +155,43 @@ export function PlanList({
           <Text style={styles.emptyText}>אין מפגשים מתוכננים בתקופה הזו.</Text>
         </View>
       ) : (
-        [...days].map(([date, list], i, all) => (
+        <>
+        {collapsedDays > 0 ? (
+          <Pressable onPress={onShowEarlier} accessibilityRole="button" hitSlop={8} style={styles.earlier}>
+            <Icon name="chevron-up" size={18} color={colors.brand} />
+            <Text style={styles.earlierText}>
+              {collapsedDays === 1 ? 'יום קודם החודש' : `${collapsedDays} ימים קודמים החודש`} · הצגה
+            </Text>
+          </Pressable>
+        ) : null}
+        {shownDays.map(([date, list], i, all) => (
           <Fragment key={date}>
           {monthDividers && (i === 0 || all[i - 1][0].slice(0, 7) !== date.slice(0, 7)) ? (
             <MonthDivider month={date.slice(0, 7)} />
           ) : null}
           <View
-            style={styles.day}
+            style={[styles.day, date === today && styles.dayToday]}
             onLayout={
               onDayLayout
                 ? (e) => onDayLayout(date, e.nativeEvent.layout.y, e.nativeEvent.layout.height)
                 : undefined
             }
           >
-            <Text style={styles.dayTitle}>{dayTitle(date)}</Text>
+            <View style={styles.dayHead}>
+              {date === today ? (
+                <View style={styles.todayChip}>
+                  <Text style={styles.todayChipText}>היום</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.dayTitle, date === today && styles.dayTitleToday]}>{dayTitle(date)}</Text>
+            </View>
             {list.map((r) => (
               <SessionRow key={`${r.course.id}@${r.date}`} row={r} onPress={() => open(r)} />
             ))}
           </View>
           </Fragment>
-        ))
+        ))}
+        </>
       )}
       {after}
       {sessionDialog.dialog}
@@ -186,25 +212,30 @@ export function buildSessionRows(
 ): SessionRowData[] {
   const byId = new Map(workplaces.map((w) => [w.id, w]));
   const today = todayISO();
+  const at = new Date();
+  const nowMin = at.getHours() * 60 + at.getMinutes();
   const rows: SessionRowData[] = [];
   for (const course of courses) {
     const workplace = byId.get(course.workplaceId);
     if (!workplace) continue;
-    for (const s of courseSessions(course, from, to)) {
+    for (const s of allCourseSessions(course, from, to)) {
       if (s.cancel?.kind === 'removed') continue; // נמחק מהתכנון — מוסתר
       const report = courseReport(course, s.date, reports);
+      // לפני תחילת המעקב ולא דווח — גם מפגש שבוטל / הועבר אינו מוצג (רק שורת הספירה).
       const status: Status = report
         ? 'reported'
-        : s.cancel?.kind === 'moved'
-          ? 'moved'
-          : s.cancel
-            ? 'canceled'
-            : s.date > today
-              ? 'planned'
-              : beforeTracking(s.date)
-                ? 'untracked'
+        : beforeTracking(s.date)
+          ? 'untracked'
+          : s.cancel?.kind === 'moved'
+            ? 'moved'
+            : s.cancel
+              ? 'canceled'
+              : s.date > today
+                ? 'planned'
                 : s.date === today
-                  ? 'pending'
+                  ? sessionLive(course, nowMin)
+                    ? 'now'
+                    : 'pending'
                   : 'missing';
       rows.push({
         course,
@@ -220,6 +251,13 @@ export function buildSessionRows(
   }
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.course.start.localeCompare(b.course.start));
   return rows;
+}
+
+/** המפגש מתקיים כעת (בין שעת ההתחלה לסיום) — כמו "עכשיו" בלו״ז הבית. */
+function sessionLive(course: Course, nowMin: number): boolean {
+  const s = parseTime(course.start);
+  const e = parseTime(course.end);
+  return s != null && e != null && nowMin >= s && nowMin < e;
 }
 
 /** מפגש שדווח → תצוגת הדיווח; אחרת — דיווח ישיר. */
@@ -244,6 +282,7 @@ export function SessionRow({
   const tone: Record<Status, { label: string; fg: string; bg: string }> = {
     planned: { label: 'מתוכנן', fg: colors.textMuted, bg: colors.background },
     pending: { label: 'ממתין', fg: colors.brandDark, bg: colors.brandLight },
+    now: { label: 'עכשיו', fg: colors.textOnBrand, bg: colors.brand },
     missing: { label: 'חסר', fg: colors.warning, bg: colors.background },
     reported: { label: 'דווח', fg: colors.success, bg: colors.brandLight },
     canceled: { label: 'בוטל', fg: colors.dangerText, bg: colors.dangerSoft },
@@ -314,8 +353,15 @@ const makeStyles = (colors: AppColors) =>
       gap: spacing.xs,
       ...cardShadow,
     },
+    dayToday: { borderWidth: 2, borderColor: colors.brand },
+    dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    dayTitleToday: { color: colors.brandDark },
+    todayChip: { backgroundColor: colors.brand, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+    todayChipText: { fontSize: 12, fontWeight: '700', color: colors.textOnBrand },
+    earlier: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+    earlierText: { fontSize: 14, fontWeight: '700', color: colors.brand },
     untrackedNote: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
-    dayTitle: { fontSize: 15, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
+    dayTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },
     pressed: { opacity: 0.7 },
     bar: { width: 4, alignSelf: 'stretch', borderRadius: 2 },
