@@ -16,7 +16,7 @@ import { dateFromIso } from './dates';
 import { addDays, longDayLabel } from './home';
 import { isLocked, statusKey, type StatusMap } from './payroll';
 import { netMinutes, type WorkReport } from './reports';
-import { currentCancel, type CancelIndex } from './sessions';
+import { currentPlan, type PlanIndex } from './sessions';
 import { effectiveReminder, FLAG_LABEL, type SessionNote } from './sessionNotes';
 import { formatDuration, formatTime, parseTime } from './time';
 import { beforeTracking } from './trackingStart';
@@ -80,14 +80,14 @@ function dayWord(date: string, shownOn: Date): string {
 
 const live = <T extends { demo?: boolean }>(list: readonly T[]) => list.filter((x) => !x.demo);
 
-function taxiPush(workplaces: readonly Workplace[], courses: readonly Course[], dates: string[], cancel: CancelIndex): PushItem[] {
+function taxiPush(workplaces: readonly Workplace[], courses: readonly Course[], dates: string[], plan: PlanIndex): PushItem[] {
   const out: PushItem[] = [];
   for (const w of workplaces) {
     if (!isTaxi(w.arrivalMode) || !w.taxi) continue;
     const kind = w.arrivalMode === 'taxi_voucher' ? 'מונית פתק' : 'מונית';
     const reminder = w.taxi.reminder;
     for (const date of dates) {
-      const first = coursesOn(courses, date, w.id, cancel)
+      const first = coursesOn(courses, date, w.id, plan.cancel, plan.moves)
         .map((c) => ({ c, start: sessionTimes(c, date).start }))
         .sort((a, b) => a.start.localeCompare(b.start))[0];
       if (!first) continue;
@@ -119,7 +119,7 @@ function reminderPush(
   workplaces: readonly Workplace[],
   courses: readonly Course[],
   reports: readonly WorkReport[],
-  cancel: CancelIndex,
+  plan: PlanIndex,
 ): PushItem[] {
   const out: PushItem[] = [];
   for (const n of notes) {
@@ -128,7 +128,7 @@ function reminderPush(
     const course = courses.find((c) => c.id === n.courseId);
     const workplace = course && workplaces.find((w) => w.id === course.workplaceId);
     if (!course || !workplace) continue;
-    if (sessionCancel(course, n.date, cancel) || courseReport(course, n.date, reports)) continue;
+    if (sessionCancel(course, n.date, plan.cancel) || courseReport(course, n.date, reports)) continue;
     const [date, time] = when.split('T');
     const fire = at(date, time);
     const start = sessionTimes(course, n.date).start;
@@ -150,13 +150,13 @@ function missingPush(
   courses: readonly Course[],
   reports: readonly WorkReport[],
   dates: string[],
-  cancel: CancelIndex,
+  plan: PlanIndex,
 ): PushItem[] {
   const ids = new Set(workplaces.map((w) => w.id));
   const out: PushItem[] = [];
   for (const date of dates) {
     if (beforeTracking(date)) continue;
-    const open = coursesOn(courses, date, undefined, cancel)
+    const open = coursesOn(courses, date, undefined, plan.cancel, plan.moves)
       .filter((c) => ids.has(c.workplaceId) && !courseReported(c, date, reports))
       .map((c) => ({ c, ...sessionTimes(c, date) }));
     if (open.length === 0) continue;
@@ -231,7 +231,7 @@ function payrollPush(
  * כל ההתראות לתזמון, מהמוקדמת למאוחרת — רק עתידיות, בטווח התזמון ועד `PUSH_MAX`.
  * מקומות עבודה בארכיון ונתוני הדגמה — בלי התראות (דוח שכר — גם למקום בארכיון שעוד לא נשלח).
  */
-export function planPush(input: PushInput, cancel: CancelIndex = currentCancel()): PushItem[] {
+export function planPush(input: PushInput, plan: PlanIndex = currentPlan()): PushItem[] {
   const { now } = input;
   const kinds = new Set(input.kinds ?? PUSH_KINDS);
   const all = live(input.workplaces);
@@ -240,9 +240,9 @@ export function planPush(input: PushInput, cancel: CancelIndex = currentCancel()
   const dates = Array.from({ length: PUSH_HORIZON_DAYS + 1 }, (_, i) => isoDate(addDays(now, i)));
   const horizonEnd = dates[dates.length - 1];
   const out: PushItem[] = [];
-  if (kinds.has('taxi')) out.push(...taxiPush(active, courses, dates, cancel));
-  if (kinds.has('reminder')) out.push(...reminderPush(input.notes, active, courses, input.reports, cancel));
-  if (kinds.has('missing')) out.push(...missingPush(active, courses, input.reports, dates, cancel));
+  if (kinds.has('taxi')) out.push(...taxiPush(active, courses, dates, plan));
+  if (kinds.has('reminder')) out.push(...reminderPush(input.notes, active, courses, input.reports, plan));
+  if (kinds.has('missing')) out.push(...missingPush(active, courses, input.reports, dates, plan));
   if (kinds.has('payroll')) out.push(...payrollPush(all, courses, input.reports, input.payroll, now, horizonEnd));
   const limit = addDays(now, PUSH_HORIZON_DAYS + 1).getTime();
   return out

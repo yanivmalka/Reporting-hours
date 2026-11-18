@@ -40,7 +40,8 @@ import {
   type ShiftPlan,
   type Vacation,
 } from './vacations';
-import { KEYS, LEGACY_KEYS } from './keys';
+import { KEYS } from './keys';
+import { ensureMigrated } from './migrations';
 import { moveNote } from './sessionNotes';
 
 export type SessionMark = {
@@ -104,8 +105,6 @@ function shortDate(iso: string): string {
 }
 
 const MARKS_KEY = KEYS.sessions;
-/** גרסה 1 — בוליאני יחיד (חגים בלבד); מומרת לגרסה 2 בטעינה. */
-const HOLIDAYS_KEY_V1 = LEGACY_KEYS.holidayCancelV1;
 const HOLIDAYS_KEY = KEYS.holidayCancel;
 
 /** אילו סוגי ימים מיוחדים מבטלים מפגשים אוטומטית. */
@@ -135,10 +134,10 @@ export function loadSessionMarks(): Promise<SessionMark[]> {
 }
 
 export async function loadHolidaySettings(): Promise<HolidaySettings> {
+  // הסבה מגרסה 1 (בוליאני יחיד) — lib/migrations.ts
+  await ensureMigrated();
   const v = await readJSON<Partial<HolidaySettings> | null>(HOLIDAYS_KEY, null);
-  if (v && typeof v === 'object') return { ...DEFAULT_HOLIDAY_SETTINGS, ...v };
-  const legacy = await readJSON<unknown>(HOLIDAYS_KEY_V1, null);
-  return typeof legacy === 'boolean' ? { ...DEFAULT_HOLIDAY_SETTINGS, yomTov: legacy } : DEFAULT_HOLIDAY_SETTINGS;
+  return v && typeof v === 'object' ? { ...DEFAULT_HOLIDAY_SETTINGS, ...v } : DEFAULT_HOLIDAY_SETTINGS;
 }
 
 export async function saveHolidaySettings(settings: HolidaySettings): Promise<void> {
@@ -244,6 +243,21 @@ export function currentMoves(): MovesIndex {
   return currentMovesIdx;
 }
 
+/**
+ * תמונת מצב של התכנון: אינדקס הביטולים ואינדקס ההעברות יחד, מאותה טעינה.
+ * חישוב שמקבל `PlanIndex` מעביר את שניהם הלאה ולא קורא את המצב הגלובלי באמצע —
+ * כך ביטול והעברה תמיד תואמים זה לזה.
+ */
+export type PlanIndex = { cancel: CancelIndex; moves: MovesIndex };
+
+/** בלי ביטולים ובלי העברות — לבדיקות ולחישוב "לפי המועד הקבוע בלבד". */
+export const NO_PLAN: PlanIndex = { cancel: NO_CANCEL, moves: NO_MOVES };
+
+/** תמונת המצב הנוכחית (מהטעינה האחרונה של הקורסים / הסימונים). */
+export function currentPlan(): PlanIndex {
+  return { cancel: current, moves: currentMovesIdx };
+}
+
 type ReportLite = {
   workplaceId: string;
   date: string;
@@ -308,6 +322,12 @@ async function loadVacationContext(
     movedIn: (courseId) => manualMoves(courseId).map((m) => m.date),
   });
   return { vacations, workplaceOf: (id) => wp.get(id), reported, shifts };
+}
+
+/** בונה מחדש את שני האינדקסים ומחזיר תמונת מצב שלהם. */
+export async function loadPlanIndex(): Promise<PlanIndex> {
+  await loadCancelIndex();
+  return currentPlan();
 }
 
 export async function loadCancelIndex(): Promise<CancelIndex> {

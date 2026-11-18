@@ -12,7 +12,7 @@ import { currentPayPeriod, currentPeriods, daysUntil, isoDate } from './dashboar
 import type { PayBasis } from './payBasis';
 import { isLocked, overduePayments, payrollItems, pendingPayroll, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
-import { currentCancel, NO_CANCEL, type Cancellation, type CancelIndex } from './sessions';
+import { currentPlan, NO_CANCEL, type Cancellation, type PlanIndex } from './sessions';
 import { recommendations } from './recommend';
 import { parseTime } from './time';
 import { activeWorkplaces, isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
@@ -102,7 +102,7 @@ export function nextSessionAfter(
   courses: readonly Course[],
   workplaces: readonly Workplace[],
   after: string,
-  cancel: CancelIndex = currentCancel(),
+  plan: PlanIndex = currentPlan(),
 ): { date: string; course: Course } | null {
   const ids = new Set(activeWorkplaces(workplaces).map((w) => w.id));
   const mine = courses.filter((c) => ids.has(c.workplaceId));
@@ -111,7 +111,7 @@ export function nextSessionAfter(
   const start = new Date(y, m - 1, d);
   for (let i = 1; i <= 366; i++) {
     const date = isoDate(addDays(start, i));
-    const found = coursesOn(mine, date, undefined, cancel);
+    const found = coursesOn(mine, date, undefined, plan.cancel, plan.moves);
     if (found.length) return { date, course: found[0] };
   }
   return null;
@@ -128,7 +128,7 @@ export function agenda(
   workplaces: readonly Workplace[],
   reports: readonly WorkReport[],
   now: Date = new Date(),
-  cancel: CancelIndex = currentCancel(),
+  plan: PlanIndex = currentPlan(),
 ): AgendaDay[] {
   // מקומות עבודה בארכיון לא מופיעים בלו״ז.
   const byId = new Map(activeWorkplaces(workplaces).map((w) => [w.id, w]));
@@ -137,13 +137,13 @@ export function agenda(
     const d = addDays(now, offset);
     const date = isoDate(d);
     const items: AgendaItem[] = [];
-    for (const course of coursesOn(courses, date, undefined, NO_CANCEL)) {
+    for (const course of coursesOn(courses, date, undefined, NO_CANCEL, plan.moves)) {
       const workplace = byId.get(course.workplaceId);
       if (!workplace) continue;
       let status: SessionStatus = 'upcoming';
       let reportId: string | undefined;
       const report = courseReport(course, date, reports);
-      const canceled = sessionCancel(course, date, cancel) ?? undefined;
+      const canceled = sessionCancel(course, date, plan.cancel) ?? undefined;
       // מפגש שבוטל אך בכל זאת דווח — מוצג כמדווח.
       const covering = report?.id;
       // מפגש שנמחק מהתכנון מוסתר מהלו״ז (מופיע רק בדף הקורס, ומשם מחזירים).
@@ -180,11 +180,12 @@ export function unreportedOn(
   workplaces: readonly Workplace[],
   reports: readonly WorkReport[],
   date: string,
+  plan: PlanIndex = currentPlan(),
 ): Course[] {
   const ids = new Set(activeWorkplaces(workplaces).map((w) => w.id));
   // לפני תחילת העבודה עם המערכת — אין דיווחים חסרים.
   if (beforeTracking(date)) return [];
-  return coursesOn(courses, date)
+  return coursesOn(courses, date, undefined, plan.cancel, plan.moves)
     .filter((c) => ids.has(c.workplaceId) && !courseReported(c, date, reports))
     .sort((a, b) => a.start.localeCompare(b.start));
 }
@@ -292,6 +293,8 @@ export type AlertInput = {
   /** פרטי מפגשים (lib/sessionNotes.ts) — לתזכורות */
   notes?: readonly SessionNote[];
   now?: Date;
+  /** תמונת מצב של הביטולים וההעברות — ברירת מחדל: הנוכחית, נלקחת פעם אחת לכל החישוב */
+  plan?: PlanIndex;
 };
 
 /** כמה ימים אחורה לחפש מפגשים שלא דווחו. */
@@ -308,7 +311,7 @@ const names = (list: string[]) => {
 };
 
 /** תזכורות מונית: לפי ההעדפה של כל מקום עבודה שמגיעים אליו במונית. */
-function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[], now: Date): HomeAlert[] {
+function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[], now: Date, plan: PlanIndex): HomeAlert[] {
   const out: HomeAlert[] = [];
   const nowMin = minutesOfDay(now);
   const today = isoDate(now);
@@ -322,7 +325,7 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
     const action = tel ? { label: w.taxi.contactName ? `חיוג ל${w.taxi.contactName}` : 'חיוג להזמנה', tel } : undefined;
     const kind = w.arrivalMode === 'taxi_voucher' ? 'מונית פתק' : 'מונית';
     if (reminder.kind === 'hoursBefore') {
-      const first = coursesOn(courses, today, w.id)[0];
+      const first = coursesOn(courses, today, w.id, plan.cancel, plan.moves)[0];
       const start = first ? parseTime(first.start) : null;
       if (first && start != null && nowMin < start && nowMin >= start - reminder.hours * 60) {
         out.push({
@@ -336,7 +339,7 @@ function taxiAlerts(workplaces: readonly Workplace[], courses: readonly Course[]
         });
       }
     } else if (reminder.kind === 'nightBefore') {
-      const first = coursesOn(courses, tomorrow, w.id)[0];
+      const first = coursesOn(courses, tomorrow, w.id, plan.cancel, plan.moves)[0];
       const at = parseTime(reminder.time);
       if (first && at != null && nowMin >= at) {
         out.push({
@@ -364,7 +367,7 @@ export function reminderAlerts(
   courses: readonly Course[],
   reports: readonly WorkReport[],
   now: Date,
-  cancel: CancelIndex = currentCancel(),
+  plan: PlanIndex = currentPlan(),
 ): HomeAlert[] {
   const out: HomeAlert[] = [];
   const at = stamp(now);
@@ -375,7 +378,7 @@ export function reminderAlerts(
     const workplace = course && workplaces.find((w) => w.id === course.workplaceId);
     if (!course || !workplace) continue;
     if (`${n.date}T${course.end}` < at) continue; // המפגש כבר הסתיים
-    if (sessionCancel(course, n.date, cancel) || courseReport(course, n.date, reports)) continue;
+    if (sessionCancel(course, n.date, plan.cancel) || courseReport(course, n.date, reports)) continue;
     const lines = [n.note, n.content && `תוכן: ${n.content}`, n.arrival && `הגעה: ${n.arrival}`].filter(Boolean);
     const [y, m, d] = n.date.split('-').map(Number);
     const day = isoDate(now) === n.date ? 'היום' : longDayLabel(new Date(y, m - 1, d));
@@ -397,13 +400,14 @@ function missingAlerts(
   courses: readonly Course[],
   reports: readonly WorkReport[],
   now: Date,
+  plan: PlanIndex,
 ): HomeAlert[] {
   const ids = new Set(workplaces.map((w) => w.id));
   const missing: { course: Course; date: string }[] = [];
   for (let i = MISSING_LOOKBACK_DAYS; i >= 1; i--) {
     const date = isoDate(addDays(now, -i));
     if (beforeTracking(date)) continue;
-    for (const course of coursesOn(courses, date)) {
+    for (const course of coursesOn(courses, date, undefined, plan.cancel, plan.moves)) {
       if (ids.has(course.workplaceId) && !courseReported(course, date, reports)) missing.push({ course, date });
     }
   }
@@ -433,13 +437,14 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
   const now = input.now ?? new Date();
   const { workplaces, courses, reports } = input;
   const out: HomeAlert[] = [];
+  const plan = input.plan ?? currentPlan();
 
   // תזכורות שוטפות (מונית, דיווח חסר, תיאום מס) — רק למקומות עבודה פעילים.
   // דוחות שכר ותשלומים — לכולם, גם למקום שהועבר לארכיון ועוד חייב תשלום.
   const active = activeWorkplaces(workplaces);
-  out.push(...taxiAlerts(active, courses, now));
-  out.push(...reminderAlerts(input.notes ?? [], active, courses, reports, now));
-  out.push(...missingAlerts(active, courses, reports, now));
+  out.push(...taxiAlerts(active, courses, now, plan));
+  out.push(...reminderAlerts(input.notes ?? [], active, courses, reports, now, plan));
+  out.push(...missingAlerts(active, courses, reports, now, plan));
 
   // דוחות שכר ותיאום מס (אותה לוגיקה שהייתה בבאנר התזכורות).
   const items = payrollItems(workplaces, reports, input.payroll);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Course } from '../lib/courses';
 import { reminderAlerts } from '../lib/home';
-import { NO_CANCEL } from '../lib/sessions';
+import { NO_PLAN } from '../lib/sessions';
 import { effectiveReminder, eveningBefore, moveNoteIn, type SessionNote } from '../lib/sessionNotes';
 import type { Workplace } from '../lib/workplaces';
 
@@ -31,11 +31,11 @@ describe('פרטי מפגש — תזכורות', () => {
   it('התראה בדף הבית מהמועד ועד סוף המפגש', () => {
     const notes = [note({ flag: 'submission', note: 'הגשת עבודה' })];
     const at = (s: string) => new Date(s);
-    expect(reminderAlerts(notes, [wp], [course], [], at('2026-11-23T19:59'), NO_CANCEL)).toHaveLength(0);
-    const shown = reminderAlerts(notes, [wp], [course], [], at('2026-11-23T20:00'), NO_CANCEL);
+    expect(reminderAlerts(notes, [wp], [course], [], at('2026-11-23T19:59'), NO_PLAN)).toHaveLength(0);
+    const shown = reminderAlerts(notes, [wp], [course], [], at('2026-11-23T20:00'), NO_PLAN);
     expect(shown).toHaveLength(1);
     expect(shown[0].title).toContain('הגשה');
-    expect(reminderAlerts(notes, [wp], [course], [], at('2026-11-24T12:01'), NO_CANCEL)).toHaveLength(0);
+    expect(reminderAlerts(notes, [wp], [course], [], at('2026-11-24T12:01'), NO_PLAN)).toHaveLength(0);
   });
 
   it('העברת מפגש — הפרטים והתזכורת המפורשת עוברים איתו', () => {
