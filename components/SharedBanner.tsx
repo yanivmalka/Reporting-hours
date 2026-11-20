@@ -1,16 +1,43 @@
 /**
  * פס קבוע בראש כל מסך (components/Screen.tsx) כשצופים בנתונים של בעלים אחר,
- * והודעה כשההרשאה בוטלה (docs/sharing-spec.md).
+ * והודעה כשההרשאה בוטלה (docs/sharing-spec.md). ובמצב צפייה בלבד (lib/viewOnly.ts) —
+ * פס "מצב צפייה בלבד" עם מעבר לעריכה.
  */
 import { View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { useCloudSync } from './CloudSync';
 import { ROLE_LABELS } from '../lib/sharing';
+import { setViewOnly, useViewOnly } from '../lib/viewOnly';
 import { spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
 export function SharedBanner() {
+  return (
+    <>
+      <AccountBanner />
+      <ViewOnlyBanner />
+    </>
+  );
+}
+
+function ViewOnlyBanner() {
+  const styles = useStyles(makeStyles);
+  const viewOnly = useViewOnly();
+  if (!viewOnly) return null;
+  return (
+    <View style={styles.bar}>
+      <Text style={styles.text} numberOfLines={1}>
+        מצב צפייה בלבד
+      </Text>
+      <Pressable onPress={() => void setViewOnly(false)} hitSlop={8} accessibilityRole="button">
+        <Text style={styles.link}>מעבר לעריכה</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function AccountBanner() {
   const styles = useStyles(makeStyles);
   const { access, accessLost, dismissAccessLost, switchAccount } = useCloudSync();
   if (accessLost) {

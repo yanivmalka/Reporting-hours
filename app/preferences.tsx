@@ -22,6 +22,7 @@ import { pushPlatform } from '../lib/push';
 import { UpdateSection } from '../components/UpdateChecker';
 import { AccountSection } from '../components/CloudSync';
 import { useAccess } from '../components/Access';
+import { setViewOnly, useViewOnly } from '../lib/viewOnly';
 import { useI18n } from '../lib/i18n';
 import type { Lang } from '../lib/strings';
 import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
@@ -38,6 +39,7 @@ export default function PreferencesScreen() {
   const { colors, palettes, paletteId, setPaletteId } = useTheme();
   const { t, lang, setLang, langLabels } = useI18n();
   const { isOwner } = useAccess();
+  const viewOnly = useViewOnly();
   const showHeb = useShowHebrewDates();
   const trackingStart = useTrackingStart();
   const [langNotice, setLangNotice] = useState(false);
@@ -73,6 +75,12 @@ export default function PreferencesScreen() {
       </Group>
 
       <Group title="כללי" icon="tune-variant">
+        <Checkbox
+          checked={viewOnly}
+          onChange={(on) => void setViewOnly(on)}
+          label="מצב צפייה בלבד"
+          hint="מציג את המערכת לקריאה בלבד: בלי דיווח ובלי עריכה, עד שחוזרים למצב עריכה (גם מהפס שבראש המסך או מהתפריט). לכל מכשיר."
+        />
         <Text style={styles.label}>תחילת עבודה עם המערכת</Text>
         {trackingStart ? (
           <>

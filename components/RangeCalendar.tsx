@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { DayDot, DayDotsLegend, useDayStatus } from './DayDot';
-import type { DayStatus } from '../lib/dayStatus';
+import { statusesIn, type DayStatus } from '../lib/dayStatus';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
@@ -49,7 +49,7 @@ type Props = {
   /** כשמוגדר — לחיצה על יום קוראת לו במקום לבחור טווח (מצב "מעבר ליום"). */
   onDayPress?: (day: string) => void;
   /** מצב היום לנקודות — כשהמסך מסנן (למשל לפי מקום עבודה); אחרת הכול */
-  statusOf?: (date: string) => DayStatus | null;
+  statusOf?: (date: string) => readonly DayStatus[];
 };
 
 /**
@@ -70,8 +70,10 @@ const TWO_MONTHS_MIN_WIDTH = 600;
 /** רוחב מרבי לחודש אחד — כדי שהתאים לא יימתחו במסך רחב. */
 const MONTH_MAX_WIDTH = 340;
 
-export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts, onDayPress, statusOf }: Props) {
+export function RangeCalendar({ month, onMonthChange, range, onRangeChange, counts, onDayPress, statusOf: statusOverride }: Props) {
   const styles = useStyles(makeStyles);
+  const ownStatus = useDayStatus();
+  const statusOf = statusOverride ?? ownStatus;
   const { isRTL } = useI18n();
   const [width, setWidth] = useState(0);
   const swipe = useSwipe(
@@ -118,9 +120,16 @@ export function RangeCalendar({ month, onMonthChange, range, onRangeChange, coun
           <Text style={styles.todayLink}>חזרה לחודש הנוכחי</Text>
         </Pressable>
       ) : null}
-      <DayDotsLegend />
+      <DayDotsLegend statuses={statusesIn(monthDays(month).concat(two ? monthDays(shiftMonth(month, -1)) : []), statusOf)} />
     </View>
   );
+}
+
+/** כל ימי החודש ("YYYY-MM") — למקרא. */
+function monthDays(month: string): string[] {
+  const [y, m] = month.split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+  return Array.from({ length: days }, (_, i) => iso(y, m - 1, i + 1));
 }
 
 function MonthGrid({
@@ -130,7 +139,7 @@ function MonthGrid({
   counts,
   today,
   onTap,
-  statusOf: statusOverride,
+  statusOf,
 }: {
   month: string;
   /** החודש שהרשימה מציגה (כשמוצגים שניים) */
@@ -139,11 +148,9 @@ function MonthGrid({
   counts: Record<string, number>;
   today: string;
   onTap: (day: string) => void;
-  statusOf?: (date: string) => DayStatus | null;
+  statusOf: (date: string) => readonly DayStatus[];
 }) {
   const styles = useStyles(makeStyles);
-  const ownStatus = useDayStatus();
-  const statusOf = statusOverride ?? ownStatus;
   const heb = useShowHebrewDates();
   const trackingStart = useTrackingStart();
   const [y, m] = month.split('-').map(Number);

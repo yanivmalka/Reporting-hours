@@ -43,6 +43,7 @@ const REGISTRY = {
   recommendDismissed: def('reporting-hours/recommend-dismissed/v1', 'viewerDevice'),
   journalCalendarPin: def('reporting-hours/journal-calendar-pin/v1', 'viewerDevice'),
   showHebrewDates: def('reporting-hours/show-hebrew-dates/v1', 'viewerDevice'),
+  courseGrouping: def('reporting-hours/course-grouping/v1', 'viewerDevice'),
   // ── לכל מכשיר בנפרד ──
   lang: def('reporting-hours/lang/v1', 'device'),
   theme: def('reporting-hours/theme/v1', 'device'),
@@ -52,6 +53,7 @@ const REGISTRY = {
   updateDownload: def('reporting-hours/update-download/v1', 'device'),
   appLock: def('reporting-hours/app-lock/v1', 'device'),
   push: def('reporting-hours/push/v1', 'device'),
+  viewOnly: def('reporting-hours/view-only/v1', 'device'),
 } as const;
 
 type Registry = typeof REGISTRY;

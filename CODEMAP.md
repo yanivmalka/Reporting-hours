@@ -36,6 +36,8 @@
 | אופן פדיון דקות | `lib/redeem.ts` | `reporting-hours/redeem-mode/v1` |
 | בסיס חישוב שכר (ברירת מחדל ישנה; לכל מקום — `Workplace.payBasis`) | `lib/payBasis.tsx` | `reporting-hours/pay-basis/v1` |
 | תאריך התחלת עבודה עם המערכת | `lib/trackingStart.ts` | `reporting-hours/tracking-start/v1` |
+| תצוגת קורסים עם אותו שם בלוח הבקרה (`split` — קורס לכל יום / `merged` — מאוחד לפי שם) | `lib/courseGrouping.ts` | `reporting-hours/course-grouping/v1` |
+| מצב צפייה בלבד (במכשיר) | `lib/viewOnly.ts` | `reporting-hours/view-only/v1` |
 | מצב התאריכון ביומן (`auto` / `full` — מלא נעוץ / `week` — פס שבוע נעוץ) | `app/reports.tsx` | `reporting-hours/journal-calendar-pin/v1` |
 | דקות עודפות — למונה / בדיווח (הגדרה כללית) | `lib/leftover.ts` | `reporting-hours/leftover-mode/v1` |
 | פרטים אישיים | `lib/profile.ts` | `reporting-hours/profile/v1` |
@@ -126,7 +128,7 @@
 - תשתית: `CloudSync` (סנכרון), `BackupScheduler` / `BackupSection`, `UpdateChecker`, `DemoSeeder`, `MailSync`, `PushScheduler` (תזמון מחדש של ההתראות לטלפון ופתיחת המסך בלחיצה; ההגדרה — `PushSetting`).
 - תצוגה: `Charts`, `ForecastChart`, `WorkplaceTile`, `ReportCard`, `RangeCalendar`, `WeekStrip`, `TrashList`, `PlanList`.
 - טעינה: `useScreenData` (טעינת נתוני מסך: פוקוס, תוצאה ישנה, רענון אחרי החלפת נתונים, `reload`), `LoadingScreen`.
-- משותפים: `Checkbox`, `FoldSection` (קבוצה מתקפלת), `MonthSlide` (החלקת חודש בתאריכון), `DateText` (לועזי + עברי בלי שבירה), `Chevrons` (חץ כניסה ‹ וחץ קיפול ⌄/⌃), `DayDot` (נקודות מצב יום ומקרא, לפי `lib/dayStatus.ts`), `useFlash` / `useFade` (הבהוב / עמעום קצר).
+- משותפים: `Checkbox`, `FoldSection` (קבוצה מתקפלת), `MonthSlide` (החלקת חודש בתאריכון), `DateText` (לועזי + עברי בלי שבירה), `Chevrons` (חץ כניסה ‹ וחץ קיפול ⌄/⌃), `DayDot` (נקודות מצב יום — נקודה למפגשים שמתקיימים וטבעת לבוטל / הועבר / חופשה / חג — ומקרא של הסוגים שבחודש, לפי `lib/dayStatus.ts`), `useFlash` / `useFade` (הבהוב / עמעום קצר).
 - קלט: `TimeInput`, `DatePicker`, `SelectField`, `TextField`.
 - טופס קורס (`components/course/`): `BreakField` (הפסקה בשורה אחת), `EndTimeCalculator` (מחשבון שעת סיום, `computeEnd` ב־`lib/academic.ts`), `ExtraSessionsCard` (מפגשים נוספים עם שם, שעות ותיאור).
 - אשף הדיווח: `components/report/SessionDetailsCard.tsx` — סיכום המפגש, הערה למפגש הבא והמפגשים הקודמים. את `Text` ו־`TextInput` מייבאים תמיד מ־`components/Text`.

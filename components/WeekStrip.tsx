@@ -59,7 +59,7 @@ type Props = {
   /** פעולה נוספת בראש הפס (למשל כפתור סינון) — ליד "היום" */
   extra?: ReactNode;
   /** מצב היום לנקודות — כשהמסך מסנן; אחרת הכול */
-  statusOf?: (date: string) => DayStatus | null;
+  statusOf?: (date: string) => readonly DayStatus[];
   /** החלקה אנכית על הפס (למטה) — פתיחת התאריכון החודשי */
   onExpand?: () => void;
   /** כפתור "נעץ": הפס נעוץ — מוצג תמיד במקום התאריכון המלא */
