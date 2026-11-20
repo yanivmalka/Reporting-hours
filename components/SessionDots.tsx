@@ -123,24 +123,24 @@ function Dot({
   );
 }
 
-export function SessionDots({
+export function SessionDots<D extends SessionDot>({
   dots,
   onPress,
   selected,
 }: {
-  dots: readonly SessionDot[];
-  onPress?: (dot: SessionDot) => void;
+  dots: readonly D[];
+  onPress?: (dot: D) => void;
   selected?: string | null;
 }) {
   const styles = useStyles(makeStyles);
   return (
     <View style={styles.row}>
-      {dots.map((s) => {
+      {dots.map((s, i) => {
         const label =
           s.state === 'moved' ? `${day(s.date)}←` : s.movedFrom ? `←${day(s.date)}` : day(s.date);
         return (
           <Pressable
-            key={s.date}
+            key={`${s.date}-${i}`}
             disabled={!onPress}
             onPress={() => onPress?.(s)}
             accessibilityRole="button"
@@ -162,17 +162,17 @@ export function SessionDots({
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 /** עיגולי המפגשים מקובצים לפי חודש, עם שם החודש בתחילת השורה. */
-export function SessionDotsByMonth({
+export function SessionDotsByMonth<D extends SessionDot>({
   dots,
   onPress,
   selected,
 }: {
-  dots: readonly SessionDot[];
-  onPress?: (dot: SessionDot) => void;
+  dots: readonly D[];
+  onPress?: (dot: D) => void;
   selected?: string | null;
 }) {
   const styles = useStyles(makeStyles);
-  const byMonth = new Map<string, SessionDot[]>();
+  const byMonth = new Map<string, D[]>();
   for (const d of dots) {
     const k = d.date.slice(0, 7);
     byMonth.set(k, [...(byMonth.get(k) ?? []), d]);

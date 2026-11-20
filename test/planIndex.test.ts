@@ -66,7 +66,7 @@ describe('תמונת מצב של התכנון (PlanIndex)', () => {
 
     const now = new Date(2026, 10, 20, 12, 0);
     expect(dayStatus('2026-11-26', { courses: [course], workplaces: [wp], reports: [], plan: moved }, now)).toBe('planned');
-    expect(dayStatus('2026-11-24', { courses: [course], workplaces: [wp], reports: [], plan: moved }, now)).toBeNull();
+    expect(dayStatus('2026-11-24', { courses: [course], workplaces: [wp], reports: [], plan: moved }, now)).toBe('moved');
     expect(Object.keys(buildPlanDays([course], [wp], [], '2026-11-23', 5, moved))).toEqual(['2026-11-26']);
     // המפגש היחיד הועבר ל־26.11 — עוד לא הסתיים
     expect(courseStatus({ ...course, from: '2026-11-24', to: '2026-11-24' }, '2026-11-25', moved)).toBe('active');

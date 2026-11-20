@@ -38,6 +38,7 @@ import { workplaceColor } from '../theme/workplaceColors';
 import { beforeTracking } from '../lib/trackingStart';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { useAccess } from '../components/Access';
 
 const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
@@ -47,6 +48,7 @@ type StepState = 'done' | 'now' | 'todo';
 
 export default function WorkplaceDetailScreen() {
   const router = useRouter();
+  const { canEdit } = useAccess();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const { basis } = usePayBasis();
@@ -409,15 +411,20 @@ export default function WorkplaceDetailScreen() {
             }
           />
         ) : null}
-        <Button
-          label="עריכת מקום העבודה והקורסים"
-          onPress={() => router.push({ pathname: '/workplace-form', params: { id: w.id } })}
-        />
-        <Button
-          label={archived ? 'החזרה ממקומות לא פעילים' : 'העברה לארכיון'}
-          variant="secondary"
-          onPress={() => void toggleArchive()}
-        />
+        {/* צפייה בלבד (הרשאה או מצב שנבחר) — בלי עריכה ובלי ארכיון */}
+        {canEdit ? (
+          <>
+            <Button
+              label="עריכת מקום העבודה והקורסים"
+              onPress={() => router.push({ pathname: '/workplace-form', params: { id: w.id } })}
+            />
+            <Button
+              label={archived ? 'החזרה ממקומות לא פעילים' : 'העברה לארכיון'}
+              variant="secondary"
+              onPress={() => void toggleArchive()}
+            />
+          </>
+        ) : null}
       </View>
     </Screen>
   );

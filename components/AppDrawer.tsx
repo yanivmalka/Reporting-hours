@@ -38,6 +38,7 @@ import { AccountSwitcher } from './CloudSync';
 import { useAccess, type Access } from './Access';
 import { useHydrated } from '../lib/useHydrated';
 import { appLockPlatform, lockFinance, unlockFinance, useAppLockEnabled, useFinanceLocked } from '../lib/appLock';
+import { setViewOnly, useViewOnly } from '../lib/viewOnly';
 
 type DrawerContextValue = {
   open: () => void;
@@ -150,6 +151,10 @@ const ARCHIVE_LINKS: NavLink[] = [
 /** דף ההגדרות — מסכי ההגדרה (דקות מצטברות, פרטים, שיתוף, נתונים, דיווח במייל) נפתחים ממנו. */
 const PREFERENCES_LINK: NavLink = { href: '/preferences', key: 'nav.preferences', icon: 'cog-outline' };
 
+/** מעבר בין מצב צפייה בלבד למצב עריכה (lib/viewOnly.ts) — בתפריט ☰ וב־⋮. */
+const VIEW_ONLY_ON = 'מצב צפייה בלבד';
+const VIEW_ONLY_OFF = 'מעבר למצב עריכה';
+
 /** הקישורים שהרמה בחשבון הפעיל מתירה (docs/sharing-spec.md). */
 function allowed(a: Access) {
   return (l: NavLink) => {
@@ -178,6 +183,7 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
   const wide = useWideLayout();
   const lockEnabled = useAppLockEnabled();
   const financeLocked = useFinanceLocked();
+  const viewOnly = useViewOnly();
   // במסך רחב התפריט כבר גלוי בצד — אין צורך בשכפול שלו.
   if (!canGoBack || wide) return null;
 
@@ -246,7 +252,18 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
                 {ARCHIVE_LINKS.map(item)}
                 <View style={menuStyles.divider} />
                 {item(PREFERENCES_LINK)}
-                {lockItem ? <View style={menuStyles.divider} /> : null}
+                <View style={menuStyles.divider} />
+                <Pressable
+                  onPress={() => {
+                    setOpen(false);
+                    void setViewOnly(!viewOnly);
+                  }}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [menuStyles.item, pressed && menuStyles.itemPressed]}
+                >
+                  <Icon name={viewOnly ? 'pencil-outline' : 'eye-outline'} size={20} color={colors.textMuted} />
+                  <Text style={menuStyles.itemText}>{viewOnly ? VIEW_ONLY_OFF : VIEW_ONLY_ON}</Text>
+                </Pressable>
                 {lockItem}
               </ScrollView>
             </View>
@@ -411,6 +428,7 @@ export function SideNav() {
 /** תוכן התפריט — משותף למגירה ולתפריט הקבוע. */
 function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
   const ok = allowed(useAccess());
+  const viewOnly = useViewOnly();
   const { t } = useI18n();
   const { colors } = useTheme();
   const drawerStyles = useStyles(makeStyles);
@@ -459,6 +477,17 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
       <View style={drawerStyles.divider} />
       {/* הגדרות — דף נפרד (app/preferences.tsx), לא בתוך התפריט */}
       {navItem(PREFERENCES_LINK)}
+      <Pressable
+        onPress={() => {
+          onNavigate?.();
+          void setViewOnly(!viewOnly);
+        }}
+        accessibilityRole="button"
+        style={({ pressed }) => [drawerStyles.navItem, pressed && drawerStyles.navItemPressed]}
+      >
+        <Icon name={viewOnly ? 'pencil-outline' : 'eye-outline'} size={22} color={colors.textMuted} />
+        <Text style={drawerStyles.navItemText}>{viewOnly ? VIEW_ONLY_OFF : VIEW_ONLY_ON}</Text>
+      </Pressable>
     </ScrollView>
   );
 }

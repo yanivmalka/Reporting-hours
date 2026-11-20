@@ -1,7 +1,8 @@
 /**
  * שיתוף החשבון בצד הממשק (docs/sharing-spec.md).
  *
- * - useAccess — מה מותר בחשבון הנתונים הפעיל (שלך, או של בעלים ששיתף איתך).
+ * - useAccess — מה מותר בחשבון הנתונים הפעיל (שלך, או של בעלים ששיתף איתך),
+ *   ובמצב צפייה בלבד (lib/viewOnly.ts) — בלי דיווח ובלי עריכה.
  * - BlockedWriteNotice — הודעה קופצת כששינוי לא נשמר כי הרמה לא מתירה אותו.
  * - NoAccess / RequireAccess — מסך חלופי למסכים שהרמה לא מתירה.
  */
@@ -14,6 +15,7 @@ import { useToast } from './Toast';
 import { useCloudSync } from './CloudSync';
 import { onBlockedWrite, type ShareRole } from '../lib/sync';
 import { ROLE_LABELS } from '../lib/sharing';
+import { setViewOnly, useViewOnly } from '../lib/viewOnly';
 import { spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -30,18 +32,22 @@ export type Access = {
   canEdit: boolean;
   /** גיבויים, ניהול נתונים וניהול הרשאות */
   isOwner: boolean;
+  /** מצב צפייה בלבד שהמשתמש בחר (כבה את canReport ו־canEdit) */
+  viewOnly: boolean;
 };
 
 export function useAccess(): Access {
   const { access } = useCloudSync();
+  const viewOnly = useViewOnly();
   const level: AccessLevel = access ? access.role : 'owner';
   return {
     level,
     shared: !!access,
     ownerName: access ? access.ownerName || access.ownerEmail : '',
-    canReport: level !== 'view',
-    canEdit: level === 'owner' || level === 'full',
+    canReport: !viewOnly && level !== 'view',
+    canEdit: !viewOnly && (level === 'owner' || level === 'full'),
     isOwner: level === 'owner',
+    viewOnly,
   };
 }
 
@@ -64,7 +70,21 @@ export function BlockedWriteNotice() {
 export function NoAccess({ need }: { need: 'report' | 'edit' | 'owner' }) {
   const styles = useStyles(makeStyles);
   const router = useRouter();
-  const { ownerName, level } = useAccess();
+  const { ownerName, level, viewOnly } = useAccess();
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  // מצב צפייה בלבד שהמשתמש בחר — ייתכן שהרמה מתירה; מציעים לחזור לעריכה.
+  const levelOk =
+    need === 'owner' ? level === 'owner' : need === 'edit' ? level === 'owner' || level === 'full' : level !== 'view';
+  if (viewOnly && levelOk) {
+    return (
+      <Screen>
+        <Text style={styles.title}>מצב צפייה בלבד</Text>
+        <Text style={styles.body}>המערכת מוצגת במצב צפייה בלבד, ולכן אי אפשר לדווח או לערוך.</Text>
+        <Button label="מעבר למצב עריכה" onPress={() => void setViewOnly(false)} />
+        <Button label="חזרה" variant="secondary" onPress={back} />
+      </Screen>
+    );
+  }
   const what =
     need === 'owner'
       ? 'המסך הזה זמין רק לבעלים של החשבון.'
@@ -78,7 +98,7 @@ export function NoAccess({ need }: { need: 'report' | 'edit' | 'owner' }) {
         {what}
         {ownerName ? `\nאת/ה צופה בנתונים של ${ownerName} (${ROLE_LABELS[level as ShareRole] ?? ''}).` : ''}
       </Text>
-      <Button label="חזרה" variant="secondary" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />
+      <Button label="חזרה" variant="secondary" onPress={back} />
     </Screen>
   );
 }

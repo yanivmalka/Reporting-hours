@@ -16,6 +16,7 @@ import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { accumulatedTotal, loadAccumulated, redeemableHours, type AccumulatedEntry } from '../lib/accumulated';
 import { currentPeriods, dateRange, monthName, periodMonthKey, monthlyTrend, roundingStats, shortDate, sumTotals, weekdayProfile, workplaceShares } from '../lib/dashboard';
 import { loadCourses, type Course } from '../lib/courses';
+import { groupCoursesForDisplay, hasSharedNames, setCourseGrouping, useCourseGrouping } from '../lib/courseGrouping';
 import { forecastMonths, monthsInView, semesterOf, shiftAnchor, STATUS_LABEL, type ChartResolution, type ForecastMode, type MonthRef, type PeriodStatus } from '../lib/forecast';
 import { hebrewMonthNames, hebrewYearSpan } from '../lib/hebrewDate';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
@@ -32,6 +33,7 @@ import { TEXT_RIGHT } from '../theme/align';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { FinanceGate } from '../components/AppLock';
+import { useAccess } from '../components/Access';
 
 type PeriodChoice = 'current' | 'previous';
 
@@ -64,6 +66,8 @@ function DashboardScreen() {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const { basis } = usePayBasis();
+  const grouping = useCourseGrouping();
+  const { canReport } = useAccess();
   const [data, setData] = useState<{
     reports: WorkReport[];
     workplaces: Workplace[];
@@ -205,7 +209,7 @@ function DashboardScreen() {
             עדיין אין דיווחים להצגה. אפשר להתחיל לדווח, או לטעון נתוני הדגמה כדי לראות
             איך הדשבורד נראה.
           </Text>
-          <Button label="דיווח יום עבודה" onPress={() => router.push('/report')} />
+          {canReport ? <Button label="דיווח יום עבודה" onPress={() => router.push('/report')} /> : null}
           <Button label="ניהול נתונים" variant="secondary" onPress={() => router.push('/data')} />
         </View>
       </Screen>
@@ -301,24 +305,41 @@ function DashboardScreen() {
     if (row.periods.length === 0) return null;
     const start = row.periods.reduce((m, p) => (p.period.start < m ? p.period.start : m), row.periods[0].period.start);
     const end = row.periods.reduce((m, p) => (p.period.end > m ? p.period.end : m), row.periods[0].period.end);
-    const groups = data.courses
-      .filter((c) => c.workplaceId === row.workplace.id)
-      .map((c) => ({ course: c, dots: sessionDots(c, start, end, data.reports) }))
+    const own = data.courses.filter((c) => c.workplaceId === row.workplace.id);
+    // שם קורס שחוזר בכמה ימים — קורס לכל יום (עם היום בשם) או מאוחד לפי השם (כמו בדוח השכר).
+    const groups = groupCoursesForDisplay(own, grouping)
+      .map((g) => ({
+        ...g,
+        dots: g.courses
+          .flatMap((c) => sessionDots(c, start, end, data.reports).map((d) => ({ ...d, courseId: c.id })))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+      }))
       .filter((g) => g.dots.length > 0);
     if (groups.length === 0) return null;
+    const canToggle = hasSharedNames(own.filter((c) => groups.some((g) => g.courses.includes(c))));
     return (
       <View style={styles.sessions}>
+        {canToggle ? (
+          <SegmentedControl
+            options={[
+              { value: 'split', label: 'קורס לכל יום' },
+              { value: 'merged', label: 'מאוחד לפי שם' },
+            ]}
+            value={grouping}
+            onChange={(m) => void setCourseGrouping(m)}
+          />
+        ) : null}
         {groups.map((g) => (
-          <View key={g.course.id} style={styles.sessionGroup}>
-            <Text style={styles.sessionCourse}>{g.course.name}</Text>
+          <View key={g.key} style={styles.sessionGroup}>
+            <Text style={styles.sessionCourse}>{g.label}</Text>
             <SessionDotsByMonth
               dots={g.dots}
               onPress={(d) =>
                 d.reportId
                   ? router.push({ pathname: '/report-view', params: { id: d.reportId } })
                   : d.state === 'open'
-                    ? router.push({ pathname: '/report', params: { course: g.course.id, date: d.date } })
-                    : router.push({ pathname: '/course-form', params: { id: g.course.id, view: '1' } })
+                    ? router.push({ pathname: '/report', params: { course: d.courseId, date: d.date } })
+                    : router.push({ pathname: '/course-form', params: { id: d.courseId, view: '1' } })
               }
             />
           </View>

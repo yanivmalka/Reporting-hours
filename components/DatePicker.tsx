@@ -8,6 +8,7 @@
 import { useMemo, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { DayDot, DayDotsLegend, useDayStatus } from './DayDot';
+import { statusesIn } from '../lib/dayStatus';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { hebrewDate, hebrewDay, hebrewMonthSpan } from '../lib/hebrewDate';
@@ -306,7 +307,7 @@ function CalendarModal({
               <Text style={styles.link}>סגירה</Text>
             </Pressable>
           </View>
-          <DayDotsLegend />
+          <DayDotsLegend statuses={statusesIn(cellsOf(monthKey).filter((c): c is string => c != null), statusOf)} />
         </Pressable>
       </Pressable>
     </Modal>

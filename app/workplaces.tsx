@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
 import { Button } from '../components/Button';
+import { useAccess } from '../components/Access';
 import { Icon } from '../components/Icon';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
@@ -22,6 +23,7 @@ const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
 
 export default function WorkplacesScreen() {
   const router = useRouter();
+  const { canEdit } = useAccess();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -159,10 +161,7 @@ export default function WorkplacesScreen() {
       </Text>
 
       <View style={styles.action}>
-        <Button
-          label="הוספת מקום עבודה"
-          onPress={() => router.push('/workplace-form')}
-        />
+        {canEdit ? <Button label="הוספת מקום עבודה" onPress={() => router.push('/workplace-form')} /> : null}
         <Button label="ארכיון ואשפה" variant="secondary" onPress={() => router.push('/archive')} />
       </View>
     </Screen>
