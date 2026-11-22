@@ -42,6 +42,8 @@ export type Palette = {
 
 /*
  * עקרונות העיצוב (2026):
+ * - כל הערכות בסגנון "גרפיט": גוון מעומעם (רוויה ~25%) בבהירות 27% למותג,
+ *   17% לכהה ו־93% לבהיר — אותה עוצמה, צבע שונה.
  * - רקע ניטרלי קריר כמעט־לבן, משטחים לבנים, גבולות עדינים; צבע המותג
  *   בגוון 700 (ניגודיות של 4.5:1 לפחות מול טקסט לבן).
  * - אותם צבעי סטטוס בכל הערכות.
@@ -70,52 +72,52 @@ export const PALETTES: readonly Palette[] = [
     labelHe: 'טורקיז',
     labelEn: 'Teal',
     colors: {
-      brand: '#0F766E',
-      brandDark: '#115E59',
-      brandLight: '#E0F2EF',
+      brand: '#305A58',
+      brandDark: '#1B3C3B',
+      brandLight: '#E8F3F2',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    swatchTint: '#2DD4BF',
+    swatchTint: '#C9E3E2',
   },
   {
     id: 'indigo',
     labelHe: 'אינדיגו',
     labelEn: 'Indigo',
     colors: {
-      brand: '#4F46E5',
-      brandDark: '#3730A3',
-      brandLight: '#EAE9FD',
+      brand: '#323358',
+      brandDark: '#1C1D3B',
+      brandLight: '#E8E8F2',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    swatchTint: '#A5B4FC',
+    swatchTint: '#CACBE2',
   },
   {
     id: 'ocean',
-    labelHe: 'כחול',
-    labelEn: 'Ocean',
+    labelHe: 'שזיף',
+    labelEn: 'Plum',
     colors: {
-      brand: '#1D4ED8',
-      brandDark: '#1E3A8A',
-      brandLight: '#E3ECFD',
+      brand: '#54364B',
+      brandDark: '#381E31',
+      brandLight: '#F1E9EF',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    swatchTint: '#60A5FA',
+    swatchTint: '#E0CCDA',
   },
   {
     id: 'forest',
-    labelHe: 'אזמרגד',
-    labelEn: 'Emerald',
+    labelHe: 'ירוק',
+    labelEn: 'Sage',
     colors: {
-      brand: '#047857',
-      brandDark: '#065F46',
-      brandLight: '#DDF3EA',
+      brand: '#335742',
+      brandDark: '#1D3A29',
+      brandLight: '#E9F2EC',
       ...NEUTRAL_LIGHT,
       ...STATUS_LIGHT,
     },
-    swatchTint: '#34D399',
+    swatchTint: '#CBE2D4',
   },
   {
     id: 'graphite',

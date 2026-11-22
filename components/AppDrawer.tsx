@@ -429,6 +429,8 @@ export function SideNav() {
 function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
   const ok = allowed(useAccess());
   const viewOnly = useViewOnly();
+  const lockEnabled = useAppLockEnabled();
+  const financeLocked = useFinanceLocked();
   const { t } = useI18n();
   const { colors } = useTheme();
   const drawerStyles = useStyles(makeStyles);
@@ -488,6 +490,25 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
         <Icon name={viewOnly ? 'pencil-outline' : 'eye-outline'} size={22} color={colors.textMuted} />
         <Text style={drawerStyles.navItemText}>{viewOnly ? VIEW_ONLY_OFF : VIEW_ONLY_ON}</Text>
       </Pressable>
+      {/* הצגת סכומים / נעילה — גם בתפריט ☰ (כמו ב־⋮), כדי שאפשר יהיה לפתוח מכל מסך */}
+      {appLockPlatform && lockEnabled ? (
+        <Pressable
+          onPress={() => {
+            onNavigate?.();
+            if (financeLocked) void unlockFinance();
+            else lockFinance();
+          }}
+          accessibilityRole="button"
+          style={({ pressed }) => [drawerStyles.navItem, pressed && drawerStyles.navItemPressed]}
+        >
+          <Icon
+            name={financeLocked ? 'lock-open-variant-outline' : 'lock-outline'}
+            size={22}
+            color={colors.textMuted}
+          />
+          <Text style={drawerStyles.navItemText}>{financeLocked ? 'הצגת סכומים' : 'נעילת סכומים'}</Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
