@@ -454,7 +454,7 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       backgroundColor: c.border,
     },
     daySelected: {
-      backgroundColor: c.text,
+      backgroundColor: c.brandDark,
     },
     dayText: {
       fontSize: 15,

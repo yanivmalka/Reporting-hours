@@ -632,7 +632,7 @@ const makeStyles = (colors: AppColors) =>
       backgroundColor: colors.surface,
       justifyContent: 'center',
     },
-    modeChipOn: { backgroundColor: colors.text, borderColor: colors.text },
+    modeChipOn: { backgroundColor: colors.brandDark, borderColor: colors.brandDark },
     modeText: { fontSize: 14, fontWeight: '600', color: colors.text },
     modeTextOn: { color: colors.textOnBrand },
     periodHead: { gap: 2, marginTop: spacing.xs },
@@ -653,7 +653,7 @@ const makeStyles = (colors: AppColors) =>
     page: { gap: spacing.md },
     // סיכום התקופה — כרטיס כהה, כמו "סכום החודש" בעיצוב.
     totalsBox: {
-      backgroundColor: colors.text,
+      backgroundColor: colors.brandDark,
       borderRadius: 28,
       paddingVertical: 18,
       paddingHorizontal: 20,
