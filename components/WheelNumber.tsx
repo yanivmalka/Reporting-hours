@@ -41,7 +41,7 @@ export function WheelNumber({
       onStart: (s) => setTop(s.top),
       onEnd: () => {
         setTop(null);
-        hideWheelOverlay();
+        hideWheelOverlay({ linger: true });
       },
     },
   );
@@ -62,7 +62,7 @@ export function WheelNumber({
       <TextField
         value={value}
         onChangeText={(t) => onChange(t.replace(/\D/g, ''))}
-        onFocus={hideWheelOverlay}
+        onFocus={() => hideWheelOverlay()}
         placeholder={placeholder}
         numeric
       />

@@ -12,8 +12,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { PanResponder, Platform, type View } from 'react-native';
 
-/** כמה פיקסלים של גרירה לצעד אחד */
-const STEP_PX = 14;
+/** כמה פיקסלים של גרירה לצעד אחד (ברירת מחדל; `stepPx` משנה) */
+const STEP_PX = 22;
 /** גלגלת עכבר: אחרי כמה זמן בלי תנועה השכבה נסגרת */
 const WHEEL_IDLE_MS = 700;
 
@@ -29,6 +29,8 @@ export type WheelStart = {
 export type WheelHandlers = {
   onStart?: (s: WheelStart) => void;
   onEnd?: () => void;
+  /** פיקסלים לצעד בגרירה הנוכחית (נקרא בכל תנועה, אחרי `onStart`) */
+  stepPx?: () => number;
 };
 
 export function useWheel(onStep: (delta: number) => void, handlers: WheelHandlers = {}) {
@@ -64,7 +66,8 @@ export function useWheel(onStep: (delta: number) => void, handlers: WheelHandler
           start(e.nativeEvent.locationX - g.dx);
         },
         onPanResponderMove: (_, g) => {
-          const steps = Math.trunc(-g.dy / STEP_PX);
+          const px = handlersRef.current.stepPx?.() ?? STEP_PX;
+          const steps = Math.trunc(-g.dy / px);
           if (steps !== consumed.current) {
             stepRef.current(steps - consumed.current);
             consumed.current = steps;
