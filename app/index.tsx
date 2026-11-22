@@ -19,6 +19,9 @@ import { FLAG_ICON, loadSessionNotes, noteFor, type SessionNote } from '../lib/s
 import { useSwipe } from '../components/useSwipe';
 import { useCloudSync } from '../components/CloudSync';
 import { useAccess } from '../components/Access';
+import { Dialog } from '../components/Dialog';
+import { Button } from '../components/Button';
+import { setViewOnly } from '../lib/viewOnly';
 import { loadAccumulated } from '../lib/accumulated';
 import { loadCourses, timeRange, type Course } from '../lib/courses';
 import { hebrewDate } from '../lib/hebrewDate';
@@ -67,7 +70,11 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const { basis } = usePayBasis();
   const { user } = useCloudSync();
-  const { canReport } = useAccess();
+  const { canReport, viewOnly, level } = useAccess();
+  /** כפתור הדיווח נשאר במקומו גם בלי אפשרות לדווח (מצב צפייה / הרשאת צפייה) — מעומעם, ולחיצה מסבירה */
+  const [blockedOpen, setBlockedOpen] = useState(false);
+  /** מצב צפייה שהמשתמש בחר, והרמה מתירה דיווח — אפשר לעבור לעריכה מכאן */
+  const canSwitchToEdit = viewOnly && level !== 'view';
   // null עד הטעינה בדפדפן: ב־web המסך מרונדר מראש בזמן הבנייה, ושעה שונה
   // בין הבנייה לדפדפן גורמת לאי־התאמה (hydration).
   const [now, setNow] = useState<Date | null>(null);
@@ -224,21 +231,30 @@ export default function HomeScreen() {
 
       {/* לוח הבקרה — מעבר בלבד, בלי סכומים: מידע כספי לא נחשף במסך הבית (צנעת הפרט) */}
       <View style={styles.topRow}>
-        {canReport ? (
         <Pressable
-          onPress={() => router.push(reportHref)}
+          onPress={() => (canReport ? router.push(reportHref) : setBlockedOpen(true))}
           accessibilityRole="button"
-          accessibilityLabel={missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}
-          style={({ pressed }) => [styles.reportBtn, pressed && styles.pressed]}
+          accessibilityLabel={
+            canReport ? (missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה') : 'דיווח יום עבודה — מצב צפייה'
+          }
+          style={({ pressed }) => [styles.reportBtn, !canReport && styles.reportBtnViewOnly, pressed && styles.pressed]}
         >
           <View style={styles.reportIcon}>
-            <Icon name={missingMode ? 'clipboard-plus-outline' : 'plus'} size={26} color={colors.textOnBrand} />
+            <Icon
+              name={!canReport ? 'eye-outline' : missingMode ? 'clipboard-plus-outline' : 'plus'}
+              size={26}
+              color={colors.textOnBrand}
+            />
           </View>
           <View style={styles.reportTexts}>
             <Text style={styles.reportTitle} numberOfLines={1}>
               {missingMode ? 'השלמת דיווח חסר' : 'דיווח יום עבודה'}
             </Text>
-            {next?.course ? (
+            {!canReport ? (
+              <Text style={styles.reportSub} numberOfLines={2}>
+                {canSwitchToEdit ? 'מצב צפייה · לחיצה למעבר לעריכה' : 'צפייה בלבד · אין הרשאת דיווח'}
+              </Text>
+            ) : next?.course ? (
               <>
                 <Text style={styles.reportSub} numberOfLines={1} ellipsizeMode="tail">
                   {next.course.name}
@@ -255,17 +271,44 @@ export default function HomeScreen() {
             )}
           </View>
         </Pressable>
-        ) : null}
         <Pressable
           onPress={() => router.push('/dashboard')}
           accessibilityRole="link"
           accessibilityLabel="לוח בקרה"
-          style={({ pressed }) => [styles.dashTile, !canReport && styles.dashTileWide, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.dashTile, pressed && styles.pressed]}
         >
           <Icon name="view-dashboard-outline" size={28} color={colors.brand} />
           <Text style={styles.dashTileText}>לוח בקרה</Text>
         </Pressable>
       </View>
+
+      {blockedOpen ? (
+        <Dialog
+          title={canSwitchToEdit ? 'מצב צפייה בלבד' : 'צפייה בלבד'}
+          onClose={() => setBlockedOpen(false)}
+          actions={
+            canSwitchToEdit
+              ? [
+                  <Button
+                    key="edit"
+                    label="מעבר לעריכה ודיווח"
+                    onPress={() => {
+                      setBlockedOpen(false);
+                      void setViewOnly(false).then(() => router.push(reportHref));
+                    }}
+                  />,
+                  <Button key="stay" label="להישאר בצפייה" variant="secondary" onPress={() => setBlockedOpen(false)} />,
+                ]
+              : [<Button key="close" label="סגירה" variant="secondary" onPress={() => setBlockedOpen(false)} />]
+          }
+        >
+          <Text style={styles.blockedText}>
+            {canSwitchToEdit
+              ? 'המערכת מוצגת במצב צפייה בלבד, ולכן אי אפשר לדווח. אפשר לעבור עכשיו למצב עריכה ולהמשיך לדיווח.'
+              : 'ההרשאה שלך בחשבון הזה היא צפייה בלבד, ולכן אי אפשר לדווח.'}
+          </Text>
+        </Dialog>
+      ) : null}
 
       <View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>הלו״ז שלי</Text>
@@ -649,7 +692,9 @@ const makeStyles = (colors: AppColors) =>
     },
     dashTileText: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: 'center' },
     reportSub: { fontSize: 14, color: colors.textOnBrand, opacity: 0.9, textAlign: TEXT_RIGHT },
-    dashTileWide: { flex: 1, flexDirection: 'row', width: undefined },
+    // בלי אפשרות לדווח — אותו כפתור, מעומעם (בצבע המערכת), במקום שהלוח יתפשט
+    reportBtnViewOnly: { backgroundColor: mix(colors.brand, colors.surface, 0.45), elevation: 0, shadowOpacity: 0 },
+    blockedText: { fontSize: 15, lineHeight: 22, color: colors.text, textAlign: TEXT_RIGHT },
 
     sectionHead: {
       flexDirection: 'row',
