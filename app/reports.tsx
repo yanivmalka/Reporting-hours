@@ -1,14 +1,13 @@
 import { View } from 'react-native';
-import { SelectField } from '../components/SelectField';
 import { Button } from '../components/Button';
 import { PlanList } from '../components/PlanList';
-import { SegmentedControl } from '../components/SegmentedControl';
 import { Screen } from '../components/Screen';
 import { journalView, useJournal, type Journal } from '../components/journal/useJournal';
 import { JournalCalendar } from '../components/journal/JournalCalendar';
 import { CalendarActions } from '../components/journal/CalendarActions';
 import { JournalWeekStrip } from '../components/journal/JournalWeekStrip';
 import { PinnedStrip } from '../components/journal/PinnedStrip';
+import { JournalControls } from '../components/journal/JournalControls';
 import { ReportsTab } from '../components/journal/ReportsTab';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { MonthLink } from '../components/journal/MonthLinks';
@@ -27,19 +26,24 @@ export default function ReportsScreen() {
   }
 
   const w: Journal = { ...core, ...journalView({ ...core, reports }) };
-  const { router, basis, workplaces, params, tab, setTab, courses, setReloadTick, wpFilter, setWpFilter, periodMode, calTop, setCalTop, calHeight, setCalHeight, pinned, setPinned, calMode, calPin, setScrollDay, weekStripHeight, scrollRef, listTop, followScroll, maybeExtend, onDayLayout, wpOptions, planFrom, planTo, shownRange, showCalendar, continuous } = w;
+  const { router, basis, workplaces, params, tab, courses, setReloadTick, wpFilter, ctrlTop, setCtrlTop, ctrlPinned, setCtrlPinned, ctrlBarHeight, periodMode, calTop, setCalTop, calHeight, setCalHeight, pinned, setPinned, calMode, calPin, setScrollDay, weekStripHeight, scrollRef, listTop, followScroll, maybeExtend, onDayLayout, planFrom, planTo, shownRange, showCalendar, continuous } = w;
 
   return (
     <Screen
-      overlay={showCalendar && pinned ? <PinnedStrip w={w} /> : undefined}
+      overlay={ctrlPinned || (showCalendar && pinned) ? <PinnedStrip w={w} /> : undefined}
       scrollRef={scrollRef}
       onScroll={(e) => {
         const y = e.nativeEvent.contentOffset.y;
+        // שורת הבקרה מוצמדת מהרגע שהיא מגיעה לראש המסך.
+        const ctrl = ctrlTop != null && y > ctrlTop;
+        if (ctrl !== ctrlPinned) setCtrlPinned(ctrl);
         // הפס המוצמד מחליף את התאריכון החודשי רק כשהתאריכון כמעט כולו נגלל
         // מתחתיו — כך לא מוצגים שניהם יחד. תאריכון נעוץ — מוצמד כמו שהוא
-        // מהרגע שראשו מגיע לראש המסך.
+        // מהרגע שראשו מגיע אל מתחת לשורת הבקרה המוצמדת.
         const next =
-          calTop != null && calHeight > 0 && (calMode !== 'auto' ? y > calTop : y > calTop + calHeight - weekStripHeight);
+          calTop != null &&
+          calHeight > 0 &&
+          (calMode !== 'auto' ? y > calTop - ctrlBarHeight : y > calTop + calHeight - weekStripHeight);
         if (next !== pinned) {
           setPinned(next);
           if (!next) setScrollDay(null);
@@ -48,23 +52,11 @@ export default function ReportsScreen() {
         maybeExtend(e);
       }}
     >
-      <SegmentedControl<'plan' | 'reports'>
-        options={[
-          { value: 'plan', label: 'תכנון' },
-          { value: 'reports', label: 'דיווחים' },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
-      <View style={styles.filters}>
-        <SelectField<string | null>
-          label="מקום עבודה:"
-          title="סינון לפי מקום עבודה"
-          value={wpFilter}
-          active={wpFilter != null}
-          onChange={setWpFilter}
-          options={wpOptions}
-        />
+      <View
+        onLayout={(e) => setCtrlTop(e.nativeEvent.layout.y)}
+        style={ctrlPinned ? styles.calHidden : undefined}
+      >
+        <JournalControls w={w} />
       </View>
 
       {periodMode ? null : (

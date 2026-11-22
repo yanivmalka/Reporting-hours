@@ -1,11 +1,10 @@
-import { SelectField } from '../SelectField';
 import { WeekStrip } from '../WeekStrip';
 import { todayISO } from '../../lib/time';
 import type { Journal } from './useJournal';
 
-/** פס השבוע — במקום התאריכון בגלילה, או נעוץ. */
+/** פס השבוע — במקום התאריכון בגלילה, או נעוץ. הסינון — בשורת הבקרה (JournalControls). */
 export function JournalWeekStrip({ w }: { w: Journal }) {
-  const { wpFilter, setWpFilter, range, setRange, pinned, calMode, setCalMode, scrollRef, weekStart, counts, filteredStatus, requestScroll, changeWeek, goToday, wpOptions, shownRange, dayPress } = w;
+  const { range, setRange, pinned, calMode, setCalMode, scrollRef, weekStart, counts, filteredStatus, requestScroll, changeWeek, goToday, shownRange, dayPress } = w;
   const weekStrip = (
         <WeekStrip
           weekStart={weekStart}
@@ -29,16 +28,6 @@ export function JournalWeekStrip({ w }: { w: Journal }) {
           pinned={calMode === 'week'}
           onPin={() => setCalMode(calMode === 'week' ? 'auto' : 'week')}
           statusOf={filteredStatus}
-          extra={
-            <SelectField<string | null>
-              compact
-              title="סינון לפי מקום עבודה"
-              value={wpFilter}
-              active={wpFilter != null}
-              onChange={setWpFilter}
-              options={wpOptions}
-            />
-          }
         />
   );
   return weekStrip;

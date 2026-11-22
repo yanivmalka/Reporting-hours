@@ -46,16 +46,21 @@ export const makeJournalStyles = (colors: AppColors) =>
     opacity: 0,
   },
   pinnedCal: {
-    backgroundColor: colors.background,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     gap: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
   pinnedStrip: {
     backgroundColor: colors.background,
+  },
+  /** קו תחתון כשאין פס שבוע (שיש לו מסגרת משלו) — רק שורת הבקרה או התאריכון הנעוץ */
+  pinnedEdge: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  pinnedControls: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   todayLink: {
     flexDirection: 'row',

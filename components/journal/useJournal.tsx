@@ -111,9 +111,14 @@ export function useJournal() {
   /** היום שמסומן בתאריכון לפי הגלילה — האריח שמתחת לתחתית התאריכון המוצמד */
   const [scrollDay, setScrollDay] = useState<string | null>(null);
   /** גובה הפס / התאריכון המוצמד (נמדד) — כדי שהיום שגוללים אליו לא יוסתר מתחתיו */
-  const [weekStripHeight, setStripHeight] = useState(120);
+  const [weekStripHeight, setStripHeight] = useState(170);
+  /** שורת הבקרה (תכנון | דיווחים, סינון): ראשה בגלילה — כשהיא נגללת החוצה היא מוצמדת */
+  const [ctrlTop, setCtrlTop] = useState<number | null>(null);
+  const [ctrlPinned, setCtrlPinned] = useState(false);
+  /** גובה שורת הבקרה המוצמדת (נמדד) — התאריכון הנעוץ מוצמד מתחתיה */
+  const [ctrlBarHeight, setCtrlBarHeight] = useState(48);
   /** גובה התאריכון הנעוץ כשהוא מוצמד (נמדד) */
-  const [pinCalHeight, setPinCalHeight] = useState(360);
+  const [pinCalHeight, setPinCalHeight] = useState(410);
   const stripHeight = calPin ? pinCalHeight : weekStripHeight;
   const scrollRef = useRef<ScrollView>(null);
   /** מיקומי הימים ברשימה הנוכחית: ראש הרשימה + y של כל יום (המופע העליון) */
@@ -439,6 +444,12 @@ export function useJournal() {
     setScrollDay,
     weekStripHeight,
     setStripHeight,
+    ctrlTop,
+    setCtrlTop,
+    ctrlPinned,
+    setCtrlPinned,
+    ctrlBarHeight,
+    setCtrlBarHeight,
     pinCalHeight,
     setPinCalHeight,
     stripHeight,
