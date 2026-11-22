@@ -175,7 +175,7 @@ export const makeReportStyles = (colors: AppColors) =>
     flexWrap: 'wrap',
     rowGap: spacing.sm,
     columnGap: spacing.md,
-    backgroundColor: colors.text,
+    backgroundColor: colors.brandDark,
     borderRadius: 24,
     paddingVertical: 14,
     paddingHorizontal: 18,

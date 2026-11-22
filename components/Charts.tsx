@@ -232,7 +232,7 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     },
     // אריח מודגש — כהה, כמו כרטיס "סכום החודש" בעיצוב.
     tileAccent: {
-      backgroundColor: c.text,
+      backgroundColor: c.brandDark,
     },
     tileArrow: { position: 'absolute', top: 8, end: 8 },
     tileLabelWithArrow: { paddingEnd: 18 },

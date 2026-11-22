@@ -717,7 +717,7 @@ const makeStyles = (colors: AppColors) =>
       backgroundColor: colors.surface,
       ...cardShadow,
     },
-    dayTabActive: { backgroundColor: colors.text },
+    dayTabActive: { backgroundColor: colors.brandDark },
     dayTabLabel: { fontSize: 12, color: colors.textMuted },
     dayTabLabelActive: { color: colors.border },
     dayTabNum: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.text },

@@ -357,7 +357,7 @@ const makeStyles = (c: ColorScheme) =>
       justifyContent: 'center',
     },
     dayInRange: { backgroundColor: c.brandLight },
-    dayEdge: { backgroundColor: c.text },
+    dayEdge: { backgroundColor: c.brandDark },
     dayToday: { backgroundColor: c.border },
     cellOff: { opacity: 0.35 },
     dayText: { fontSize: 15, fontWeight: '600', color: c.text },

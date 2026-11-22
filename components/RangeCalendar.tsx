@@ -321,7 +321,7 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       backgroundColor: c.brandLight,
     },
     dayEdge: {
-      backgroundColor: c.text,
+      backgroundColor: c.brandDark,
     },
     dayToday: {
       backgroundColor: c.border,
