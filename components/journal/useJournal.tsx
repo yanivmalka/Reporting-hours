@@ -220,6 +220,12 @@ export function useJournal() {
     scheduleResolve();
   }
 
+  /** מחיקת המיקומים של ימים שלפני התאריך (כשהם מקופלים ולא מוצגים). */
+  function dropDaysBefore(date: string) {
+    for (const d of dayPos.current.map.keys()) if (d < date) dayPos.current.map.delete(d);
+    for (const [id, p] of itemPos.current.map) if (p.date < date) itemPos.current.map.delete(id);
+  }
+
   /** לחיצה על יום בלי בחירת טווח: מסמנים אותו וגוללים אליו ברשימה. */
   function focusOn(day: string) {
     setFocusDay(day);
@@ -454,6 +460,7 @@ export function useJournal() {
     requestScroll,
     scheduleResolve,
     onDayLayout,
+    dropDaysBefore,
     focusOn,
     changeWeek,
     goToday,
@@ -586,6 +593,9 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
   // הוספת חודש בסוף הרשימה לא מזיזה את הימים שכבר נמדדו — לכן המפתח לא כולל את סוף החלון.
   const listKey = `${tab}|${range ? `${range.from}-${range.to}` : win.epoch}|${wpFilter}|${periodMode}|${reloadTick}|${reports.length}`;
   if (dayPos.current.key !== listKey) dayPos.current = { key: listKey, map: new Map() };
+  // ימים מקופלים ("N ימים קודמים החודש") לא מוצגים — מוחקים את המיקומים שנמדדו להם
+  // כשהיו מוצגים, אחרת יום מקופל (למשל 9.11) "נמצא" מתחת לפס בגלילה והתאריכון קופץ אליו.
+  if (collapseBefore) core.dropDaysBefore(collapseBefore);
 
   /** הסימון בתאריכון: הטווח (במצב טווח) או היום שאליו גוללים */
   const markDay = (pinned ? scrollDay : null) ?? focusDay;
