@@ -25,10 +25,25 @@ import { LoadingScreen } from '../components/LoadingScreen';
  */
 function ReportScreenInner() {
   const core = useReportWizard();
-  const { workplaces, editing, lockedStart, styles, colors, router } = core;
+  const { workplaces, editing, editMissing, editId, lockedStart, styles, colors, router } = core;
 
   if (workplaces === null) {
     return <LoadingScreen />;
+  }
+
+  // עריכה: עד שהדיווח נטען — טעינה, לא אשף של דיווח חדש (שנפתח על תאריך אחר).
+  if (editId && !editing) {
+    if (!editMissing) return <LoadingScreen />;
+    return (
+      <Screen>
+        <Stack.Screen options={{ title: 'עריכת דיווח' }} />
+        <View style={styles.intro}>
+          <Text style={styles.title}>הדיווח לא נמצא</Text>
+          <Text style={styles.subtitle}>ייתכן שהוא נמחק או שעוד לא סונכרן למכשיר הזה.</Text>
+        </View>
+        <Button label="חזרה" variant="secondary" onPress={() => router.back()} />
+      </Screen>
+    );
   }
 
   if (editing && lockedStart) {
@@ -77,7 +92,11 @@ function ReportScreenInner() {
 
   return (
     <Screen keyboardFooter>
-      {direct && step !== 'done' ? <Stack.Screen options={{ title: 'דיווח מפגש' }} /> : null}
+      {editId ? (
+        <Stack.Screen options={{ title: 'עריכת דיווח' }} />
+      ) : direct && step !== 'done' ? (
+        <Stack.Screen options={{ title: 'דיווח מפגש' }} />
+      ) : null}
       <WizardStepper w={w} />
       <ReportContextCard w={w} />
       <SessionDetailsCard w={w} />
