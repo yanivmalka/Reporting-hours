@@ -16,7 +16,7 @@ import { MailSync } from '../components/MailSync';
 import { PushScheduler } from '../components/PushScheduler';
 import { SyncProvider, useCloudSync } from '../components/CloudSync';
 import { BlockedWriteNotice } from '../components/Access';
-import { HeaderTitle } from '../components/HeaderTitle';
+import { HeaderBadges, HeaderTitle } from '../components/HeaderTitle';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -87,12 +87,15 @@ function Chrome() {
                 <HeaderStart canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
               ),
               headerBackVisible: false,
-              // הכותרת ולצדה סימני מצב: נתונים של משתמש אחר (👤) ומצב צפייה בלבד (👁)
               headerTitle: (props) => (
                 <HeaderTitle title={String(props.children ?? '')} tintColor={String(props.tintColor ?? barFg)} />
               ),
+              // סימני מצב (👤 נתונים של משתמש אחר, 👁 צפייה בלבד) בצמוד לשמאל, לפני ה־⋮
               headerRight: (props) => (
-                <HeaderEnd canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <HeaderBadges />
+                  <HeaderEnd canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
+                </View>
               ),
             }}
           >
