@@ -6,9 +6,12 @@
  * האזור לא תופס מגע (`pointerEvents="none"`), כך שהגרירה נשארת בתיבה.
  * מצב אחד גלובלי: `showWheelOverlay` / `hideWheelOverlay`, והמארח
  * (`WheelOverlayHost`) מרונדר פעם אחת בשורש האפליקציה (`app/_layout.tsx`).
+ *
+ * עזיבת הגרירה (`hideWheelOverlay({ linger: true })`): השכבה נשארת רגע עם הערך
+ * הסופי ונעלמת בדהייה. גרירה חדשה בזמן הזה מחזירה אותה מיד.
  */
-import { useSyncExternalStore } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 
 export type WheelColumn = {
@@ -29,7 +32,12 @@ export type WheelOverlayState = {
   bottom: number;
 };
 
-let current: WheelOverlayState | null = null;
+/** כמה זמן השכבה נשארת אחרי עזיבת הגרירה, לפני הדהייה */
+const LINGER_MS = 600;
+const FADE_MS = 300;
+
+type Snapshot = { state: WheelOverlayState; leaving: boolean } | null;
+let current: Snapshot = null;
 const listeners = new Set<() => void>();
 
 function notify() {
@@ -37,12 +45,26 @@ function notify() {
 }
 
 export function showWheelOverlay(state: WheelOverlayState) {
-  current = state;
+  current = { state, leaving: false };
   notify();
 }
 
-export function hideWheelOverlay() {
+/**
+ * הסתרת השכבה. `linger` — בסוף גרירה: נשארת רגע ונעלמת בדהייה; בלי — מיד
+ * (למשל כשנכנסים להקליד בתיבה).
+ */
+export function hideWheelOverlay(opts?: { linger?: boolean }) {
   if (current == null) return;
+  if (opts?.linger === true) {
+    if (current.leaving) return;
+    current = { ...current, leaving: true };
+  } else current = null;
+  notify();
+}
+
+/** סוף הדהייה — רק אם בינתיים לא התחילה גרירה חדשה. */
+function finishLeaving(snap: Snapshot) {
+  if (current !== snap) return;
   current = null;
   notify();
 }
@@ -56,9 +78,9 @@ function subscribe(l: () => void) {
 
 const get = () => current;
 
-/** האם גלגלת נגררת עכשיו (השכבה מוצגת). */
+/** האם גלגלת נגררת עכשיו (לא כולל ההשתהות והדהייה אחרי העזיבה). */
 export function useWheelActive(): boolean {
-  return useSyncExternalStore(subscribe, () => current != null, () => false);
+  return useSyncExternalStore(subscribe, () => current != null && !current.leaving, () => false);
 }
 
 /** מרווח מתחת לגלגלת, מעל התיבה */
@@ -66,14 +88,34 @@ const GAP = 12;
 const TITLE_H = 32;
 
 export function WheelOverlayHost() {
-  const state = useSyncExternalStore(subscribe, get, () => null);
-  if (!state) return null;
+  const snap = useSyncExternalStore(subscribe, get, () => null);
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!snap) return;
+    if (!snap.leaving) {
+      opacity.stopAnimation();
+      opacity.setValue(1);
+      return;
+    }
+    const anim = Animated.timing(opacity, {
+      toValue: 0,
+      delay: LINGER_MS,
+      duration: FADE_MS,
+      useNativeDriver: false,
+    });
+    anim.start(({ finished }) => {
+      if (finished) finishLeaving(snap);
+    });
+    return () => anim.stop();
+  }, [snap, opacity]);
+  if (!snap) return null;
+  const state = snap.state;
   const height = Math.max(0, state.bottom - GAP);
   // שלוש שורות + כותרת בתוך האזור; גופן גדול ככל שיש מקום.
   const row = Math.max(34, Math.min(84, (height - TITLE_H - 16) / 3));
   const font = Math.round(row * 0.78);
   return (
-    <View pointerEvents="none" style={[styles.host, { height: height + GAP }]}>
+    <Animated.View pointerEvents="none" style={[styles.host, { height: height + GAP, opacity }]}>
       <View style={styles.inner}>
         <Text style={styles.title} numberOfLines={1}>
           {state.title}
@@ -105,7 +147,7 @@ export function WheelOverlayHost() {
           ) : null}
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

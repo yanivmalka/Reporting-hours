@@ -9,7 +9,8 @@
  * - כניסה לשדה מלא מנקה אותו; הערך הקודם מוצג כרמז אפור ומוחזר אם יוצאים
  *   בלי להקליד.
  * - גלגלת: גרירה אנכית על התיבה (וגלגלת עכבר ב־web). בחצי השמאלי — שעות
- *   (צעד של שעה), בחצי הימני — דקות (צעד של דקה; מעבר 59 / 00 מעדכן את השעה).
+ *   (צעד של שעה), בחצי הימני — דקות (צעד של דקה; מעבר 59 / 00 מעדכן את השעה). בקצה היממה הגלגלת נעצרת (23:59 / 00:00),
+ *   בלי לקפוץ לצד השני. בעזיבה השכבה נשארת רגע ונעלמת בדהייה.
  *   בזמן הגרירה מוצגת שכבת גלגלת כהה מעל התיבה (`WheelOverlay`), עם `label`.
  * - הערך החיצוני הוא "HH:MM" כשהשעה מלאה, אחרת מחרוזת ריקה.
  * - `min` (שעת סיום — שעת ההתחלה): הגלגלת לא יורדת אל `min` ומתחת לו ולא עוברת את חצות,
@@ -48,6 +49,10 @@ type TimeInputProps = {
   /** השעה חייבת להיות אחרי זו ("HH:MM") — לשעת סיום */
   min?: string;
 };
+
+/** פיקסלים של גרירה לשעה / לדקה */
+const HOUR_STEP_PX = 40;
+const MINUTE_STEP_PX = 18;
 
 const onlyDigits = (text: string) => text.replace(/\D/g, '');
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -192,8 +197,12 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     // שדה ריק עם `min` — הגלגלת מתחילה משעת ההתחלה.
     const from = base[0] === '' && lo != null ? lo : Number(base[0] || 0) * 60 + Number(base[1] || 0);
     const raw = from + delta;
-    // עם `min` — בלי מעבר חצות, ותמיד אחרי `min`.
-    const total = lo != null ? Math.min(1439, Math.max(lo + 1, raw)) : ((raw % 1440) + 1440) % 1440;
+    // בלי מעבר חצות: בקצה היממה (או אחרי `min`) הגלגלת נעצרת — לא קופצת ל־00.
+    // בגרירת שעות הדקות נשמרות: הקצה הוא 23:MM / 00:MM, לא 23:59.
+    const m = from % 60;
+    const hi = partRef.current === 0 ? 23 * 60 + m : 1439;
+    const floor = lo != null ? lo + 1 : partRef.current === 0 ? m : 0;
+    const total = Math.min(hi, Math.max(floor, raw));
     setSaved('');
     emit(pad2(Math.floor(total / 60)), pad2(total % 60));
   }
@@ -206,8 +215,10 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     },
     onEnd: () => {
       setDrag(null);
-      hideWheelOverlay();
+      hideWheelOverlay({ linger: true });
     },
+    // שעות — תנועה גדולה יותר לכל שעה, כדי שלא "יברחו" בגרירה ארוכה.
+    stepPx: () => (partRef.current === 0 ? HOUR_STEP_PX : MINUTE_STEP_PX),
   });
 
   useEffect(() => {
@@ -218,7 +229,7 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
       bottom: drag.top,
       separator: ':',
       columns: [
-        { values: [pad2((h + 23) % 24), pad2(h), pad2((h + 1) % 24)], active: drag.part === 0 },
+        { values: [h > 0 ? pad2(h - 1) : '', pad2(h), h < 23 ? pad2(h + 1) : ''], active: drag.part === 0 },
         { values: [pad2((m + 59) % 60), pad2(m), pad2((m + 1) % 60)], active: drag.part === 1 },
       ],
     });
