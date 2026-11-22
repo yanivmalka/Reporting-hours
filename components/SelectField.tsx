@@ -32,6 +32,13 @@ type SelectFieldProps<T extends string | null> = {
   active?: boolean;
   /** כפתור אייקון קטן (סינון) במקום שדה מלא — למשל בפס השבוע המוצמד */
   compact?: boolean;
+  /**
+   * צ׳יפ סינון קומפקטי (שורת הבקרה ביומן): בלי סינון — משפך ו־placeholder;
+   * עם סינון — נקודת הצבע של האפשרות, שמה ו־✕ שמנקה (onClear).
+   */
+  chip?: boolean;
+  placeholder?: string;
+  onClear?: () => void;
 };
 
 export function SelectField<T extends string | null>({
@@ -42,6 +49,9 @@ export function SelectField<T extends string | null>({
   title,
   active,
   compact,
+  chip,
+  placeholder,
+  onClear,
 }: SelectFieldProps<T>) {
   const { colors } = useTheme();
   const styles = useStyles(makeStyles);
@@ -50,7 +60,32 @@ export function SelectField<T extends string | null>({
 
   return (
     <>
-      {compact ? (
+      {chip ? (
+        <View style={[styles.chip, active && styles.fieldActive]}>
+          <Pressable
+            onPress={() => setOpen(true)}
+            hitSlop={6}
+            style={styles.chipMain}
+            accessibilityRole="button"
+            accessibilityLabel={`${title ?? label ?? ''} ${active ? current?.label ?? '' : placeholder ?? ''}`}
+          >
+            {active && current?.color ? (
+              <View style={[styles.chipDot, { backgroundColor: current.color }]} />
+            ) : (
+              <Icon name={active ? 'filter' : 'filter-outline'} size={16} color={active ? colors.brand : colors.textMuted} />
+            )}
+            <Text style={[styles.chipText, active && styles.textActive]} numberOfLines={1}>
+              {active ? current?.label ?? '' : placeholder ?? current?.label ?? ''}
+            </Text>
+            {active && onClear ? null : <Icon name="chevron-down" size={16} color={colors.textMuted} />}
+          </Pressable>
+          {active && onClear ? (
+            <Pressable onPress={onClear} hitSlop={8} accessibilityRole="button" accessibilityLabel="נקה סינון">
+              <Icon name="close" size={16} color={colors.brandDark} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : compact ? (
         <Pressable
           onPress={() => setOpen(true)}
           style={[styles.iconBtn, active && styles.fieldActive]}
@@ -135,6 +170,22 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       borderColor: c.border,
       borderRadius: radius.lg,
     },
+    chip: {
+      height: 32,
+      maxWidth: 200,
+      flexShrink: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 16,
+      backgroundColor: c.surface,
+    },
+    chipMain: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+    chipDot: { width: 10, height: 10, borderRadius: 5 },
+    chipText: { fontSize: 13, fontWeight: '700', color: c.text, flexShrink: 1 },
     fieldActive: {
       borderColor: c.brand,
       backgroundColor: c.brandLight,
