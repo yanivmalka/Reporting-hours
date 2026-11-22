@@ -1,7 +1,7 @@
 /**
  * הודעה בראש כל מסך (components/Screen.tsx) כשההרשאה לנתונים של בעלים אחר
  * בוטלה (docs/sharing-spec.md). הסימון שצופים בנתונים של משתמש אחר, ומצב צפייה
- * בלבד — אייקונים בשורת התפריט ליד הכותרת (components/HeaderTitle.tsx).
+ * בלבד — אייקונים בשורת התפריט בצמוד לשמאל (components/HeaderTitle.tsx).
  */
 import { View } from 'react-native';
 import { Text } from './Text';

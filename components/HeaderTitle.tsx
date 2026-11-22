@@ -1,8 +1,10 @@
 /**
- * כותרת המסך בשורת התפריט (app/_layout.tsx), ולצדה סימני מצב:
- * - אייקון משתמש — מוצגים נתונים של משתמש אחר (חשבון ששותף, docs/sharing-spec.md).
- * - עין — מצב צפייה בלבד (lib/viewOnly.ts).
- * לחיצה על סימן פותחת דיאלוג עם הפרטים והמעבר חזרה ("לנתונים שלי" / "מעבר לעריכה").
+ * שורת התפריט (app/_layout.tsx):
+ * - HeaderTitle — כותרת המסך.
+ * - HeaderBadges — סימני מצב, בצמוד לשמאל השורה (בצד ה־⋮, לא ליד הכותרת):
+ *   - אייקון משתמש — מוצגים נתונים של משתמש אחר (חשבון ששותף, docs/sharing-spec.md).
+ *   - עין — מצב צפייה בלבד (lib/viewOnly.ts).
+ *   לחיצה על סימן פותחת דיאלוג עם הפרטים והמעבר חזרה ("לנתונים שלי" / "מעבר לעריכה").
  */
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -19,6 +21,15 @@ import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyle
 
 export function HeaderTitle({ title, tintColor }: { title: string; tintColor: string }) {
   const styles = useStyles(makeStyles);
+  return (
+    <Text style={[styles.title, { color: tintColor }]} numberOfLines={1}>
+      {title}
+    </Text>
+  );
+}
+
+export function HeaderBadges() {
+  const styles = useStyles(makeStyles);
   const { access, switchAccount } = useCloudSync();
   const viewOnly = useViewOnly();
   const [open, setOpen] = useState<'account' | 'viewOnly' | null>(null);
@@ -27,9 +38,6 @@ export function HeaderTitle({ title, tintColor }: { title: string; tintColor: st
 
   return (
     <View style={styles.row}>
-      <Text style={[styles.title, { color: tintColor }]} numberOfLines={1}>
-        {title}
-      </Text>
       {access ? (
         <Pressable
           onPress={() => setOpen('account')}
@@ -102,7 +110,7 @@ export function HeaderTitle({ title, tintColor }: { title: string; tintColor: st
 
 function makeStyles(c: ColorScheme, layout: StyleLayout) {
   return {
-    row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.sm, flexShrink: 1 },
+    row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.sm, marginHorizontal: spacing.sm },
     title: { fontSize: 20, fontWeight: '700' as const, flexShrink: 1 },
     badge: { padding: 2 },
     accent: { color: c.brand },
