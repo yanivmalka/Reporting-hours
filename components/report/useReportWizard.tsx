@@ -62,6 +62,8 @@ export function useReportWizard() {
   const [editing, setEditing] = useState<WorkReport | null>(null);
   /** בעריכה: הדוח לשכר של החודש נשלח — הדיווח נעול */
   const [lockedStart, setLockedStart] = useState<string | null>(null);
+  /** בעריכה: הדיווח לא נמצא בנתונים (נמחק / לא סונכרן) — לא נופלים לאשף של דיווח חדש */
+  const [editMissing, setEditMissing] = useState(false);
   const confirm = useConfirm();
   const sessionDialog = useSessionCancel();
   const moveDialog = useSessionMove();
@@ -176,6 +178,7 @@ export function useReportWizard() {
       if (editId) {
         if (editing) return;
         const r = reports.find((x) => x.id === editId);
+        setEditMissing(!r);
         if (r) {
           const w = list.find((x) => x.id === r.workplaceId);
           if (w) {
@@ -380,6 +383,7 @@ export function useReportWizard() {
     skippedCourse,
     setSkippedCourse,
     editing,
+    editMissing,
     setEditing,
     lockedStart,
     setLockedStart,
