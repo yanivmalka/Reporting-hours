@@ -9,9 +9,7 @@ import { Text } from './Text';
 import { FoldSection } from './FoldSection';
 import { FoldChevron } from './Chevrons';
 import { Pressable } from './Pressable';
-import { DEFAULT_MAIL_SETTINGS, loadMailSettings, mailTextArchived, splitMailReply } from '../lib/mailReport';
-import { isoDate } from '../lib/dates';
-import { formatISODate } from '../lib/time';
+import { DEFAULT_MAIL_SETTINGS, loadMailSettings, mailReceivedLabel, mailTextArchived, splitMailReply } from '../lib/mailReport';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
@@ -22,7 +20,7 @@ export function ViaEmail({ via }: { via: { text: string; receivedAt: number } })
   useEffect(() => {
     void loadMailSettings().then((s) => setDays(s.archiveDays));
   }, []);
-  const when = formatISODate(isoDate(new Date(via.receivedAt)));
+  const when = mailReceivedLabel(via.receivedAt);
   const [threadOpen, setThreadOpen] = useState(false);
   const { reply, quoted } = splitMailReply(via.text ?? '');
   const body = (
@@ -47,7 +45,7 @@ export function ViaEmail({ via }: { via: { text: string; receivedAt: number } })
   );
   if (mailTextArchived(via.receivedAt, days)) {
     return (
-      <FoldSection title={`המייל שהתקבל ב־${when} (ארכיון)`}>
+      <FoldSection title={`המייל שהתקבל · ${when} (ארכיון)`}>
         {body}
       </FoldSection>
     );

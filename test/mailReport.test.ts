@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Course } from '../lib/courses';
-import { buildPlanDays, mailTextArchived, splitMailReply, unseenMailReports } from '../lib/mailReport';
+import { buildPlanDays, mailReceivedLabel, mailTextArchived, splitMailReply, unseenMailReports } from '../lib/mailReport';
 import { leftoverMinutesFor } from '../lib/reportForm';
 import type { WorkReport } from '../lib/reports';
 import type { Workplace } from '../lib/workplaces';
@@ -85,5 +85,13 @@ describe('splitMailReply', () => {
   it('בלי ציטוט, או רק ציטוט — הכול מוצג', () => {
     expect(splitMailReply('  כן  ')).toEqual({ reply: 'כן', quoted: '' });
     expect(splitMailReply('> רק ציטוט')).toEqual({ reply: '> רק ציטוט', quoted: '' });
+  });
+});
+
+describe('mailReceivedLabel', () => {
+  it('מציג תאריך ושעה מקומיים', () => {
+    const at = new Date(2026, 10, 22, 21, 4).getTime();
+    expect(mailReceivedLabel(at)).toMatch(/ · 21:04$/);
+    expect(mailReceivedLabel(at)).toContain('22');
   });
 });

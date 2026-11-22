@@ -170,8 +170,11 @@ export function useReportWizard() {
       // דיווח חדש — הדקות העודפות לפי ההגדרה הכללית (נטען מחדש גם בחזרה
       // מהמסך שבו משנים אותה). דיווח קיים שומר את מה שנקבע בו.
       if (!editId) loadLeftoverMode().then((m) => setLeftoverChoice(m));
-      // מצב עריכה — טעינת הדיווח פעם אחת ומילוי הטופס.
-      if (editId && !editing) {
+      // מצב עריכה — טעינת הדיווח פעם אחת ומילוי הטופס. טעינה חוזרת (כש־editing
+      // נקבע, חזרה למסך, סנכרון) לא נוגעת בטופס — אחרת היא נופלת למסלול של דיווח
+      // חדש וממלאת מחדש את שעות הקורס על השעות שנשמרו.
+      if (editId) {
+        if (editing) return;
         const r = reports.find((x) => x.id === editId);
         if (r) {
           const w = list.find((x) => x.id === r.workplaceId);

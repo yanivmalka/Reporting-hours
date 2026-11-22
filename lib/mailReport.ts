@@ -16,6 +16,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { APP_ID, firestore } from './firebase';
 import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
+import { formatISODate, formatTime } from './time';
 import { authUser, getAccess, isDemoActive } from './sync';
 import { courseReported, coursesOn, loadCourses, sessionTimes, type Course } from './courses';
 import { loadReports, type WorkReport } from './reports';
@@ -129,6 +130,12 @@ export function unseenMailReports(
     if (at > latest) latest = at;
   }
   return { count, latest };
+}
+
+/** מועד קבלת המייל לתצוגה — תאריך ושעה מקומיים: "22.11.2026 · 21:34". */
+export function mailReceivedLabel(receivedAt: number): string {
+  const d = new Date(receivedAt);
+  return `${formatISODate(isoDate(d))} · ${formatTime(d.getHours() * 60 + d.getMinutes())}`;
 }
 
 /** האם טקסט המייל של הדיווח כבר בארכיון (עברו `archiveDays` ימים מקבלתו). */
