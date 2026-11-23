@@ -162,6 +162,7 @@ export default function PreferencesScreen() {
         {isOwner ? link('/mail-report', 'email-fast-outline', t('nav.mailReport')) : null}
         {link('/holidays', 'calendar-check-outline', t('nav.holidays'))}
         {link('/export', 'file-export-outline', t('nav.export'), 'CSV לאקסל או PDF להדפסה')}
+        {link('/activity', 'history', t('nav.activity'), 'מי שינה מה ומתי · שחזור וביטול')}
       </Group>
 
       {isOwner ? (

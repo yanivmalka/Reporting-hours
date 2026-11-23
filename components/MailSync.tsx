@@ -12,6 +12,7 @@ import { onLocalWrite, readJSON, writeJSON } from '../lib/storage';
 import { KEYS } from '../lib/keys';
 import { authUser, getAccess, onRemoteChange } from '../lib/sync';
 import { loadReports } from '../lib/reports';
+import { appendLog, mailLogEntries } from '../lib/activityLog';
 import { useToast } from './Toast';
 
 const START_DELAY_MS = 8_000;
@@ -33,7 +34,10 @@ async function checkUnseen(show: (m: string) => void): Promise<void> {
   const account = getAccess()?.ownerUid ?? authUser()?.uid;
   if (!account) return;
   const seen = await readJSON<Record<string, number>>(KEYS.mailSeen, {});
-  const { count, latest } = unseenMailReports(await loadReports(), seen[account] ?? null);
+  const reports = await loadReports();
+  // יומן הפעולות: דיווח שהשרת רשם מהמייל (פעם אחת לכל דיווח, גם מכמה מכשירים).
+  await appendLog(mailLogEntries(reports)).catch((e) => console.warn('[log] mail log failed', e));
+  const { count, latest } = unseenMailReports(reports, seen[account] ?? null);
   if (count > 0) show(count === 1 ? 'נקלט דיווח מהמייל' : `נקלטו ${count} דיווחים מהמייל`);
   if (latest !== (seen[account] ?? null)) await writeJSON(KEYS.mailSeen, { ...seen, [account]: latest });
 }

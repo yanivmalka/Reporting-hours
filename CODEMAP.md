@@ -38,6 +38,8 @@
 | תאריך התחלת עבודה עם המערכת | `lib/trackingStart.ts` | `reporting-hours/tracking-start/v1` |
 | תצוגת קורסים עם אותו שם בלוח הבקרה (`split` — קורס לכל יום / `merged` — מאוחד לפי שם) | `lib/courseGrouping.ts` | `reporting-hours/course-grouping/v1` |
 | מצב צפייה בלבד (במכשיר) | `lib/viewOnly.ts` | `reporting-hours/view-only/v1` |
+| יומן פעולות — כל שינוי בדיווחים עם הגרסאות לפני / אחרי (מסונכרן, 90 יום) | `lib/activityLog.ts`, `lib/activityUndo.ts`, `app/activity.tsx` | `reporting-hours/activity-log/v1` |
+| מזהה מכשיר קצר ליומן הפעולות (במכשיר) | `lib/activityLog.ts` | `reporting-hours/device-id/v1` |
 | מצב התאריכון ביומן (`auto` / `full` — מלא נעוץ / `week` — פס שבוע נעוץ) | `app/reports.tsx` | `reporting-hours/journal-calendar-pin/v1` |
 | דקות עודפות — למונה / בדיווח (הגדרה כללית) | `lib/leftover.ts` | `reporting-hours/leftover-mode/v1` |
 | פרטים אישיים | `lib/profile.ts` | `reporting-hours/profile/v1` |

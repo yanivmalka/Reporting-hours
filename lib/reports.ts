@@ -1,7 +1,8 @@
 import { toAcademic, type AcademicBreakdown } from './academic';
 import { readJSON, writeJSON } from './storage';
 import { parseTime } from './time';
-import { actingAs } from './sync';
+import { actingAs, authUser } from './sync';
+import { appendLog, deviceName, reportLogEntries } from './activityLog';
 import { KEYS } from './keys';
 
 /**
@@ -83,10 +84,18 @@ export async function loadReports(): Promise<WorkReport[]> {
   }));
 }
 
-export async function saveReports(list: WorkReport[]): Promise<void> {
+/**
+ * שמירת רשימת הדיווחים. כל שינוי נרשם ביומן הפעולות (lib/activityLog.ts).
+ * `log.action` — כתיבה שהיא שחזור / ביטול מתוך היומן (`undoOf` — הרשומה המבוטלת).
+ */
+export async function saveReports(
+  list: WorkReport[],
+  log: { action?: 'restore' | 'undo'; undoOf?: string } = {},
+): Promise<void> {
   // דיווח שנוסף או השתנה מקבל את שם המדווח (מורשה), או מאבד אותו כשהבעלים עורכים.
   const actor = actingAs();
-  const prev = new Map((await readJSON<WorkReport[]>(STORAGE_KEY, [])).map((r) => [r.id, r]));
+  const prevList = await readJSON<WorkReport[]>(STORAGE_KEY, []);
+  const prev = new Map(prevList.map((r) => [r.id, r]));
   const stamped = list.map((r) => {
     const old = prev.get(r.id);
     const { by: _by, ...rest } = r;
@@ -97,7 +106,15 @@ export async function saveReports(list: WorkReport[]): Promise<void> {
     }
     return actor ? { ...rest, by: actor } : rest;
   });
-  return writeJSON(STORAGE_KEY, stamped);
+  await writeJSON(STORAGE_KEY, stamped);
+  try {
+    const me = authUser();
+    const who = actor ?? (me ? { name: me.name || me.email || '', email: me.email || '' } : undefined);
+    const entries = reportLogEntries(prevList, stamped, { at: Date.now(), who, device: await deviceName(), ...log });
+    await appendLog(entries);
+  } catch (e) {
+    console.warn('[log] report log failed', e);
+  }
 }
 
 function makeId(): string {

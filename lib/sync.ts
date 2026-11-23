@@ -33,6 +33,7 @@ import {
 import { DATA_PREFIX, KEYS, isBackedUpKey, isSyncedKey as isSyncedByScope, isViewerLocalKey } from './keys';
 import { APP_ID, firestore, type CloudUser } from './firebase';
 import { merge3Raw } from './merge';
+import { appendLog, deviceName, droppedOnMerge, makeLogId, type LogEntry } from './activityLog';
 
 const PREFIX = DATA_PREFIX;
 const META_KEY = 'reporting-hours-sync/meta/v1';
@@ -45,6 +46,51 @@ const ACTIVE_KEY = 'reporting-hours-sync/active/v1';
 const REPORTER_KEYS = new Set<string>([KEYS.reports, KEYS.sessions, KEYS.accumulated]);
 /** מונה: שינויים מקבילים מצטברים במיזוג. */
 const ADDITIVE_KEYS = new Set<string>([KEYS.accumulated]);
+/** מפתחות שבהם מחיקה גוברת על שינוי מקביל (lib/merge.ts) — והגרסה שנזרקה נרשמת ביומן הפעולות. */
+const DELETE_WINS_KEYS = new Set<string>([KEYS.reports]);
+
+const parseList = (raw: string | null): any[] => {
+  try {
+    const v = raw == null ? [] : JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+};
+
+/** מיזוג מפתח בסנכרון; בדיווחים — רישום ביומן של גרסה שנזרקה (נמחקה בצד אחד ושונתה בשני). */
+function mergeKey(key: string, base: string | null, local: string, remote: string): string {
+  const deleteWins = DELETE_WINS_KEYS.has(key);
+  const merged = merge3Raw(base, local, remote, ADDITIVE_KEYS.has(key), deleteWins);
+  if (deleteWins && base != null) {
+    try {
+      const dropped = droppedOnMerge(parseList(base), parseList(local), parseList(remote), parseList(merged));
+      if (dropped.length) {
+        const at = Date.now();
+        void deviceName()
+          .then((device) =>
+            appendLog(
+              dropped.map(
+                (r): LogEntry => ({
+                  id: makeLogId(at),
+                  at,
+                  action: 'sync-dropped',
+                  entity: 'report',
+                  entityId: r.id,
+                  device,
+                  before: r,
+                }),
+              ),
+            ),
+          )
+          .catch((e) => console.warn('[log] sync log failed', e));
+      }
+    } catch (e) {
+      console.warn('[log] sync diff failed', e);
+    }
+  }
+  return merged;
+}
 const DEMO_META_KEY = KEYS.demo;
 const PUSH_DELAY_MS = 1500;
 
@@ -217,7 +263,7 @@ async function pushKey(uid: string, key: string): Promise<boolean> {
       const ru = Number(d.updated) || 0;
       // מישהו אחר כתב מאז הבסיס שלנו — ממזגים במקום לדרוס.
       if (typeof d.v === 'string' && ru !== known && d.v !== raw) {
-        written = merge3Raw(base, raw, d.v, ADDITIVE_KEYS.has(key));
+        written = mergeKey(key, base, raw, d.v);
       }
     }
     updated = Date.now();
@@ -228,7 +274,7 @@ async function pushKey(uid: string, key: string): Promise<boolean> {
     // ייתכן שבזמן הדחיפה נכתב ערך מקומי חדש — ממזגים גם אותו.
     const now = await AsyncStorage.getItem(key);
     if (now != null && now !== raw) {
-      await AsyncStorage.setItem(key, merge3Raw(raw, now, written, ADDITIVE_KEYS.has(key)));
+      await AsyncStorage.setItem(key, mergeKey(key, raw, now, written));
       dirty.add(key);
     } else {
       await AsyncStorage.setItem(key, written);
@@ -384,7 +430,7 @@ async function pullOnce(): Promise<boolean> {
         continue;
       }
       // שני הצדדים שינו — מיזוג.
-      const merged = merge3Raw(base, local, c.v, ADDITIVE_KEYS.has(key));
+      const merged = mergeKey(key, base, local, c.v);
       if (merged !== local) {
         await AsyncStorage.setItem(key, merged);
         changed = true;

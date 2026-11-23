@@ -119,6 +119,7 @@ function Chrome() {
             <Stack.Screen name="course-form" options={{ title: 'קורס' }} />
             <Stack.Screen name="trash" options={{ title: t('nav.trash') }} />
             <Stack.Screen name="archive" options={{ title: t('nav.archive') }} />
+            <Stack.Screen name="activity" options={{ title: t('nav.activity') }} />
             <Stack.Screen name="settings" options={{ title: t('nav.settings') }} />
             <Stack.Screen name="holidays" options={{ title: t('nav.holidays') }} />
             <Stack.Screen name="data" options={{ title: t('nav.data') }} />
