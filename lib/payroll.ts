@@ -151,11 +151,33 @@ export type PayrollSession = {
   netMinutes: number;
 };
 
+/** כל המפגשים של יום אחד (בקיבוץ לפי מקום עבודה) — שורה אחת בדוח, עם סה״כ השעות של היום. */
+export type PayrollDay = {
+  date: string;
+  /** המפגשים של היום, לפי שעת ההתחלה */
+  sessions: PayrollSession[];
+  netMinutes: number;
+};
+
+/** מפגשי הקבוצה מקובצים לפי תאריך (טהור). */
+export function sessionsByDate(sessions: readonly PayrollSession[]): PayrollDay[] {
+  const map = new Map<string, PayrollSession[]>();
+  for (const x of sessions) map.set(x.date, [...(map.get(x.date) ?? []), x]);
+  return [...map]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, list]) => {
+      const sorted = [...list].sort((a, b) => a.start.localeCompare(b.start));
+      return { date, sessions: sorted, netMinutes: sorted.reduce((n, x) => n + x.netMinutes, 0) };
+    });
+}
+
 export type PayrollGroup = {
   /** תווית הקבוצה לפי רמת הקיבוץ: שם הקורס / "קורס · יום ב׳" / שם מקום העבודה; או "ללא קורס" */
   name: string;
   sessions: PayrollSession[];
   netMinutes: number;
+  /** בקיבוץ לפי מקום עבודה — המפגשים מקובצים גם לפי תאריך (שורה ליום) */
+  days?: PayrollDay[];
 };
 
 /** מפגש שבוטל בתקופה — לשורה בדוח השכר. */
@@ -230,6 +252,7 @@ export function buildPayrollReport(
       name: level === 'workplace' ? workplace.name : g.label,
       sessions,
       netMinutes: sessions.reduce((n, x) => n + x.netMinutes, 0),
+      ...(level === 'workplace' ? { days: sessionsByDate(sessions) } : {}),
     };
   });
   const days = new Set(mine.map((r) => r.date)).size;
@@ -336,16 +359,21 @@ export function payrollBody(report: PayrollReport, profile?: Profile): string {
   const header = ['תאריך', 'יום', 'שעות', 'שע׳ אקד׳'];
   for (const g of report.groups) {
     lines.push('');
-    lines.push(`■ ${g.name} — ${g.sessions.length} מפגשים · ${academic(g.netMinutes)} שעות אקדמיות`);
+    const days = g.days?.length ?? 0;
+    lines.push(
+      `■ ${g.name} — ${g.sessions.length} מפגשים${g.days ? ` · ${days} ימים` : ''} · ${academic(g.netMinutes)} שעות אקדמיות`,
+    );
     lines.push(header.map((h, k) => pad(h, W[k])).join(' | '));
     lines.push(W.map((w) => '-'.repeat(w)).join('-+-'));
-    for (const s of g.sessions) {
-      const [y, m, d] = s.date.split('-').map(Number);
+    // בקיבוץ לפי מקום עבודה — שורה לכל תאריך, עם כל טווחי השעות של היום וסה״כ.
+    const rows = g.days ?? g.sessions.map((s) => ({ date: s.date, sessions: [s], netMinutes: s.netMinutes }));
+    for (const day of rows) {
+      const [y, m, d] = day.date.split('-').map(Number);
       const row = [
-        ddmmyyyy(s.date),
+        ddmmyyyy(day.date),
         WEEKDAYS[new Date(y, m - 1, d).getDay()],
-        `${s.start}-${s.end}`,
-        academic(s.netMinutes),
+        day.sessions.map((s) => `${s.start}-${s.end}`).join(', '),
+        academic(day.netMinutes),
       ];
       lines.push(row.map((c, k) => pad(c, W[k])).join(' | '));
     }

@@ -12,7 +12,10 @@ import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { EnterChevron } from './Chevrons';
 import { useSessionCancel } from './SessionCancelDialog';
-import { allCourseSessions, courseReport, timeRange, type Course } from '../lib/courses';
+import { allCourseSessions, courseReport, sessionTimes, timeRange, type Course } from '../lib/courses';
+import { dayTotalsByWorkplace, rangeNetMinutes } from '../lib/daySummary';
+import { netMinutes } from '../lib/reports';
+import { DaySummary } from './DaySummary';
 import { expectedFor, plannedFor } from '../lib/forecast';
 import type { PayBasis } from '../lib/payBasis';
 import type { WorkReport } from '../lib/reports';
@@ -106,6 +109,8 @@ export function PlanList({
   const rows = allRows.filter((r) => r.status !== 'untracked');
   const hiddenBefore = allRows.length - rows.length;
   const trackingStart = getTrackingStart();
+  const reportById = new Map(reports.map((r) => [r.id, r]));
+  const wpById = new Map(workplaces.map((w) => [w.id, w]));
   const days = new Map<string, SessionRowData[]>();
   for (const r of rows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
   const today = todayISO();
@@ -201,6 +206,22 @@ export function PlanList({
             {list.map((r) => (
               <SessionRow key={`${r.course.id}@${r.date}`} row={r} onPress={() => open(r)} />
             ))}
+            {(() => {
+              // סיכום היום לפי מקום עבודה — כשיש ביום יותר ממפגש אחד שמתקיים (לא בוטל / הועבר).
+              const held = list.filter((r) => r.status !== 'canceled' && r.status !== 'moved');
+              if (held.length < 2) return null;
+              const totals = dayTotalsByWorkplace(
+                held.map((r) => {
+                  const rep = r.reportId ? reportById.get(r.reportId) : undefined;
+                  const t = sessionTimes(r.course, r.date);
+                  return {
+                    workplaceId: r.workplace.id,
+                    netMinutes: rep ? netMinutes(rep) ?? 0 : rangeNetMinutes(t.start, t.end, t.breakMinutes),
+                  };
+                }),
+              );
+              return <DaySummary totals={totals} workplaceOf={(id) => wpById.get(id)} basis={basis} />;
+            })()}
           </View>
           </Fragment>
         ))}
