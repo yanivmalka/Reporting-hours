@@ -22,6 +22,8 @@ import { loadReports, type WorkReport } from '../lib/reports';
 import { loadWorkplaces, type Workplace } from '../lib/workplaces';
 import { loadCourses, type Course } from '../lib/courses';
 import { usePayBasis } from '../lib/payBasis';
+import { useGroupLevel } from '../lib/courseGrouping';
+import { GroupLevelPicker } from '../components/GroupLevelPicker';
 import { unlockFinance, useFinanceLocked } from '../lib/appLock';
 import { isoDate } from '../lib/dates';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -52,6 +54,7 @@ export default function ExportScreen() {
   const styles = useThemedStyles(makeStyles);
   const colorOf = useWorkplaceColor();
   const { basis } = usePayBasis();
+  const level = useGroupLevel();
   const locked = useFinanceLocked();
   const { showToast } = useToast();
   const [data, setData] = useState<Data | null>(null);
@@ -80,7 +83,7 @@ export default function ExportScreen() {
       .map((w) => ({ value: w.id, label: w.name, color: colorOf(w), sub: w.archivedAt ? 'בארכיון' : undefined })),
   ];
   const wpName = data.workplaces.find((w) => w.id === workplaceId)?.name ?? null;
-  const preview = buildExport(data.reports, data.workplaces, data.courses, basis, { from, to, workplaceId, withPay: false });
+  const preview = buildExport(data.reports, data.workplaces, data.courses, basis, { from, to, workplaceId, withPay: false, level });
 
   async function run(kind: 'csv' | 'pdf') {
     if (!data || badRange) return;
@@ -88,7 +91,7 @@ export default function ExportScreen() {
     if (withPay && locked && !(await unlockFinance())) return;
     setBusy(kind);
     try {
-      const out = buildExport(data.reports, data.workplaces, data.courses, basis, { from, to, workplaceId, withPay });
+      const out = buildExport(data.reports, data.workplaces, data.courses, basis, { from, to, workplaceId, withPay, level });
       const name = exportFileName({ from, to }, kind);
       const p = data.profile;
       const employee: EmployeeInfo = {
@@ -142,6 +145,9 @@ export default function ExportScreen() {
         <Text style={styles.label}>מקום עבודה</Text>
         <SelectField value={workplaceId} options={wpOptions} onChange={setWorkplaceId} title="מקום עבודה" />
 
+        <Text style={styles.label}>קיבוץ</Text>
+        <GroupLevelPicker />
+
         <Checkbox
           checked={withPay}
           onChange={setWithPay}
@@ -156,6 +162,14 @@ export default function ExportScreen() {
             ? 'אין דיווחים בתקופה'
             : `${preview.totals.reports === 1 ? 'דיווח אחד' : `${preview.totals.reports} דיווחים`} · ${hoursText(preview.totals.netMinutes)} שעות נטו`}
         </Text>
+        {preview.groups?.map((g) => (
+          <View key={g.label} style={styles.groupRow}>
+            <Text style={styles.groupLabel}>{g.label}</Text>
+            <Text style={styles.groupMeta}>
+              {g.totals.reports} דיווחים · {hoursText(g.totals.netMinutes)} שע׳
+            </Text>
+          </View>
+        ))}
         <Text style={styles.sub}>קובץ CSV נפתח באקסל וב־Google Sheets.</Text>
         <Text style={styles.sub}>קובץ PDF — טבלה מסודרת להדפסה או לשליחה.</Text>
         <Button
@@ -192,4 +206,7 @@ const makeStyles = (colors: AppColors) =>
     error: { fontSize: 13, color: colors.danger, textAlign: TEXT_RIGHT },
     dates: { flexDirection: 'row', gap: spacing.sm },
     dateCol: { flex: 1, gap: 4 },
+    groupRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+    groupLabel: { flex: 1, fontSize: 13, color: colors.text, textAlign: TEXT_RIGHT },
+    groupMeta: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
   });

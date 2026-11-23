@@ -17,6 +17,8 @@ import { useToast } from '../components/Toast';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
 import { loadCourses } from '../lib/courses';
 import { dateRange, deadlineRelative, shortDate } from '../lib/dashboard';
+import { useGroupLevel } from '../lib/courseGrouping';
+import { GroupLevelPicker } from '../components/GroupLevelPicker';
 import { buildPayrollReport, canceledByReason, expectedPayment, grossAmount, netAmount, loadPayrollStatus, payrollBody, payrollMailto, payrollSubject, periodStartingAt, periodTitle, statusKey, updatePayrollStatus, type PayrollReport, type PayrollStatus } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
 import { formatShekels, hasTravelCost } from '../lib/travel';
@@ -60,6 +62,7 @@ function PayrollReportScreen() {
   const [status, setStatus] = useState<PayrollStatus>({});
   const [missing, setMissing] = useState(false);
   const { basis } = usePayBasis();
+  const level = useGroupLevel();
   const [profile, setProfile] = useState<Profile | undefined>(undefined);
   /** דיאלוג ביטול דוח שנשלח — עם סיבה */
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -74,7 +77,7 @@ function PayrollReportScreen() {
         loadPayrollStatus(),
         loadProfile(),
       ]),
-    [params.wp, params.start, basis],
+    [params.wp, params.start, basis, level],
     ([workplaces, reports, courses, st, prof]) => {
       // שם השולח: השם המלא מהפרטים האישיים (בחשבון ששותף — של הבעלים).
       setProfile({ ...prof, fullName: senderName(prof) });
@@ -85,7 +88,7 @@ function PayrollReportScreen() {
       }
       const period = periodStartingAt(w, params.start);
       const own = st[statusKey(w.id, period.start)] ?? {};
-      setReport(buildPayrollReport(w, period, reports, courses, basis, own.redeemedMinutes ?? 0));
+      setReport(buildPayrollReport(w, period, reports, courses, basis, own.redeemedMinutes ?? 0, undefined, level));
       setStatus(own);
     },
   );
@@ -226,6 +229,13 @@ function PayrollReportScreen() {
           onPress={() => router.push({ pathname: '/workplace-form', params: { id: workplace.id, focus: 'payroll' } })}
         />
       </View>
+
+      {!empty ? (
+        <View style={styles.levelBox}>
+          <Text style={styles.label}>קיבוץ המפגשים (גם במייל ובשיתוף)</Text>
+          <GroupLevelPicker />
+        </View>
+      ) : null}
 
       {empty ? (
         <Text style={styles.subtitle}>אין דיווחים בחודש הזה.</Text>
@@ -428,6 +438,7 @@ const makeStyles = (colors: AppColors) =>
     email: { fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     cc: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     warn: { fontSize: 14, fontWeight: '700', color: colors.danger, textAlign: TEXT_RIGHT },
+    levelBox: { gap: spacing.xs },
     groupHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     groupName: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     groupHours: { fontSize: 15, fontWeight: '800', color: colors.brandDark },

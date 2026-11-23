@@ -64,24 +64,31 @@ describe('קורסים עם אותו שם בלוח הבקרה', () => {
   const thu = { ...base, id: 'b', name: 'תכנון אדריכלי ', weekday: 4 };
   const solo = { ...base, id: 'c', name: 'סדנה', weekday: 2 };
 
-  it('קורס לכל יום — היום מתווסף רק לשם משותף', () => {
-    expect(groupCoursesForDisplay([mon, thu, solo], 'split').map((g) => g.label)).toEqual([
+  it('קורס ויום — קורס לכל יום, עם היום', () => {
+    expect(groupCoursesForDisplay([mon, thu, solo], 'courseDay').map((g) => g.label)).toEqual([
       'תכנון אדריכלי · יום ב׳',
       'תכנון אדריכלי · יום ה׳',
-      'סדנה',
+      'סדנה · יום ג׳',
     ]);
     // אותו יום — גם שעת ההתחלה
     const late = { ...mon, id: 'd', start: '14:00' };
-    expect(groupCoursesForDisplay([mon, late], 'split').map((g) => g.label)).toEqual([
+    expect(groupCoursesForDisplay([mon, late], 'courseDay').map((g) => g.label)).toEqual([
       'תכנון אדריכלי · יום ב׳ 09:00',
       'תכנון אדריכלי · יום ב׳ 14:00',
     ]);
   });
 
   it('מאוחד לפי שם — קבוצה אחת עם כל הימים', () => {
-    const groups = groupCoursesForDisplay([mon, solo, thu], 'merged');
+    const groups = groupCoursesForDisplay([mon, solo, thu], 'course');
     expect(groups.map((g) => g.label)).toEqual(['תכנון אדריכלי · ימים ב׳, ה׳', 'סדנה']);
     expect(groups[0].courses.map((c) => c.id)).toEqual(['a', 'b']);
+  });
+
+  it('מקום עבודה — קבוצה אחת לכל הקורסים', () => {
+    const groups = groupCoursesForDisplay([mon, solo, thu], 'workplace');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].courses.map((c) => c.id)).toEqual(['a', 'c', 'b']);
+    expect(groupCoursesForDisplay([], 'workplace')).toEqual([]);
   });
 
   it('עזרים', () => {
