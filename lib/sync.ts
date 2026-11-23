@@ -43,7 +43,7 @@ const BASE_PREFIX = 'reporting-hours-sync/base/';
 const ACTIVE_KEY = 'reporting-hours-sync/active/v1';
 /* אילו מפתחות מסונכרנים ואילו נשארים במכשיר — במרשם המפתחות (lib/keys.ts). */
 /** מה שמורשה ברמת "מדווח" רשאי לשנות (זהה לחוקי האבטחה ב־apps-platform). */
-const REPORTER_KEYS = new Set<string>([KEYS.reports, KEYS.sessions, KEYS.accumulated]);
+const REPORTER_KEYS = new Set<string>([KEYS.reports, KEYS.sessions, KEYS.accumulated, KEYS.activityLog]);
 /** מונה: שינויים מקבילים מצטברים במיזוג. */
 const ADDITIVE_KEYS = new Set<string>([KEYS.accumulated]);
 /** מפתחות שבהם מחיקה גוברת על שינוי מקביל (lib/merge.ts) — והגרסה שנזרקה נרשמת ביומן הפעולות. */
