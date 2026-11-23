@@ -72,3 +72,17 @@ export function editIntegrityError(
   }
   return null;
 }
+
+/**
+ * דיווחים נוספים על אותו מפגש (אותו קורס ואותו תאריך, לא "מפגש נוסף") — כפילות.
+ * במסך הבית מוצג רק אחד מהם, ולכן מחיקה "לא נתפסת" (תקלת 23.11: שלושה דיווחים על אותו מפגש).
+ */
+export function sameSessionReports<R extends Pick<WorkReport, 'id' | 'courseId' | 'date' | 'extraKind'>>(
+  report: Pick<WorkReport, 'id' | 'courseId' | 'date' | 'extraKind'>,
+  reports: readonly R[],
+): R[] {
+  if (!report.courseId || report.extraKind) return [];
+  return reports.filter(
+    (r) => r.id !== report.id && !r.extraKind && r.courseId === report.courseId && r.date === report.date,
+  );
+}
