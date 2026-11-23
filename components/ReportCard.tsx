@@ -26,6 +26,8 @@ type ReportCardProps = {
   onPress?: () => void;
   /** צבע מקום העבודה — פס בצד האריח */
   color?: string;
+  /** היום של הדיווח מסומן בתאריכון — רקע בהיר (כמו אריח היום הנבחר בתכנון) */
+  highlight?: boolean;
 };
 
 /** תיאור השעות האקדמיות בדיווח, למשל "6 שע׳ אקדמיות ו־30 דק׳". */
@@ -39,7 +41,7 @@ function academicText(report: WorkReport): string {
 }
 
 /** שורת רשימה לדיווח יום עבודה: מקום, תאריך, טווח שעות, הפסקות, זמן נטו, שעות אקדמיות ושכר. */
-export function ReportCard({ report, workplaceName, pay, travel, locked, onPress, color }: ReportCardProps) {
+export function ReportCard({ report, workplaceName, pay, travel, locked, onPress, color, highlight }: ReportCardProps) {
   const styles = useThemedStyles(makeStyles);
   const breakTotal = totalBreakMinutes(report.breaks);
   const net = netMinutes(report);
@@ -52,6 +54,7 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onPress
       accessibilityLabel={`${workplaceName} · ${formatISODate(report.date)}${locked ? ' · נעול' : ''}`}
       style={({ pressed }) => [
         styles.card,
+        highlight && styles.cardHighlight,
         color ? { borderStartWidth: 5, borderStartColor: color } : null,
         pressed && styles.pressed,
       ]}
@@ -162,6 +165,7 @@ const makeStyles = (colors: AppColors) =>
       gap: spacing.xs,
       ...cardShadow,
     },
+    cardHighlight: { backgroundColor: colors.brandLight },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
