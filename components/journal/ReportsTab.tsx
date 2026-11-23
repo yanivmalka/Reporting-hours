@@ -10,6 +10,7 @@ import { workplaceColor } from '../../theme/workplaceColors';
 import { MonthDivider } from '../MonthDivider';
 import { MonthLink } from './MonthLinks';
 import type { Journal } from './useJournal';
+import { GroupedSummary } from './GroupedSummary';
 
 /** לשונית "דיווחים": סיכום התקופה ורשימת הדיווחים, כולל מפגשים של היום ושעברו שלא דווחו. */
 export function ReportsTab({ w }: { w: Journal }) {
@@ -40,6 +41,8 @@ export function ReportsTab({ w }: { w: Journal }) {
         </Pressable>
       ) : null}
     </View>
+
+    <GroupedSummary w={w} />
 
     <MonthLink w={w} at="top" />
     {items.length === 0 && reports.length === 0 ? (

@@ -8,13 +8,12 @@
  */
 import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
-import { courseReport, courseSessions, occursOn, type Course } from './courses';
+import { courseReport, courseSessions, type Course } from './courses';
 import { currentPlan, type PlanIndex } from './sessions';
 import { currentPayPeriod, type PayPeriod } from './dashboard';
 import { netMinutes, totalBreakMinutes, type WorkReport } from './reports';
 import { readJSON, writeJSON } from './storage';
 import { formatShekels, hasTravelCost, travelCostForWorkplace } from './travel';
-import { parseTime } from './time';
 import { hebrewDate, hebrewRange } from './hebrewDate';
 import { workplaceAt, taxPercentOf, type Workplace } from './workplaces';
 import { workplacePay } from './pay';
@@ -24,6 +23,7 @@ import { paymentTermsOf } from './workplaces';
 import { signatureLines, type Profile } from './profile';
 import { KEYS } from './keys';
 import { isoDate } from './dates';
+import { groupItems, NO_COURSE_LABEL, reportCourseName, type GroupLevel } from './courseGrouping';
 
 // ───────────────────────── מצב הדוחות ─────────────────────────
 
@@ -152,7 +152,7 @@ export type PayrollSession = {
 };
 
 export type PayrollGroup = {
-  /** שם הקורס, או "ללא קורס" */
+  /** תווית הקבוצה לפי רמת הקיבוץ: שם הקורס / "קורס · יום ב׳" / שם מקום העבודה; או "ללא קורס" */
   name: string;
   sessions: PayrollSession[];
   netMinutes: number;
@@ -175,6 +175,8 @@ export type PayrollReport = {
   canceledPay: number;
   workplace: Workplace;
   period: PayPeriod;
+  /** רמת הקיבוץ של `groups` (lib/courseGrouping.ts) */
+  level: GroupLevel;
   groups: PayrollGroup[];
   /** סך הדקות בדוח — מפגשים + דקות שנפדו מהמונה */
   netMinutes: number;
@@ -189,26 +191,7 @@ export type PayrollReport = {
   paymentType: 'hourly' | 'monthly';
 };
 
-export const NO_COURSE = 'עבודה שלא במסגרת קורס קבוע';
-
-/** לאיזה קורס שייך דיווח: קורס של אותו מקום שמתקיים בתאריך וחופף בשעות; אחרת לפי הנושא. */
-function courseOf(report: WorkReport, courses: readonly Course[], plan: PlanIndex): string {
-  if (report.courseId) {
-    const byId = courses.find((c) => c.id === report.courseId);
-    if (byId) return byId.name;
-  }
-  const s = parseTime(report.start) ?? 0;
-  const e = parseTime(report.end) ?? 0;
-  const match = courses.find((c) => {
-    if (c.workplaceId !== report.workplaceId || !occursOn(c, report.date, plan.moves)) return false;
-    const cs = parseTime(c.start) ?? 0;
-    const ce = parseTime(c.end) ?? 0;
-    return cs < e && ce > s;
-  });
-  if (match) return match.name;
-  const byName = courses.find((c) => c.workplaceId === report.workplaceId && c.name === report.note);
-  return byName?.name ?? NO_COURSE;
-}
+export const NO_COURSE = NO_COURSE_LABEL;
 
 export function buildPayrollReport(
   workplace: Workplace,
@@ -220,29 +203,35 @@ export function buildPayrollReport(
   redeemedMinutes = 0,
   /** תמונת מצב של הביטולים וההעברות — נלקחת פעם אחת לכל הדוח */
   plan: PlanIndex = currentPlan(),
+  /** רמת הקיבוץ (ברירת מחדל — לפי קורס, כמו בעבר) */
+  level: GroupLevel = 'course',
 ): PayrollReport {
   basis = basisFor(workplace, basis);
   const mine = reports
     .filter((r) => r.workplaceId === workplace.id && r.date >= period.start && r.date <= period.end)
     .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
 
-  const groups = new Map<string, PayrollGroup>();
-  for (const r of mine) {
-    const name = courseOf(r, courses, plan);
-    const g = groups.get(name) ?? { name, sessions: [], netMinutes: 0 };
-    // בשעות אקדמיות — הדקות שהועברו למונה אינן חלק מהדוח (הן ייכנסו כשייפדו).
-    const net = Math.max(0, (netMinutes(r) ?? 0) - (basis === 'academic' ? r.carriedMinutes ?? 0 : 0));
-    g.sessions.push({
-      reportId: r.id,
-      date: r.date,
-      start: r.start,
-      end: r.end,
-      breakMinutes: totalBreakMinutes(r.breaks),
-      netMinutes: net,
-    });
-    g.netMinutes += net;
-    groups.set(name, g);
-  }
+  // בשעות אקדמיות — הדקות שהועברו למונה אינן חלק מהדוח (הן ייכנסו כשייפדו).
+  const sessionOf = (r: WorkReport): PayrollSession => ({
+    reportId: r.id,
+    date: r.date,
+    start: r.start,
+    end: r.end,
+    breakMinutes: totalBreakMinutes(r.breaks),
+    netMinutes: Math.max(0, (netMinutes(r) ?? 0) - (basis === 'academic' ? r.carriedMinutes ?? 0 : 0)),
+  });
+  const groups: PayrollGroup[] = groupItems(
+    mine.map((r) => ({ r, course: reportCourseName(r, courses, plan) })),
+    level,
+    (x) => ({ workplaceId: workplace.id, course: x.course, date: x.r.date }),
+  ).map((g) => {
+    const sessions = g.items.map((x) => sessionOf(x.r));
+    return {
+      name: level === 'workplace' ? workplace.name : g.label,
+      sessions,
+      netMinutes: sessions.reduce((n, x) => n + x.netMinutes, 0),
+    };
+  });
   const days = new Set(mine.map((r) => r.date)).size;
   const travel = travelCostForWorkplace(workplace, mine);
   const rates = [...new Set(mine.map((r) => workplaceAt(workplace, r.date).rate))];
@@ -252,7 +241,7 @@ export function buildPayrollReport(
   const atEnd = workplaceAt(workplace, period.end);
   const redeemedPay =
     atEnd.paymentType === 'hourly' ? (Math.max(0, atEnd.rate) * redeemed) / ACADEMIC_HOUR_MINUTES : 0;
-  const sessionsMinutes = [...groups.values()].reduce((s, g) => s + g.netMinutes, 0);
+  const sessionsMinutes = groups.reduce((s, g) => s + g.netMinutes, 0);
   // מפגשים שבוטלו (ונשארו בפוטנציאל) ולא דווחו — שורה לכל אחד, עם התשלום לפי הסיבה.
   const canceled: PayrollCanceled[] = [];
   for (const c of courses) {
@@ -278,9 +267,8 @@ export function buildPayrollReport(
     paymentType,
     workplace,
     period,
-    groups: [...groups.values()].sort((a, b) =>
-      a.name === NO_COURSE ? 1 : b.name === NO_COURSE ? -1 : a.name.localeCompare(b.name, 'he'),
-    ),
+    level,
+    groups,
     netMinutes: sessionsMinutes + redeemed,
     days,
     travel,
