@@ -2,7 +2,8 @@
  * עיגולי מפגשים של קורס — אותו קוד צבעים בלוח הבקרה ובדף הקורס:
  *   ✓ ירוק — דווח · מסגרת — מתוכנן / טרם דווח · אדום מקווקו — בוטל (נשאר בפוטנציאל) ·
  *   אפור מחוק — הוסר מהפוטנציאל / חג · מקווקו בצבע המערכת — חופשה · "←" — הועבר ·
- *   + קטן בפינה — מפגש נוסף.
+ *   + קטן בפינה — מפגש נוסף. כמה מפגשים באותו יום (`mergeDays`) — עיגול אחד עם מספר המפגשים
+ *   בפינה; חלק דווחו — "דווח חלקית": מסגרת ירוקה ו"1/2" בפינה (lib/dayDots.ts).
  * תצוגה בלבד: לחיצה על עיגול מועברת ל־`onPress` (ניווט או הצגת פרטים).
  */
 import { StyleSheet, View } from 'react-native';
@@ -10,6 +11,7 @@ import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { courseReport, courseSessions, type Course, type CourseSession } from '../lib/courses';
 import { mix } from '../theme/shades';
+import { mergeDotsByDay } from '../lib/dayDots';
 import { spacing } from '../theme/colors';
 import { useTheme } from '../theme/ThemeContext';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
@@ -72,10 +74,12 @@ export function dotDescription(s: SessionDot): string {
 }
 
 type Tone = { bg: string; fg: string; border: string; dashed?: boolean; strike?: boolean };
+type ToneState = DotState | 'partial';
 
-function useTones(): Record<DotState, Tone> {
+function useTones(): Record<ToneState, Tone> {
   const { colors } = useTheme();
   return {
+    partial: { bg: colors.surface, fg: colors.success, border: colors.success },
     reported: { bg: mix(colors.success, colors.surface, 0.82), fg: colors.success, border: colors.success },
     open: { bg: colors.surface, fg: colors.textMuted, border: colors.border },
     canceled: { bg: mix(colors.danger, colors.surface, 0.85), fg: colors.danger, border: colors.danger, dashed: true },
@@ -91,12 +95,15 @@ function Dot({
   state,
   label,
   extra,
+  badge,
   small,
   selected,
 }: {
-  state: DotState;
+  state: ToneState;
   label: string;
   extra?: boolean;
+  /** מספר בפינה — כמה מפגשים ביום ("2") או כמה דווחו ("1/2") */
+  badge?: string;
   small?: boolean;
   selected?: boolean;
 }) {
@@ -119,6 +126,70 @@ function Dot({
           <Text style={[styles.plusText, small && styles.plusTextSmall]}>+</Text>
         </View>
       ) : null}
+      {badge ? (
+        <View
+          style={[
+            small ? styles.badgeSmall : styles.badge,
+            { backgroundColor: state === 'partial' || state === 'reported' ? colors.success : colors.textMuted },
+          ]}
+        >
+          <Text style={small ? styles.badgeTextSmall : styles.badgeText}>{badge}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** תווית העיגול: היום בחודש, עם ← להעברה ו־✓ לדווח. */
+function dotLabel(s: Pick<SessionDot, 'date' | 'state' | 'movedFrom'>, state: ToneState = s.state): string {
+  const label = s.state === 'moved' ? `${day(s.date)}←` : s.movedFrom ? `←${day(s.date)}` : day(s.date);
+  return state === 'reported' ? `${label}✓` : label;
+}
+
+/**
+ * עיגול אחד לכל יום: יום עם מפגש אחד — כרגיל; עם כמה — מאוחד (מספר המפגשים בפינה, או
+ * "1/2" כשחלק דווחו). לחיצה על יום מאוחד → `onPressDay`.
+ */
+export function DayDots<D extends SessionDot>({
+  dots,
+  onPress,
+  onPressDay,
+}: {
+  dots: readonly D[];
+  onPress?: (dot: D) => void;
+  onPressDay?: (date: string, parts: D[]) => void;
+}) {
+  const styles = useStyles(makeStyles);
+  return (
+    <View style={styles.row}>
+      {mergeDotsByDay(dots).map((m) => {
+        const first = m.parts[0];
+        if (m.parts.length === 1) {
+          return (
+            <Pressable
+              key={m.date}
+              disabled={!onPress}
+              onPress={() => onPress?.(first)}
+              accessibilityRole="button"
+              accessibilityLabel={dotDescription(first)}
+            >
+              <Dot state={first.state} label={dotLabel(first)} extra={first.kind === 'extra'} />
+            </Pressable>
+          );
+        }
+        const badge = m.state === 'partial' ? `${m.reported}/${m.held}` : String(m.parts.length);
+        return (
+          <Pressable
+            key={m.date}
+            disabled={!onPressDay}
+            onPress={() => onPressDay?.(m.date, m.parts)}
+            accessibilityRole="button"
+            accessibilityLabel={`${m.parts.length} מפגשים: ${m.parts.map(dotDescription).join('; ')}`}
+          >
+            <Dot state={m.state} label={dotLabel(first, m.state)} badge={badge} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -166,10 +237,15 @@ export function SessionDotsByMonth<D extends SessionDot>({
   dots,
   onPress,
   selected,
+  mergeDays,
+  onPressDay,
 }: {
   dots: readonly D[];
   onPress?: (dot: D) => void;
   selected?: string | null;
+  /** עיגול אחד ליום (כמה קורסים באותו יום) */
+  mergeDays?: boolean;
+  onPressDay?: (date: string, parts: D[]) => void;
 }) {
   const styles = useStyles(makeStyles);
   const byMonth = new Map<string, D[]>();
@@ -183,7 +259,11 @@ export function SessionDotsByMonth<D extends SessionDot>({
         <View key={key} style={styles.monthRow}>
           <Text style={styles.monthName}>{MONTH_NAMES[Number(key.slice(5, 7)) - 1]}</Text>
           <View style={styles.monthDots}>
-            <SessionDots dots={list} selected={selected} onPress={onPress} />
+            {mergeDays ? (
+              <DayDots dots={list} onPress={onPress} onPressDay={onPressDay} />
+            ) : (
+              <SessionDots dots={list} selected={selected} onPress={onPress} />
+            )}
           </View>
         </View>
       ))}
@@ -195,9 +275,9 @@ export function SessionDotsByMonth<D extends SessionDot>({
  * מקרא לעיגולים: עיגולים קטנים בעיצוב האמיתי + תווית. כל פריט יחידה שלא
  * נשברת. "נמחק מהתכנון" לא מופיע — מפגש כזה מוסתר מהלו״ז.
  */
-export function SessionDotsLegend() {
+export function SessionDotsLegend({ days = false }: { days?: boolean } = {}) {
   const styles = useStyles(makeStyles);
-  const items: { state: DotState; label: string; text: string; extra?: boolean }[] = [
+  const items: { state: ToneState; label: string; text: string; extra?: boolean; badge?: string }[] = [
     { state: 'reported', label: '✓', text: 'דווח' },
     { state: 'open', label: '', text: 'מתוכנן' },
     { state: 'canceled', label: '', text: 'בוטל' },
@@ -205,12 +285,18 @@ export function SessionDotsLegend() {
     { state: 'vacation', label: '', text: 'חופשה' },
     { state: 'moved', label: '←', text: 'הועבר' },
     { state: 'open', label: '', text: 'מפגש נוסף', extra: true },
+    ...(days
+      ? [
+          { state: 'reported' as const, label: '✓', text: 'כמה מפגשים ביום', badge: '2' },
+          { state: 'partial' as const, label: '', text: 'דווח חלקית', badge: '½' },
+        ]
+      : []),
   ];
   return (
     <View style={styles.legend}>
       {items.map((i) => (
         <View key={i.text} style={styles.legendItem}>
-          <Dot state={i.state} label={i.label} extra={i.extra} small />
+          <Dot state={i.state} label={i.label} extra={i.extra} badge={i.badge} small />
           <Text style={styles.legendText}>{i.text}</Text>
         </View>
       ))}
@@ -255,6 +341,20 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     plusSmall: { top: -3, end: -3, width: 8, height: 8, borderRadius: 4 },
     plusText: { fontSize: 10, lineHeight: 12, fontWeight: '800', color: c.textOnBrand },
     plusTextSmall: { fontSize: 7, lineHeight: 8 },
+    badge: {
+      position: 'absolute',
+      top: -6,
+      end: -6,
+      minWidth: 16,
+      height: 16,
+      paddingHorizontal: 3,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badgeSmall: { position: 'absolute', top: -4, end: -5, minWidth: 9, height: 9, borderRadius: 4.5, alignItems: 'center', justifyContent: 'center' },
+    badgeText: { fontSize: 10, lineHeight: 12, fontWeight: '800', color: c.textOnBrand },
+    badgeTextSmall: { fontSize: 6, lineHeight: 8, fontWeight: '800', color: c.textOnBrand },
     legend: { flexDirection: layout.rowStart, flexWrap: 'wrap', columnGap: spacing.md, rowGap: 6 },
     legendItem: { flexDirection: layout.rowStart, alignItems: 'center', gap: 4 },
     legendText: { fontSize: 11, color: c.textMuted },

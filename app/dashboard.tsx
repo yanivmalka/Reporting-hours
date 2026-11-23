@@ -318,6 +318,8 @@ function DashboardScreen() {
       .filter((g) => g.dots.length > 0);
     if (groups.length === 0) return null;
     const canToggle = own.length > 1;
+    // עיגול אחד ליום כשבאותה קבוצה יש כמה מפגשים באותו יום (בעיקר בקיבוץ לפי מקום עבודה).
+    const merged = groups.some((g) => new Set(g.dots.map((d) => d.date)).size < g.dots.length);
     return (
       <View style={styles.sessions}>
         {canToggle ? <GroupLevelPicker /> : null}
@@ -326,6 +328,11 @@ function DashboardScreen() {
             {g.label ? <Text style={styles.sessionCourse}>{g.label}</Text> : null}
             <SessionDotsByMonth
               dots={g.dots}
+              mergeDays={merged}
+              // יום עם כמה מפגשים → היומן על אותו יום, מסונן למקום.
+              onPressDay={(date) =>
+                router.push({ pathname: '/reports', params: { tab: 'plan', day: date, wp: row.workplace.id } })
+              }
               onPress={(d) =>
                 d.reportId
                   ? router.push({ pathname: '/report-view', params: { id: d.reportId } })
@@ -336,7 +343,7 @@ function DashboardScreen() {
             />
           </View>
         ))}
-        <SessionDotsLegend />
+        <SessionDotsLegend days={merged} />
       </View>
     );
   };
