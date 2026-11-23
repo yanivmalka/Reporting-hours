@@ -3,6 +3,8 @@ name: Build Android APK
 # בונה APK חתום ומפרסם אותו כ־GitHub Release — בכל push ל־main (כולל שינויי JS בלבד,
 # כדי שכל שינוי יגיע גם לאפליקציה בטלפון), ובהפעלה ידנית (Run workflow).
 # האפליקציה בודקת את ה־Release האחרון (lib/update.ts) ומציעה עדכון.
+# הפעלה ידנית מענף שאינו main — "גרסת בדיקה": Release מסוג prerelease, שאינו "האחרון",
+# ולכן לא מוצע כעדכון באפליקציה; מורידים ומתקינים אותו ידנית כדי לבדוק לפני מיזוג.
 #
 # חתימה: אנדרואיד מתקין עדכון רק אם הוא חתום באותו מפתח כמו הגרסה המותקנת.
 # אם הוגדרו הסודות ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD /
@@ -100,11 +102,12 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.APP_VERSION }}
-          name: גרסה ${{ env.APP_VERSION }}
-          make_latest: true
+          tag_name: v${{ env.APP_VERSION }}${{ github.ref != 'refs/heads/main' && '-test' || '' }}
+          name: ${{ github.ref != 'refs/heads/main' && 'גרסת בדיקה' || 'גרסה' }} ${{ env.APP_VERSION }}
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
+          make_latest: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
           body: |
-            בנייה ${{ github.run_number }} · commit ${{ github.sha }}
+            בנייה ${{ github.run_number }} · ${{ github.ref_name }} · commit ${{ github.sha }}
 
             ${{ github.event.head_commit.message }}
           files: out/*.apk
