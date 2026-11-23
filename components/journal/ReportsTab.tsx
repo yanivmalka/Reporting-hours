@@ -18,7 +18,7 @@ import { netMinutes } from '../../lib/reports';
 
 /** לשונית "דיווחים": סיכום התקופה ורשימת הדיווחים, כולל מפגשים של היום ושעברו שלא דווחו. */
 export function ReportsTab({ w }: { w: Journal }) {
-  const { router, styles, colors, basis, reports, params, setWpFilter, setRange, setPeriodMode, listTop, filtered, onDayLayout, workplaceOf, nameOf, payOf, totals, travelOf, lockOf, items, missingCount, pendingCount, isFiltered, timeLabel, continuous, today } = w;
+  const { router, styles, colors, basis, reports, params, setWpFilter, setRange, setPeriodMode, listTop, filtered, onDayLayout, selectedDay, workplaceOf, nameOf, payOf, totals, travelOf, lockOf, items, missingCount, pendingCount, isFiltered, timeLabel, continuous, today } = w;
   return (
     <>
     <View style={styles.summary}>
@@ -69,6 +69,7 @@ export function ReportsTab({ w }: { w: Journal }) {
             ) : null;
           // שלשום עד מחרתיים: תגית לפני הפריט הראשון של היום; היום — גם מסגרת.
           const isToday = date === today;
+          const frame = [styles.itemFrame, isToday && styles.todayFrame, date === selectedDay && styles.selectedFrame];
           const todayHead =
             prevDate !== date && nearDay(date, today) ? (
               <View style={styles.todayHead}>
@@ -82,7 +83,7 @@ export function ReportsTab({ w }: { w: Journal }) {
           {item.kind === 'session' ? (
             <View
               key={`s:${item.row.course.id}@${item.row.date}`}
-              style={[styles.dueCard, isToday && styles.todayFrame]}
+              style={[styles.dueCard, ...frame]}
               onLayout={(e) => onDayLayout(item.row.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height, `s:${item.row.course.id}@${item.row.date}`)}
             >
               <SessionRow row={item.row} showDate onPress={() => openSession(router, item.row)} />
@@ -90,7 +91,7 @@ export function ReportsTab({ w }: { w: Journal }) {
           ) : (
             <View
               key={item.report.id}
-              style={isToday ? styles.todayFrame : undefined}
+              style={frame}
               onLayout={(e) =>
                 onDayLayout(item.report.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height, item.report.id)
               }
