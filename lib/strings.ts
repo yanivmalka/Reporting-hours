@@ -10,6 +10,10 @@ export type Lang = 'he' | 'en';
 export type StringTree = { [key: string]: string | StringTree };
 
 const he = {
+  splash: {
+    name: 'שיעור',
+    tagline: 'כל שיעור נספר. כל שקל מגיע.',
+  },
   common: {
     back: 'חזרה',
     add: 'הוספה',
@@ -182,6 +186,10 @@ const he = {
 } as const;
 
 const en: StringTree = {
+  splash: {
+    name: 'Shiur',
+    tagline: 'Every lesson counted. Every shekel paid.',
+  },
   common: {
     back: 'Back',
     add: 'Add',
@@ -200,7 +208,7 @@ const en: StringTree = {
   },
   nav: {
     homeLink: 'Home',
-    home: 'Hours Reporting',
+    home: 'Shiur',
     report: 'Log a Work Day',
     reports: 'Journal',
     workplaces: 'Workplaces',
