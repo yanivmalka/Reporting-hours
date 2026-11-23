@@ -6,6 +6,7 @@ import { useDayStatus } from '../DayDot';
 import { monthOfWeek, shiftWeek, weekStartOf } from '../WeekStrip';
 import { longDate } from '../DatePicker';
 import { todayISO } from '../../lib/time';
+import { nearDates, shiftISO } from '../../lib/nearDays';
 import { currentPayPeriod, monthName, previousPayPeriod, dateRange, totalsFor } from '../../lib/dashboard';
 import { buildSessionRows, type SessionRowData } from '../PlanList';
 import { readJSON, writeJSON } from '../../lib/storage';
@@ -170,20 +171,29 @@ export function useJournal() {
   }
 
   /**
-   * הגלילה מסמנת יום בתאריכון: האריח הראשון שמתחת לתחתית הפס / התאריכון
-   * המוצמד. גם פס השבוע עוקב אחריו.
+   * הגלילה מסמנת יום בתאריכון: האריח הראשון שמוצג במלואו מתחת לתחתית הפס /
+   * התאריכון המוצמד. גם פס השבוע עוקב אחריו.
    */
   function followScroll(y: number) {
     if (Date.now() < autoScrollUntil.current) return;
     const edge = y + stripHeight - listTop.current;
+    // היום הראשון שמוצג במלואו (ראשו מתחת לתחתית הפס); אם אין כזה (אריח גבוה
+    // מהמסך) — הראשון שנראה בחלקו.
     let top: string | null = null;
     let topY = Infinity;
+    let part: string | null = null;
+    let partY = Infinity;
     for (const [date, pos] of dayPos.current.map) {
-      if (pos.bottom > edge + 4 && pos.y < topY) {
+      if (pos.y >= edge - 4 && pos.y < topY) {
         top = date;
         topY = pos.y;
       }
+      if (pos.bottom > edge + 4 && pos.y < partY) {
+        part = date;
+        partY = pos.y;
+      }
     }
+    top = top ?? part;
     if (!top) return;
     if (top !== scrollDay) setScrollDay(top);
     const ws = weekStartOf(top);
@@ -548,13 +558,21 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
   const planTo = range ? range.to : monthEnd(win.to);
   /** פסי חודש ברשימה — כשהיא רציפה (לא טווח ולא תקופת שכר) */
   const continuous = !range && !periodMode;
-  /** תכנון בחודש הנוכחי: הימים שלפני היום מקופלים — אריח היום בראש הרשימה */
+  /**
+   * תכנון בחודש הנוכחי: הימים שלפני שלשום מקופלים — חמשת הימים הקרובים (שלשום
+   * עד מחרתיים, עם תגית) בראש הרשימה. שלשום בחודש הקודם — הרשימה מתחילה ממנו.
+   */
   const todayIso = todayISO();
+  const nearFrom = shiftISO(todayIso, -2);
   const collapsible =
-    tab === 'plan' && continuous && win.from === todayIso.slice(0, 7) && !(focusDay && focusDay < todayIso);
-  const collapseBefore = collapsible && !core.earlierShown ? todayIso : null;
+    tab === 'plan' && continuous && win.from === todayIso.slice(0, 7) && !(focusDay && focusDay < nearFrom);
+  const collapseBefore = collapsible && !core.earlierShown ? nearFrom : null;
   /** הימים הקודמים הורחבו — אפשר לקפל אותם שוב */
-  const expandedBefore = collapsible && core.earlierShown ? todayIso : null;
+  const expandedBefore = collapsible && core.earlierShown ? nearFrom : null;
+  /** הרשימה (בתכנון) מתחילה משלשום גם כשהוא בחודש הקודם */
+  const listFrom = collapsible && nearFrom < planFrom ? nearFrom : planFrom;
+  /** חמשת הימים הקרובים — מוצגים תמיד ברשימה הרציפה, גם בלי מפגשים */
+  const nearDays = continuous ? nearDates(todayIso) : [];
 
   // "דיווחים": גם מפגשים שעוד לא דווחו — של היום ("ממתין") ושעברו ("חסר").
   // מפגשים עתידיים שייכים ל"תכנון" ולא מוצגים כאן.
@@ -647,6 +665,8 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     continuous,
     collapseBefore,
     expandedBefore,
+    listFrom,
+    nearDays,
   };
 }
 

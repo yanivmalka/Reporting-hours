@@ -32,6 +32,23 @@ import { MonthDivider } from './MonthDivider';
 import { useSessionNotes } from './useSessionNotes';
 import { FLAG_ICON, noteFor } from '../lib/sessionNotes';
 import { parseTime, todayISO } from '../lib/time';
+import { nearDay } from '../lib/nearDays';
+
+/**
+ * תגית היום ביחס להיום — שלשום · אתמול · היום · מחר · מחרתיים (כמו בלו״ז הבית).
+ * "היום" בצבע היום הנבחר בתאריכון ובלו״ז הבית (`brandDark`); השאר — בגוון בהיר.
+ */
+export function NearDayChip({ date, today }: { date: string; today: string }) {
+  const styles = useThemedStyles(makeStyles);
+  const near = nearDay(date, today);
+  if (!near) return null;
+  const isToday = near.key === 'today';
+  return (
+    <View style={[styles.nearChip, isToday && styles.todayChip]}>
+      <Text style={[styles.nearChipText, isToday && styles.todayChipText]}>{near.label}</Text>
+    </View>
+  );
+}
 
 /** planned — עתידי; pending — היום ולא דווח; now — מתקיים כעת; missing — עבר ולא דווח */
 export type SessionStatus = 'planned' | 'pending' | 'now' | 'missing' | 'reported' | 'canceled' | 'moved' | 'untracked';
@@ -76,6 +93,7 @@ export function PlanList({
   onShowEarlier,
   expandedBefore,
   onHideEarlier,
+  nearDays,
 }: {
   courses: readonly Course[];
   workplaces: readonly Workplace[];
@@ -98,6 +116,8 @@ export function PlanList({
   /** הימים שלפני התאריך הורחבו — קישור לקיפול חוזר */
   expandedBefore?: string | null;
   onHideEarlier?: () => void;
+  /** ימים שמוצגים תמיד (שלשום עד מחרתיים) — גם בלי מפגשים, עם תגית */
+  nearDays?: readonly string[];
 }) {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
@@ -114,7 +134,9 @@ export function PlanList({
   const days = new Map<string, SessionRowData[]>();
   for (const r of rows) days.set(r.date, [...(days.get(r.date) ?? []), r]);
   const today = todayISO();
-  const allDays = [...days];
+  // חמשת הימים הקרובים מוצגים גם בלי מפגשים (כשיש ברשימה מפגשים בכלל).
+  if (rows.length) for (const d of nearDays ?? []) if (d >= from && d <= to && !days.has(d)) days.set(d, []);
+  const allDays = [...days].sort(([a], [b]) => a.localeCompare(b));
   const shownDays = collapseBefore ? allDays.filter(([d]) => d >= collapseBefore) : allDays;
   const collapsedDays = allDays.length - shownDays.length;
   const expandedDays = expandedBefore ? allDays.filter(([d]) => d < expandedBefore).length : 0;
@@ -196,13 +218,10 @@ export function PlanList({
             }
           >
             <View style={styles.dayHead}>
-              {date === today ? (
-                <View style={styles.todayChip}>
-                  <Text style={styles.todayChipText}>היום</Text>
-                </View>
-              ) : null}
+              <NearDayChip date={date} today={today} />
               <Text style={[styles.dayTitle, date === today && styles.dayTitleToday]}>{dayTitle(date)}</Text>
             </View>
+            {list.length === 0 ? <Text style={styles.noSessions}>אין מפגשים ביום זה.</Text> : null}
             {list.map((r) => (
               <SessionRow key={`${r.course.id}@${r.date}`} row={r} onPress={() => open(r)} />
             ))}
@@ -387,11 +406,14 @@ const makeStyles = (colors: AppColors) =>
       gap: spacing.xs,
       ...cardShadow,
     },
-    dayToday: { borderWidth: 2, borderColor: colors.brand },
+    dayToday: { borderWidth: 2, borderColor: colors.brandDark },
     dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     dayTitleToday: { color: colors.brandDark },
-    todayChip: { backgroundColor: colors.brand, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-    todayChipText: { fontSize: 12, fontWeight: '700', color: colors.textOnBrand },
+    nearChip: { backgroundColor: colors.brandLight, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+    nearChipText: { fontSize: 12, fontWeight: '700', color: colors.brandDark },
+    todayChip: { backgroundColor: colors.brandDark },
+    todayChipText: { color: colors.textOnBrand },
+    noSessions: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
     earlier: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
     earlierText: { fontSize: 14, fontWeight: '700', color: colors.brand },
     untrackedNote: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },

@@ -81,8 +81,9 @@ export default function ReportsScreen() {
           courses={courses}
           workplaces={workplaces}
           reports={reports}
-          from={planFrom}
+          from={w.listFrom}
           to={planTo}
+          nearDays={w.nearDays}
           wpFilter={wpFilter}
           basis={basis}
           onChanged={() => setReloadTick((n) => n + 1)}
