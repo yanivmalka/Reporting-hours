@@ -11,6 +11,11 @@ export type Profile = {
   phone: string;
   email: string;
   address: string;
+  /**
+   * תמונת הפרופיל מחשבון Google של בעל החשבון — נשמרת אוטומטית (`syncGooglePhoto`), כדי שמורשה
+   * שצופה בחשבון יראה אותה (עם כובע — components/Avatar.tsx). לא נערכת בטופס.
+   */
+  photoUrl?: string;
 };
 
 const KEY = KEYS.profile;
@@ -30,6 +35,13 @@ export async function loadProfile(): Promise<Profile> {
 
 export async function saveProfile(p: Profile): Promise<void> {
   await writeJSON(KEY, p);
+}
+
+/** שמירת תמונת Google של הבעלים בפרטים המסונכרנים (רק בנתונים שלך, ורק כשהשתנתה). */
+export async function syncGooglePhoto(photo: string | null | undefined): Promise<void> {
+  if (!photo || getAccess()) return;
+  const p = await loadProfile();
+  if (p.photoUrl !== photo) await saveProfile({ ...p, photoUrl: photo });
 }
 
 /** חתימת מייל: שם, מספר עובד, טלפון ומייל (כשקיימים). */

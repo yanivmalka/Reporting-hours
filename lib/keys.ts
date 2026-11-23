@@ -56,6 +56,8 @@ const REGISTRY = {
   push: def('reporting-hours/push/v1', 'device'),
   viewOnly: def('reporting-hours/view-only/v1', 'device'),
   deviceId: def('reporting-hours/device-id/v1', 'device'),
+  feedback: def('reporting-hours/feedback/v1', 'device'),
+  intro: def('reporting-hours/intro/v1', 'device'),
 } as const;
 
 type Registry = typeof REGISTRY;

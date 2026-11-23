@@ -20,6 +20,8 @@ import { HeaderBadges, HeaderTitle } from '../components/HeaderTitle';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
+import { Platform } from 'react-native';
+import { Intro } from '../components/Intro';
 
 export default function RootLayout() {
   return (
@@ -40,6 +42,8 @@ export default function RootLayout() {
             </SyncedTree>
           </SyncProvider>
         </UpdateProvider>
+        {/* אנימציית הפתיחה — מחוץ לעץ שנטען מחדש בסנכרון, כדי שתרוץ פעם אחת (אנדרואיד) */}
+        {Platform.OS !== 'web' ? <Intro /> : null}
       </ThemeProvider>
     </I18nProvider>
   );

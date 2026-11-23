@@ -4,7 +4,7 @@
  * משלשום עד מחרתיים (בחירת יום בשורת ימים או בהחלקה); התראות ותזכורות,
  * עם אפשרות להציג שוב התראות שהוסתרו.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, type Href } from 'expo-router';
 import { Linking, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
@@ -25,6 +25,7 @@ import { setViewOnly } from '../lib/viewOnly';
 import { loadAccumulated } from '../lib/accumulated';
 import { loadCourses, timeRange, type Course } from '../lib/courses';
 import { hebrewDate } from '../lib/hebrewDate';
+import { setIntroTarget } from '../lib/intro';
 import { AGENDA_TODAY_INDEX, agenda, firstName, greetingFor, homeAlerts, nextRelevantDay, type NextRelevant, type AgendaDay, type AgendaItem, type HomeAlert, type SessionStatus, nextSessionAfter } from '../lib/home';
 import { usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus } from '../lib/payroll';
@@ -82,6 +83,7 @@ export default function HomeScreen() {
   const [dismissed, setDismissed] = useState<string[]>([]);
   // היום שנבחר בלו״ז (אינדקס ברשימת הימים)
   const [tabIdx, setTabIdx] = useState(AGENDA_TODAY_INDEX);
+  const todayTabRef = useRef<View>(null);
   /** גובה מדוד של כל יום בלו״ז — אזור הלו״ז לא קטן מהגבוה שבהם, כדי שמעבר יום לא יזיז את מה שמתחת. */
   const [dayHeights, setDayHeights] = useState<Record<string, number>>({});
   const dayAreaMin = Math.max(0, ...Object.values(dayHeights));
@@ -330,6 +332,16 @@ export default function HomeScreen() {
           return (
             <Pressable
               key={d.key}
+              // כפתור "היום" — יעד הכוונת באנימציית הפתיחה (components/Intro.tsx)
+              ref={i === AGENDA_TODAY_INDEX ? todayTabRef : undefined}
+              onLayout={
+                i === AGENDA_TODAY_INDEX
+                  ? () =>
+                      setIntroTarget((cb) =>
+                        todayTabRef.current?.measureInWindow((x, y, width, height) => cb({ x, y, width, height })),
+                      )
+                  : undefined
+              }
               onPress={() => pickDay(i)}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}

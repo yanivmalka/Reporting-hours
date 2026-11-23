@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
+import { feedback } from '../lib/feedback';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { radius, spacing, type AppColors } from '../theme/colors';
@@ -43,6 +44,8 @@ export function Button({
   return (
     <Pressable
       onPress={onPress}
+      onPressIn={() => feedback('tap')}
+      android_disableSound
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,

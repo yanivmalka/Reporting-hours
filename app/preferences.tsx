@@ -23,6 +23,8 @@ import { UpdateSection } from '../components/UpdateChecker';
 import { AccountSection } from '../components/CloudSync';
 import { useAccess } from '../components/Access';
 import { setViewOnly, useViewOnly } from '../lib/viewOnly';
+import { setFeedbackSettings, useFeedbackSettings, feedback } from '../lib/feedback';
+import { setIntroEnabled, useIntroEnabled } from '../lib/intro';
 import { useI18n } from '../lib/i18n';
 import type { Lang } from '../lib/strings';
 import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
@@ -41,6 +43,8 @@ export default function PreferencesScreen() {
   const { isOwner } = useAccess();
   const viewOnly = useViewOnly();
   const showHeb = useShowHebrewDates();
+  const fb = useFeedbackSettings();
+  const intro = useIntroEnabled();
   const trackingStart = useTrackingStart();
   const [langNotice, setLangNotice] = useState(false);
   // ב־web הדף מרונדר מראש; החשבון, העדכונים וההגדרות המקומיות שונים בדפדפן —
@@ -142,6 +146,31 @@ export default function PreferencesScreen() {
           label="הצגת תאריך עברי"
           hint="בתאריכונים ובבחירת תאריך"
         />
+        <Checkbox
+          checked={intro}
+          onChange={(on) => void setIntroEnabled(on)}
+          label="אנימציית פתיחה"
+          hint="הכוונת ננעלת על ״היום״ בכל פתיחה של האפליקציה"
+        />
+        {Platform.OS !== 'web' ? (
+          <>
+            <Checkbox
+              checked={fb.sound}
+              onChange={(sound) => {
+                void setFeedbackSettings({ ...fb, sound }).then(() => sound && feedback('tap'));
+              }}
+              label="צליל עדין בלחיצות ובהודעות"
+              hint="כפתורים, תפריטים והודעות אזהרה. לא מתנגן כשהטלפון במצב שקט"
+            />
+            <Checkbox
+              checked={fb.haptics}
+              onChange={(haptics) => {
+                void setFeedbackSettings({ ...fb, haptics }).then(() => haptics && feedback('tap'));
+              }}
+              label="רטט קל בלחיצות ובהודעות"
+            />
+          </>
+        ) : null}
       </Group>
 
       {pushPlatform ? (

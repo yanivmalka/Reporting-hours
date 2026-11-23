@@ -39,7 +39,7 @@ import {
   type SyncStatus,
 } from '../lib/sync';
 import { isDemoLoaded, onDataChanged, removeDemoData } from '../lib/demo';
-import { loadProfile } from '../lib/profile';
+import { loadProfile, syncGooglePhoto } from '../lib/profile';
 import { spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -114,6 +114,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           await setSyncUser(u);
           if (u && (await isDemoLoaded()) && (await cloudHasData())) await removeDemoData();
           await loadProfile(); // מנקה שדות שהוסרו (ת״ז) גם מהעותק שהגיע מהענן
+          await syncGooglePhoto(u?.photo); // כדי שמורשים יראו את התמונה של הבעלים
         })();
       }),
     [],

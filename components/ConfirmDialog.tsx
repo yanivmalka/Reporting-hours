@@ -8,7 +8,8 @@
  *   …
  *   {confirm.dialog}
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { feedback } from '../lib/feedback';
 import { StyleSheet } from 'react-native';
 import { Text } from './Text';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
@@ -68,6 +69,10 @@ function ConfirmDialog({
   onConfirm: () => void;
 }) {
   const styles = useStyles(makeStyles);
+  // הודעת אזהרה — צליל ורטט עדינים (lib/feedback.ts), לפי ההגדרה.
+  useEffect(() => {
+    feedback(request.destructive === false ? 'menu' : 'warn');
+  }, [request]);
   // הפעולה הראשית למעלה, והביטול מתחתיה — בתחתית הקבועה של הדיאלוג.
   return (
     <Dialog

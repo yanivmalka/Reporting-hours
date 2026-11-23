@@ -31,6 +31,7 @@ import { Pressable } from './Pressable';
 import { Icon } from './Icon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '../lib/i18n';
+import { feedback } from '../lib/feedback';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
@@ -90,6 +91,7 @@ export function DrawerToggle({ tintColor }: { tintColor?: string }) {
   const { t } = useI18n();
   return (
     <Pressable
+      onPressIn={() => feedback('menu')}
       onPress={open}
       accessibilityRole="button"
       accessibilityLabel={t('drawer.openMenu')}
@@ -112,6 +114,7 @@ export function HeaderStart({ canGoBack, tintColor }: { canGoBack?: boolean; tin
   if (!canGoBack) return wide ? null : <DrawerToggle tintColor={tintColor} />;
   return (
     <Pressable
+      onPressIn={() => feedback('menu')}
       onPress={() => router.back()}
       hitSlop={10}
       accessibilityRole="button"
@@ -192,6 +195,7 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
   const lockItem =
     appLockPlatform && lockEnabled ? (
       <Pressable
+        onPressIn={() => feedback('menu')}
         onPress={() => {
           setOpen(false);
           if (financeLocked) void unlockFinance();
@@ -220,6 +224,7 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
     return (
       <Pressable
         key={String(link.href)}
+        onPressIn={() => feedback('menu')}
         onPress={() => go(link.href)}
         style={({ pressed }) => [menuStyles.item, (pressed || current) && menuStyles.itemPressed]}
       >
@@ -232,6 +237,7 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
   return (
     <>
       <Pressable
+        onPressIn={() => feedback('menu')}
         onPress={() => setOpen(true)}
         hitSlop={10}
         accessibilityRole="button"
@@ -255,6 +261,7 @@ export function HeaderEnd({ canGoBack, tintColor }: { canGoBack?: boolean; tintC
                 {item(PREFERENCES_LINK)}
                 <View style={menuStyles.divider} />
                 <Pressable
+                  onPressIn={() => feedback('menu')}
                   onPress={() => {
                     setOpen(false);
                     void setViewOnly(!viewOnly);
@@ -451,6 +458,7 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <Pressable
         key={String(link.href)}
+        onPressIn={() => feedback('menu')}
         onPress={() => go(link.href)}
         accessibilityRole="link"
         accessibilityState={{ selected: current }}
@@ -481,6 +489,7 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
       {/* הגדרות — דף נפרד (app/preferences.tsx), לא בתוך התפריט */}
       {navItem(PREFERENCES_LINK)}
       <Pressable
+        onPressIn={() => feedback('menu')}
         onPress={() => {
           onNavigate?.();
           void setViewOnly(!viewOnly);
@@ -494,6 +503,7 @@ function DrawerBody({ onNavigate }: { onNavigate?: () => void }) {
       {/* הצגת סכומים / נעילה — גם בתפריט ☰ (כמו ב־⋮), כדי שאפשר יהיה לפתוח מכל מסך */}
       {appLockPlatform && lockEnabled ? (
         <Pressable
+          onPressIn={() => feedback('menu')}
           onPress={() => {
             onNavigate?.();
             if (financeLocked) void unlockFinance();
