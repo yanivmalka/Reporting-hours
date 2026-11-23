@@ -247,28 +247,56 @@ function PayrollReportScreen() {
               <Text style={styles.groupHours}>{academic(g.netMinutes)} שע׳ אקד׳</Text>
             </View>
             <Text style={styles.cc}>
-              {g.sessions.length} מפגשים · {hm(g.netMinutes)} שעות נטו
+              {g.sessions.length} מפגשים{g.days ? ` · ${g.days.length} ימים` : ''} · {hm(g.netMinutes)} שעות נטו
             </Text>
-            {g.sessions.map((s) => (
-              <Pressable
-                key={`${s.date}${s.start}`}
-                onPress={() => router.push({ pathname: '/report-view', params: { id: s.reportId } })}
-                accessibilityRole="link"
-                style={({ pressed }) => [styles.session, pressed && { opacity: 0.6 }]}
-              >
-                <View style={styles.sessionDateBox}>
-                  <Text style={styles.sessionDate}>
-                    {weekday(s.date)} {formatISODate(s.date).slice(0, 5)}
-                  </Text>
-                  <Text style={styles.sessionHeb}>{hebrewDate(s.date, false)}</Text>
-                </View>
-                <Text style={styles.sessionTime}>
-                  {`⁦${s.start}–${s.end}⁩`}
-                  {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
-                </Text>
-                <Text style={styles.sessionHours}>{academic(s.netMinutes)}</Text>
-              </Pressable>
-            ))}
+            {g.days
+              ? // לפי מקום עבודה — שורה לכל תאריך: כל טווחי השעות של היום (כל אחד מוביל לדיווח שלו) וסה״כ.
+                g.days.map((day) => (
+                  <View key={day.date} style={styles.session}>
+                    <View style={styles.sessionDateBox}>
+                      <Text style={styles.sessionDate}>
+                        {weekday(day.date)} {formatISODate(day.date).slice(0, 5)}
+                      </Text>
+                      <Text style={styles.sessionHeb}>{hebrewDate(day.date, false)}</Text>
+                    </View>
+                    <View style={styles.dayTimes}>
+                      {day.sessions.map((s) => (
+                        <Pressable
+                          key={s.reportId}
+                          onPress={() => router.push({ pathname: '/report-view', params: { id: s.reportId } })}
+                          accessibilityRole="link"
+                          style={({ pressed }) => pressed && { opacity: 0.6 }}
+                        >
+                          <Text style={styles.dayTime}>
+                            {`⁦${s.start}–${s.end}⁩`}
+                            {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <Text style={styles.sessionHours}>{academic(day.netMinutes)}</Text>
+                  </View>
+                ))
+              : g.sessions.map((s) => (
+                  <Pressable
+                    key={`${s.date}${s.start}`}
+                    onPress={() => router.push({ pathname: '/report-view', params: { id: s.reportId } })}
+                    accessibilityRole="link"
+                    style={({ pressed }) => [styles.session, pressed && { opacity: 0.6 }]}
+                  >
+                    <View style={styles.sessionDateBox}>
+                      <Text style={styles.sessionDate}>
+                        {weekday(s.date)} {formatISODate(s.date).slice(0, 5)}
+                      </Text>
+                      <Text style={styles.sessionHeb}>{hebrewDate(s.date, false)}</Text>
+                    </View>
+                    <Text style={styles.sessionTime}>
+                      {`⁦${s.start}–${s.end}⁩`}
+                      {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
+                    </Text>
+                    <Text style={styles.sessionHours}>{academic(s.netMinutes)}</Text>
+                  </Pressable>
+                ))}
           </View>
         ))
       )}
@@ -454,6 +482,8 @@ const makeStyles = (colors: AppColors) =>
     sessionHeb: { fontSize: 11, color: colors.textMuted, textAlign: TEXT_RIGHT },
     sessionDate: { fontSize: 13, fontWeight: '600', color: colors.text, textAlign: TEXT_RIGHT },
     sessionTime: { flex: 1, fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    dayTimes: { flex: 1, gap: 4 },
+    dayTime: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
     sessionHours: { fontSize: 13, fontWeight: '700', color: colors.brandDark },
     totals: {
       backgroundColor: colors.brandLight,

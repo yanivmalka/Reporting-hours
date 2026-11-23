@@ -103,6 +103,12 @@ export const makeJournalStyles = (colors: AppColors) =>
     paddingVertical: spacing.xs,
     ...cardShadow,
   },
+  daySummary: {
+    backgroundColor: colors.brandLight,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
   todayFrame: { borderWidth: 2, borderColor: colors.brand, borderRadius: radius.md },
   todayHead: { flexDirection: 'row' },
   todayChip: { backgroundColor: colors.brand, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 2 },

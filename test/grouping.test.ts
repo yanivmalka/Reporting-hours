@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { groupItems, parseGroupLevel } from '../lib/courseGrouping';
 import { currentPayPeriod } from '../lib/dashboard';
-import { buildPayrollReport, NO_COURSE, payrollBody } from '../lib/payroll';
+import { buildPayrollReport, NO_COURSE, payrollBody, sessionsByDate } from '../lib/payroll';
+import { dayTotalsByWorkplace, dayTotalText, rangeNetMinutes } from '../lib/daySummary';
 import { buildExport, toCsv, toHtml } from '../lib/exportReports';
 import type { Course } from '../lib/courses';
 import type { WorkReport } from '../lib/reports';
@@ -128,5 +129,53 @@ describe('ייצוא מקובץ', () => {
     expect(buildExport(reports, [wp, wp2], courses, 'academic', { ...one, level: 'workplace' }).groups!.map((g) => g.label)).toEqual([
       'מכללה',
     ]);
+  });
+});
+
+describe('לפי מקום עבודה — שעות לפי תאריך', () => {
+  const period = currentPayPeriod(1, new Date(2026, 10, 17, 12));
+  // שני מפגשים ב־2.11
+  const twice = [...reports, r('f', '2026-11-02', { start: '13:00', end: '14:30' })];
+  it('שורה לכל תאריך, עם המפגשים לפי שעה וסה״כ', () => {
+    const rep = buildPayrollReport(wp, period, twice, courses, 'academic', 0, undefined, 'workplace');
+    const days = rep.groups[0].days!;
+    expect(days.map((d) => [d.date, d.sessions.map((s) => s.start).join(','), d.netMinutes])).toEqual([
+      ['2026-11-02', '09:00,13:00', 270],
+      ['2026-11-03', '14:00', 90],
+      ['2026-11-05', '09:00', 180],
+      ['2026-11-09', '09:00', 180],
+    ]);
+    expect(payrollBody(rep)).toContain('09:00-12:00, 13:00-14:30');
+    expect(payrollBody(rep)).toContain('5 מפגשים · 4 ימים');
+  });
+  it('ברמות האחרות — בלי קיבוץ לפי תאריך', () => {
+    expect(buildPayrollReport(wp, period, twice, courses, 'academic').groups[0].days).toBeUndefined();
+  });
+  it('sessionsByDate — ממוין', () => {
+    const s = (date: string, start: string) => ({ reportId: date + start, date, start, end: start, breakMinutes: 0, netMinutes: 10 });
+    expect(sessionsByDate([s('2026-01-02', '10:00'), s('2026-01-01', '09:00'), s('2026-01-02', '08:00')]).map((d) => [d.date, d.sessions[0].start, d.netMinutes])).toEqual([
+      ['2026-01-01', '09:00', 10],
+      ['2026-01-02', '08:00', 20],
+    ]);
+  });
+});
+
+describe('סיכום יומי לפי מקום', () => {
+  it('מקבץ לפי מקום בסדר ההופעה', () => {
+    const t = dayTotalsByWorkplace([
+      { workplaceId: 'b', netMinutes: 90 },
+      { workplaceId: 'a', netMinutes: 60 },
+      { workplaceId: 'b', netMinutes: 345 },
+    ]);
+    expect(t).toEqual([
+      { workplaceId: 'b', count: 2, netMinutes: 435 },
+      { workplaceId: 'a', count: 1, netMinutes: 60 },
+    ]);
+    expect(dayTotalText(t[0], true)).toBe('2 מפגשים · 7:15 שעות נטו · 9.67 שע׳ אקד׳');
+    expect(dayTotalText(t[1], false, 'דיווחים')).toBe('דיווח אחד · 1:00 שעות נטו');
+  });
+  it('דקות נטו של טווח', () => {
+    expect(rangeNetMinutes('10:45', '16:10', 15)).toBe(310);
+    expect(rangeNetMinutes('x', '16:10')).toBe(0);
   });
 });
