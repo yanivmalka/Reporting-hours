@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
 import { Text } from '../components/Text';
@@ -9,7 +9,8 @@ import { Screen } from '../components/Screen';
 import { useToast } from '../components/Toast';
 import { loadCourses, type Course } from '../lib/courses';
 import { usePayBasis } from '../lib/payBasis';
-import { buildPayrollReport, expectedPayment, grossAmount, loadPayrollStatus, netAmount, payrollItems, periodTitle, updatePayrollStatus, type PayrollItem, type PayrollReport } from '../lib/payroll';
+import { buildPayrollReport, expectedPayment, grossAmount, loadPayrollStatus, netAmount, payrollItems, periodTitle, statusKey, updatePayrollStatus, type PayrollItem, type PayrollReport } from '../lib/payroll';
+import { useAccess } from '../components/Access';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { todayISO } from '../lib/time';
 import { formatShekels } from '../lib/travel';
@@ -48,6 +49,10 @@ function PaymentsScreen() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [editing, setEditing] = useState<Row | null>(null);
   const [open, setOpen] = useState({ overdue: true, waiting: true, paid: false });
+  const { canEdit } = useAccess();
+  // ?mark=<מקום>|<תחילת תקופה> — מהתראת "לבדוק הפקדה": פותח את סימון התשלום של הדוח.
+  const { mark } = useLocalSearchParams<{ mark?: string }>();
+  const [marked, setMarked] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [w, r, st, c] = await Promise.all([
@@ -74,6 +79,13 @@ function PaymentsScreen() {
   }, [basis]);
 
   useScreenData(load, [load]);
+
+  useEffect(() => {
+    if (!rows || !mark || marked === mark || !canEdit) return;
+    setMarked(mark);
+    const row = rows.find((r) => statusKey(r.item.workplace.id, r.item.period.start) === mark);
+    if (row) setEditing(row);
+  }, [rows, mark, marked, canEdit]);
 
   if (!rows) {
     return <LoadingScreen />;
@@ -110,7 +122,7 @@ function PaymentsScreen() {
     const { item, report, expected } = row;
     return (
       <Pressable
-        onPress={() => setEditing(row)}
+        onPress={() => (canEdit ? setEditing(row) : undefined)}
         style={({ pressed }) => [
           styles.row,
           kind === 'overdue' && styles.rowOverdue,
@@ -139,8 +151,19 @@ function PaymentsScreen() {
           {taxPercentOf(workplaceAt(item.workplace, item.period.end)) > 0
             ? ` · מס ${taxPercentOf(workplaceAt(item.workplace, item.period.end))}%`
             : ''}
-          {kind === 'overdue' ? ' · באיחור' : ''}
+          {kind === 'overdue' ? ` · ${daysBetween(expected, today)} ימים אחרי המועד` : ''}
+          {kind === 'paid' ? ` · ${paidTiming(expected, item.status.paidAt as string)}` : ''}
         </Text>
+        {kind !== 'paid' && expected <= today && canEdit ? (
+          <Pressable
+            onPress={() => void save(row, today, netAmount(report))}
+            accessibilityRole="button"
+            hitSlop={6}
+            style={({ pressed }) => [styles.quick, pressed && styles.pressed]}
+          >
+            <Text style={styles.quickText}>התקבל היום · {formatShekels(netAmount(report))}</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={() =>
             router.push({
@@ -225,6 +248,15 @@ function PaymentsScreen() {
   );
 }
 
+const daysBetween = (a: string, b: string) =>
+  Math.round((new Date(`${b}T12:00:00`).getTime() - new Date(`${a}T12:00:00`).getTime()) / 86_400_000);
+
+/** התשלום התקבל בזמן / באיחור / מוקדם — ביחס למועד הצפוי. */
+function paidTiming(expected: string, paidAt: string): string {
+  const d = daysBetween(expected, paidAt);
+  return d > 0 ? `באיחור ${d === 1 ? 'יום' : `${d} ימים`}` : d < 0 ? `מוקדם ב־${-d === 1 ? 'יום' : `${-d} ימים`}` : 'בזמן';
+}
+
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -256,5 +288,14 @@ const makeStyles = (colors: AppColors) =>
     rowName: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
     amount: { fontSize: 16, fontWeight: '800', color: colors.brandDark },
     meta: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    quick: {
+      alignSelf: 'flex-start',
+      marginTop: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: colors.brandDark,
+    },
+    quickText: { fontSize: 13, fontWeight: '700', color: colors.textOnBrand },
     link: { fontSize: 13, fontWeight: '700', color: colors.brand, textAlign: TEXT_RIGHT, marginTop: 2 },
   });

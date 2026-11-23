@@ -4,7 +4,7 @@ import { Text } from '../Text';
 import { Pressable } from '../Pressable';
 import { ACADEMIC_HOUR_MINUTES } from '../../lib/academic';
 import { ReportCard } from '../ReportCard';
-import { NearDayChip, SessionRow, openSession } from '../PlanList';
+import { NearDayChip, SessionRow, useOpenSession } from '../PlanList';
 import { nearDay } from '../../lib/nearDays';
 import { formatShekels } from '../../lib/travel';
 import { workplaceColor } from '../../theme/workplaceColors';
@@ -18,7 +18,8 @@ import { netMinutes } from '../../lib/reports';
 
 /** לשונית "דיווחים": סיכום התקופה ורשימת הדיווחים, כולל מפגשים של היום ושעברו שלא דווחו. */
 export function ReportsTab({ w }: { w: Journal }) {
-  const { router, styles, colors, basis, reports, params, setWpFilter, setRange, setPeriodMode, listTop, filtered, onDayLayout, workplaceOf, nameOf, payOf, totals, travelOf, lockOf, items, missingCount, pendingCount, isFiltered, timeLabel, continuous, today } = w;
+  const { router, styles, colors, basis, reports, params, setWpFilter, setRange, setPeriodMode, listTop, filtered, onDayLayout, workplaceOf, nameOf, payOf, totals, travelOf, lockOf, items, missingCount, pendingCount, offCount, isFiltered, timeLabel, continuous, today } = w;
+  const session = useOpenSession(() => w.setReloadTick((n) => n + 1));
   return (
     <>
     <View style={styles.summary}>
@@ -27,6 +28,7 @@ export function ReportsTab({ w }: { w: Journal }) {
         {filtered.length} דיווחים · {totals.days} ימי עבודה
         {missingCount ? ` · ${missingCount} חסרים` : ''}
         {pendingCount ? ` · ${pendingCount} ממתינים` : ''}
+        {offCount ? ` · ${offCount} לא התקיימו` : ''}
       </Text>
       <Text style={styles.summaryLine}>
         {Math.round((totals.netMinutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳ אקדמיות · שכר{' '}
@@ -85,7 +87,7 @@ export function ReportsTab({ w }: { w: Journal }) {
               style={[styles.dueCard, isToday && styles.todayFrame]}
               onLayout={(e) => onDayLayout(item.row.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height, `s:${item.row.course.id}@${item.row.date}`)}
             >
-              <SessionRow row={item.row} showDate onPress={() => openSession(router, item.row)} />
+              <SessionRow row={item.row} showDate onPress={() => session.open(item.row)} />
             </View>
           ) : (
             <View
@@ -138,6 +140,7 @@ export function ReportsTab({ w }: { w: Journal }) {
       </View>
     )}
     <MonthLink w={w} at="bottom" />
+    {session.dialog}
 
     </>
   );

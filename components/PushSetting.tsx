@@ -28,6 +28,7 @@ const KINDS: { kind: PushKind; label: string; hint: string }[] = [
   { kind: 'reminder', label: 'תזכורות מפגש', hint: 'הגשה, מבחן ותזכורות מ"פרטי המפגש"' },
   { kind: 'taxi', label: 'הזמנת מונית', hint: 'לפי ההגדרה של כל מקום עבודה' },
   { kind: 'payroll', label: 'יום אחרון לדיווח שכר', hint: 'סיכום התקופה בערב שלפני ובבוקר עצמו, בלי סכומים' },
+  { kind: 'payment', label: 'בדיקת הפקדה', hint: 'בבוקר מועד התשלום הצפוי, ושוב אחרי 3 ו־7 ימים אם לא סומן "התקבל"' },
 ];
 
 export function PushSetting() {

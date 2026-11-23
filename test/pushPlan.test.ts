@@ -87,6 +87,20 @@ describe('התראות לטלפון — מה מתוזמן', () => {
     expect(plan({ kinds: ['reminder'], notes, reports: [reported] })).toHaveLength(0);
   });
 
+  it('בדיקת הפקדה: במועד הצפוי ואחרי 3 ימים, בלי סכומים; שולם / לא נשלח — בלי', () => {
+    const now = new Date(2026, 11, 20, 8, 0);
+    const sent = { 'w1|2026-10-25': { sentAt: new Date(2026, 10, 23).getTime() } };
+    const p = plan({ kinds: ['payment'], reports: [report], now, payroll: sent });
+    // שוטף + 30 בדיוק: סוף נובמבר + 30 ימים = 30.12; התזכורת של 7 ימים מחוץ לטווח התזמון.
+    expect(p.map((x) => hhmm(x.at))).toEqual(['30.12 09:00', '2.1 09:00']);
+    expect(p[0].title).toContain('לבדוק הפקדה');
+    expect(p[0].body).not.toContain('₪');
+    expect(p[0].href).toBe('/payments?mark=w1%7C2026-10-25');
+    const paid = { 'w1|2026-10-25': { sentAt: 1, paidAt: '2026-12-29' } };
+    expect(plan({ kinds: ['payment'], reports: [report], now, payroll: paid })).toHaveLength(0);
+    expect(plan({ kinds: ['payment'], reports: [report], now })).toHaveLength(0);
+  });
+
   it('דוח שכר: ערב לפני היום האחרון ובבוקר שלו, בלי סכומים; דוח שנשלח — בלי', () => {
     const now = new Date(2026, 10, 20, 12, 0);
     const p = plan({ kinds: ['payroll'], reports: [report], now }).filter((x) => x.id.includes('2026-11-24'));
