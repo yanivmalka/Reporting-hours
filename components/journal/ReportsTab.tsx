@@ -107,6 +107,7 @@ export function ReportsTab({ w }: { w: Journal }) {
                 pay={payOf(item.report)}
                 travel={travelOf(item.report)}
                 locked={lockOf(item.report) != null}
+                highlight={date === selectedDay}
                 onPress={() => router.push({ pathname: '/report-view', params: { id: item.report.id } })}
               />
             </View>
