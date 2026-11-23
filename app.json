@@ -49,7 +49,9 @@
         {
           "android": {
             "useLegacyPackaging": true,
-            "enableBundleCompression": true
+            "enableBundleCompression": true,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],
@@ -68,7 +70,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#305A58"
         }
-      ]
+      ],
+      "./plugins/withLeanAndroid"
     ],
     "extra": {
       "supportsRTL": true
