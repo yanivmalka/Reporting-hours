@@ -74,7 +74,7 @@ export function WizardNav({ w }: { w: ReportWizard }) {
                   onDone: editing
                     ? async (to: string) => {
                         const moved = { ...editing, date: to };
-                        await updateReport(editing.id, moved);
+                        await updateReport(editing.id, moved, editing);
                         setEditing(moved);
                         setDate(to);
                       }

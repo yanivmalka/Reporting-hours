@@ -152,9 +152,37 @@ export function academicOf(
   return toAcademic(Math.max(0, net - (report.carriedMinutes ?? 0)));
 }
 
-/** עדכון דיווח קיים. מחזיר את הרשימה המעודכנת. */
-export async function updateReport(id: string, draft: WorkReportDraft): Promise<WorkReport[]> {
+/** הדיווח השמור כבר לא זהה לגרסה שנפתחה לעריכה — העדכון לא בוצע. */
+export class ReportChangedError extends Error {
+  constructor() {
+    super('report changed since it was loaded');
+    this.name = 'ReportChangedError';
+  }
+}
+
+/**
+ * עדכון דיווח קיים. מחזיר את הרשימה המעודכנת.
+ * `expected` — הגרסה שנפתחה לעריכה: אם הדיווח השמור כבר שונה ממנה (תאריך, מקום, שעות),
+ * או שאינו קיים — לא דורסים, וזורקים `ReportChangedError`.
+ */
+export async function updateReport(
+  id: string,
+  draft: WorkReportDraft,
+  expected?: Pick<WorkReport, 'date' | 'workplaceId' | 'start' | 'end'>,
+): Promise<WorkReport[]> {
   const list = await loadReports();
+  if (expected) {
+    const stored = list.find((r) => r.id === id);
+    if (
+      !stored ||
+      stored.date !== expected.date ||
+      stored.workplaceId !== expected.workplaceId ||
+      stored.start !== expected.start ||
+      stored.end !== expected.end
+    ) {
+      throw new ReportChangedError();
+    }
+  }
   const next = list.map((r) => {
     if (r.id !== id) return r;
     const { note: _n, courseId: _c, extraKind: _k, ...rest } = r;

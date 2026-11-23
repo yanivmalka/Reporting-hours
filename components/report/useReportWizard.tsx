@@ -13,7 +13,7 @@ import { nextMissingAfter, nextRelevantDay, unreportedOn } from '../../lib/home'
 import { loadLeftoverMode } from '../../lib/leftover';
 import { addAccumulatedMinutes, adjustAccumulated, entryOf } from '../../lib/accumulated';
 import { usePayBasis } from '../../lib/payBasis';
-import { addReport, deleteReport, loadReports, makeBreakId, updateReport, type ExtraSessionKind, type WorkReport } from '../../lib/reports';
+import { addReport, deleteReport, loadReports, makeBreakId, ReportChangedError, updateReport, type ExtraSessionKind, type WorkReport } from '../../lib/reports';
 import { courseReported, canceledOn, coursesOn, loadCourses, sessionTimes, timeRange, type Course } from '../../lib/courses';
 import { currentPayPeriod } from '../../lib/dashboard';
 import { isLocked, loadPayrollStatus, statusKey } from '../../lib/payroll';
@@ -23,6 +23,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import { useWorkplaceColor } from '../../theme/workplaceColors';
 import { buildReportDraft, reportPreview, validateReportForm } from '../../lib/reportForm';
+import { changesMessage, editIntegrityError, reportChanges } from '../../lib/reportEdit';
 import { BreakRow, DEFAULT_BREAK_MINUTES, Step, LeftoverChoice, Errors, AUTO_RETURN_SECONDS } from './shared';
 import { makeReportStyles as makeStyles } from './styles';
 import { useScreenData } from '../useScreenData';
@@ -64,6 +65,11 @@ export function useReportWizard() {
   const [lockedStart, setLockedStart] = useState<string | null>(null);
   /** בעריכה: הדיווח לא נמצא בנתונים (נמחק / לא סונכרן) — לא נופלים לאשף של דיווח חדש */
   const [editMissing, setEditMissing] = useState(false);
+  /**
+   * בעריכה: האם המשתמש עצמו שינה באשף את התאריך / מקום העבודה. שינוי שלא דרכו =
+   * הטופס התחלף מתחת לידיים — השמירה נחסמת (lib/reportEdit.ts).
+   */
+  const userChanged = useRef({ date: false, workplace: false });
   const confirm = useConfirm();
   const sessionDialog = useSessionCancel();
   const moveDialog = useSessionMove();
@@ -298,6 +304,7 @@ export function useReportWizard() {
   }
 
   function changeDate(next: string) {
+    userChanged.current.date = true;
     setDate(next);
     setTouched(true);
     setErrors((prev) => ({ ...prev, date: undefined }));
@@ -328,15 +335,92 @@ export function useReportWizard() {
     setErrors(found);
     if (Object.values(found).some(Boolean)) return;
 
-    setSaving(true);
-    const id = workplaceId as string;
     const { draft: draftReport, carried } = buildReportDraft(
       { workplaceId, date, start, end, breaks, note, leftoverChoice },
       { workplaces: workplaces ?? [], basis, course: selectedCourse, extraKind },
     );
-    const saved = editing
-      ? await updateReport(editing.id, draftReport)
-      : await addReport(draftReport);
+    if (!editing) {
+      await commitSave(draftReport, carried);
+      return;
+    }
+    // ── עדכון דיווח קיים: בקרה ואישור ──
+    // 1. הטופס חייב להיות של הדיווח הזה: תאריך / מקום עבודה שהשתנו בלי שהמשתמש בחר — חסימה.
+    const integrity = editIntegrityError(editing, draftReport, {
+      dateChanged: userChanged.current.date,
+      workplaceChanged: userChanged.current.workplace,
+    });
+    if (integrity) {
+      confirm({
+        title: 'הדיווח לא נשמר',
+        message: `${integrity}\nהטופס ייטען מחדש מהדיווח השמור, כדי שלא יידרס.`,
+        confirmLabel: 'טעינה מחדש',
+        destructive: false,
+        onConfirm: () => reloadEditing(),
+      });
+      return;
+    }
+    // 2. אישור המשתמש — מה משתנה, לפני ← אחרי.
+    const changes = reportChanges(editing, draftReport, {
+      workplace: (wid) => workplaces?.find((w) => w.id === wid)?.name ?? '',
+      course: (cid) => courses.find((c) => c.id === cid)?.name ?? '',
+    });
+    if (changes.length === 0) {
+      showToast('לא בוצעו שינויים בדיווח');
+      setExitReason('cancelled');
+      return;
+    }
+    const critical = changes.some((c) => c.critical);
+    confirm({
+      title: critical ? 'להעביר את הדיווח?' : 'לעדכן את הדיווח?',
+      message: changesMessage(changes),
+      confirmLabel: 'עדכון הדיווח',
+      destructive: critical,
+      onConfirm: () => commitSave(draftReport, carried),
+    });
+  }
+
+  /** טעינה מחדש של הדיווח הנערך מהנתונים השמורים (אחרי שהבקרה חסמה שמירה). */
+  async function reloadEditing() {
+    if (!editing) return;
+    const fresh = (await loadReports()).find((r) => r.id === editing.id);
+    userChanged.current = { date: false, workplace: false };
+    if (!fresh) {
+      setEditMissing(true);
+      return;
+    }
+    setEditing(fresh);
+    setWorkplaceId(fresh.workplaceId);
+    setDate(fresh.date);
+    setStart(fresh.start);
+    setEnd(fresh.end);
+    setBreaks(fresh.breaks.map((b) => ({ id: b.id, minutes: String(b.minutes) })));
+    setNote(fresh.note ?? '');
+    setLeftoverChoice(fresh.carriedMinutes > 0 ? 'carry' : 'include');
+    setStep('times');
+  }
+
+  async function commitSave(draftReport: ReturnType<typeof buildReportDraft>['draft'], carried: number) {
+    setSaving(true);
+    const id = draftReport.workplaceId;
+    let saved: WorkReport[];
+    try {
+      saved = editing
+        ? await updateReport(editing.id, draftReport, editing)
+        : await addReport(draftReport);
+    } catch (e) {
+      setSaving(false);
+      if (e instanceof ReportChangedError) {
+        confirm({
+          title: 'הדיווח השתנה בינתיים',
+          message: 'הדיווח השמור כבר לא זהה למה שנפתח לעריכה (שינוי ממכשיר אחר או מהמייל). לא נשמר דבר.',
+          confirmLabel: 'טעינה מחדש',
+          destructive: false,
+          onConfirm: () => reloadEditing(),
+        });
+        return;
+      }
+      throw e;
+    }
     setExisting(saved);
 
     let toast: string | null = null;
@@ -354,6 +438,7 @@ export function useReportWizard() {
       toast,
     });
     if (editing) setEditing({ ...editing, ...draftReport });
+    userChanged.current = { date: false, workplace: false };
     // ניקוי הטופס (התאריך נשמר — לדיווח נוסף באותו יום).
     setStart('');
     setEnd('');
@@ -384,6 +469,7 @@ export function useReportWizard() {
     setSkippedCourse,
     editing,
     editMissing,
+    userChanged,
     setEditing,
     lockedStart,
     setLockedStart,
@@ -459,7 +545,7 @@ export type ReportWizardCore = ReturnType<typeof useReportWizard>;
 
 /** נגזרות אחרי הטעינה — נקרא רק כש־workplaces נטען ויש לפחות מקום עבודה. */
 export function reportWizardView(core: ReportWizardCore & { workplaces: Workplace[] }) {
-  const { router, navigation, editId, presetWp, direct, setDirect, skippedCourse, setSkippedCourse, editing, sessionDialog, basis, workplaces, existing, courses, setCourses, courseId, setCourseId, setExtraKind, step, setStep, viaCourse, setViaCourse, setLastSaved, setTouched, setExitReason, swipeRef, workplaceId, setWorkplaceId, date, note, setNote, start, setStart, end, setEnd, breaks, setBreaks, wheelActive, heldPreview, leftoverChoice, setErrors, setBaseline, openOnDate, validate } = core;
+  const { router, navigation, editId, presetWp, direct, setDirect, skippedCourse, setSkippedCourse, editing, sessionDialog, basis, workplaces, existing, courses, setCourses, courseId, setCourseId, setExtraKind, step, setStep, viaCourse, setViaCourse, setLastSaved, setTouched, setExitReason, swipeRef, workplaceId, setWorkplaceId, date, note, setNote, start, setStart, end, setEnd, breaks, setBreaks, wheelActive, heldPreview, leftoverChoice, setErrors, setBaseline, openOnDate, validate, userChanged } = core;
   // ── התצוגה המקדימה החיה (lib/reportForm.ts) ──
   const workplace = workplaces.find((w) => w.id === workplaceId) ?? null;
   const {
@@ -508,6 +594,7 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
    * נקבעים מקום העבודה והנושא, והשעות שהוקלדו נשמרות. אחרת — ממלאים הכול.
    */
   function applyCourse(c: Course, keepTimes = false) {
+    userChanged.current.workplace = true;
     setCourseId(c.id);
     setExtraKind(null);
     setWorkplaceId(c.workplaceId);
@@ -561,6 +648,7 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
       if (activeCourses.length > 0) setStep('course');
       else if (lockWp) {
         // מקום העבודה כבר נבחר ואין לו קורסים ביום זה — ישר לשעות.
+        userChanged.current.workplace = true;
         setWorkplaceId(lockWp);
         setCourseId(null);
         setViaCourse(false);
@@ -626,6 +714,7 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
   }
 
   function chooseWorkplace(id: string) {
+    userChanged.current.workplace = true;
     setWorkplaceId(id);
     setCourseId(null);
     setExtraKind(null);
@@ -705,6 +794,11 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
   const wAt = workplace ? workplaceAt(workplace, date) : null;
 
   return {
+    /** בחירת תאריך בשלב התאריך — פעולת משתמש (נרשמת לבקרת העריכה). */
+    openOnDate: (d: string) => {
+      userChanged.current.date = true;
+      openOnDate(d);
+    },
     workplaces,
     startMin,
     endMin,
