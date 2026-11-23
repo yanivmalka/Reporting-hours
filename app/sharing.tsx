@@ -123,7 +123,7 @@ function SharingScreenInner() {
 
   async function sendInvite(to: string, r: ShareRole) {
     try {
-      await Share.share({ title: 'דיווח שעות — שיתוף', message: inviteMessage(to, r) });
+      await Share.share({ title: 'שיעור — שיתוף', message: inviteMessage(to, r) });
     } catch {
       // המשתמש סגר את תפריט השיתוף
     }
