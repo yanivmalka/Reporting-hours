@@ -17,6 +17,7 @@ import { recommendations } from './recommend';
 import { parseTime } from './time';
 import { activeWorkplaces, isTaxi, missingTaxCoordination, type Workplace } from './workplaces';
 import { beforeTracking } from './trackingStart';
+import { NEAR_DAYS, type NearDayKey } from './nearDays';
 import { effectiveReminder, FLAG_ICON, FLAG_LABEL, stamp, type SessionNote } from './sessionNotes';
 
 // ───────────────────────── ברכה ─────────────────────────
@@ -73,7 +74,7 @@ export type AgendaItem = {
   cancel?: Cancellation;
 };
 
-export type AgendaDayKey = 'dayBefore' | 'yesterday' | 'today' | 'tomorrow' | 'dayAfter';
+export type AgendaDayKey = NearDayKey;
 
 export type AgendaDay = {
   key: AgendaDayKey;
@@ -85,13 +86,7 @@ export type AgendaDay = {
   items: AgendaItem[];
 };
 
-const AGENDA_DAYS: { key: AgendaDayKey; offset: number; label: string }[] = [
-  { key: 'dayBefore', offset: -2, label: 'שלשום' },
-  { key: 'yesterday', offset: -1, label: 'אתמול' },
-  { key: 'today', offset: 0, label: 'היום' },
-  { key: 'tomorrow', offset: 1, label: 'מחר' },
-  { key: 'dayAfter', offset: 2, label: 'מחרתיים' },
-];
+const AGENDA_DAYS = NEAR_DAYS;
 
 /** מיקום "היום" ברשימת ימי הלו״ז. */
 /**

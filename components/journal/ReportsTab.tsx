@@ -4,7 +4,8 @@ import { Text } from '../Text';
 import { Pressable } from '../Pressable';
 import { ACADEMIC_HOUR_MINUTES } from '../../lib/academic';
 import { ReportCard } from '../ReportCard';
-import { SessionRow, openSession } from '../PlanList';
+import { NearDayChip, SessionRow, openSession } from '../PlanList';
+import { nearDay } from '../../lib/nearDays';
 import { formatShekels } from '../../lib/travel';
 import { workplaceColor } from '../../theme/workplaceColors';
 import { MonthDivider } from '../MonthDivider';
@@ -66,14 +67,12 @@ export function ReportsTab({ w }: { w: Journal }) {
             continuous && (prevDate == null || prevDate.slice(0, 7) !== date.slice(0, 7)) ? (
               <MonthDivider month={date.slice(0, 7)} />
             ) : null;
-          // היום מסומן בבירור: כותרת "היום" לפני הפריט הראשון שלו, ומסגרת בצבע המערכת.
+          // שלשום עד מחרתיים: תגית לפני הפריט הראשון של היום; היום — גם מסגרת.
           const isToday = date === today;
           const todayHead =
-            isToday && prevDate !== date ? (
+            prevDate !== date && nearDay(date, today) ? (
               <View style={styles.todayHead}>
-                <View style={styles.todayChip}>
-                  <Text style={styles.todayChipText}>היום</Text>
-                </View>
+                <NearDayChip date={date} today={today} />
               </View>
             ) : null;
           return (
