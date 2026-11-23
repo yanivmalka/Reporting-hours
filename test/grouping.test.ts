@@ -179,3 +179,28 @@ describe('סיכום יומי לפי מקום', () => {
     expect(rangeNetMinutes('x', '16:10')).toBe(0);
   });
 });
+
+import { mergeDotsByDay } from '../lib/dayDots';
+describe('עיגול אחד ליום', () => {
+  const d = (date: string, state: string) => ({ date, state });
+  it('מאחד לפי תאריך ומחשב מצב', () => {
+    const m = mergeDotsByDay([
+      d('2026-11-01', 'reported'),
+      d('2026-11-01', 'reported'),
+      d('2026-11-08', 'reported'),
+      d('2026-11-08', 'open'),
+      d('2026-11-15', 'moved'),
+      d('2026-11-15', 'moved'),
+      d('2026-11-22', 'open'),
+      d('2026-11-22', 'canceled'),
+      d('2026-11-29', 'open'),
+    ]);
+    expect(m.map((x) => [x.date.slice(8), x.state, x.parts.length, `${x.reported}/${x.held}`])).toEqual([
+      ['01', 'reported', 2, '2/2'],
+      ['08', 'partial', 2, '1/2'],
+      ['15', 'moved', 2, '0/0'],
+      ['22', 'open', 2, '0/1'],
+      ['29', 'open', 1, '0/1'],
+    ]);
+  });
+});
