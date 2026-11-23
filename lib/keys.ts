@@ -38,6 +38,7 @@ const REGISTRY = {
   leftoverMode: def('reporting-hours/leftover-mode/v1', 'synced'),
   profile: def('reporting-hours/profile/v1', 'synced'),
   emailReport: def('reporting-hours/email-report/v1', 'synced'),
+  activityLog: def('reporting-hours/activity-log/v1', 'synced'),
   // ── העדפות תצוגה (לא בחשבון של אחר) ──
   homeDismissed: def('reporting-hours/home-dismissed/v1', 'viewerDevice'),
   recommendDismissed: def('reporting-hours/recommend-dismissed/v1', 'viewerDevice'),
@@ -54,6 +55,7 @@ const REGISTRY = {
   appLock: def('reporting-hours/app-lock/v1', 'device'),
   push: def('reporting-hours/push/v1', 'device'),
   viewOnly: def('reporting-hours/view-only/v1', 'device'),
+  deviceId: def('reporting-hours/device-id/v1', 'device'),
 } as const;
 
 type Registry = typeof REGISTRY;

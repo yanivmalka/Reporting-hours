@@ -146,6 +146,7 @@ const PAY_LINKS: NavLink[] = [
 const ARCHIVE_LINKS: NavLink[] = [
   { href: '/holidays', key: 'nav.holidays', icon: 'calendar-check-outline' },
   { href: '/archive', key: 'nav.archive', icon: 'archive-outline' },
+  { href: '/activity', key: 'nav.activity', icon: 'history' },
 ];
 
 /** דף ההגדרות — מסכי ההגדרה (דקות מצטברות, פרטים, שיתוף, נתונים, דיווח במייל) נפתחים ממנו. */

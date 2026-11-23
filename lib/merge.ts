@@ -7,6 +7,8 @@
  *   רשומה ששונתה רק בצד אחד — השינוי שלו; נמחקה בצד אחד ולא שונתה בשני — נמחקת;
  *   חדשה בצד אחד — נוספת.
  * - אובייקט: מיזוג לפי שדה, באותו אופן ברקורסיה.
+ * - `deleteWins` (הדיווחים): רשומה שנמחקה בצד אחד נמחקת גם אם שונתה בשני — מחיקה מכוונת לא
+ *   "חוזרת לחיים" בשקט. הגרסה שנזרקה נרשמת ביומן הפעולות (lib/sync.ts ← droppedOnMerge), ומשם אפשר להחזיר.
  * - מספרים ששונו בשני הצדדים, כש־`additive` (מונה הדקות המצטברות): שני השינויים מצטברים.
  * - כל השאר: צד שלא השתנה מהבסיס מקבל את השינוי של השני; שונו שניהם — המכשיר מנצח.
  */
@@ -27,7 +29,7 @@ function isRecordList(x: Json): x is object[] {
 }
 const isPlainObject = (x: Json): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 
-export function merge3(base: Json, local: Json, remote: Json, additive = false): Json {
+export function merge3(base: Json, local: Json, remote: Json, additive = false, deleteWins = false): Json {
   if (same(local, remote)) return local;
   if (same(local, base)) return remote;
   if (same(remote, base)) return local;
@@ -44,11 +46,11 @@ export function merge3(base: Json, local: Json, remote: Json, additive = false):
       if (inL && inR) return merge3(b.get(k), l.get(k), r.get(k), additive);
       if (inL) {
         // לא בענן: נמחק שם (אם היה בבסיס ולא השתנה כאן) או חדש כאן.
-        if (inB && same(l.get(k), b.get(k))) return undefined;
+        if (inB && (deleteWins || same(l.get(k), b.get(k)))) return undefined;
         return l.get(k);
       }
       if (inR) {
-        if (inB && same(r.get(k), b.get(k))) return undefined; // נמחק במכשיר
+        if (inB && (deleteWins || same(r.get(k), b.get(k)))) return undefined; // נמחק במכשיר
         return r.get(k);
       }
       return undefined;
@@ -92,10 +94,16 @@ export function merge3(base: Json, local: Json, remote: Json, additive = false):
 }
 
 /** מיזוג של מחרוזות JSON. בסיס חסר (null) — אין היסטוריה משותפת. */
-export function merge3Raw(baseRaw: string | null, localRaw: string, remoteRaw: string, additive = false): string {
+export function merge3Raw(
+  baseRaw: string | null,
+  localRaw: string,
+  remoteRaw: string,
+  additive = false,
+  deleteWins = false,
+): string {
   try {
     const base = baseRaw == null ? undefined : JSON.parse(baseRaw);
-    return JSON.stringify(merge3(base, JSON.parse(localRaw), JSON.parse(remoteRaw), additive));
+    return JSON.stringify(merge3(base, JSON.parse(localRaw), JSON.parse(remoteRaw), additive, deleteWins));
   } catch {
     return localRaw;
   }
