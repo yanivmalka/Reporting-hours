@@ -27,6 +27,7 @@ export default function ProfileScreen() {
   async function save() {
     setSaving(true);
     await saveProfile({
+      ...p,
       fullName: p.fullName.trim(),
       phone: p.phone.trim(),
       email: p.email.trim(),
