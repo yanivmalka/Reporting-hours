@@ -11,6 +11,7 @@ import { Text } from '../components/Text';
 import { Button } from '../components/Button';
 import { Pressable } from '../components/Pressable';
 import { Screen } from '../components/Screen';
+import { sameSessionReports } from '../lib/reportEdit';
 import { useConfirm } from '../components/ConfirmDialog';
 import { adjustAccumulated } from '../lib/accumulated';
 import { courseReport, coursesOn, loadCourses, type Course } from '../lib/courses';
@@ -53,6 +54,8 @@ export default function ReportViewScreen() {
     paid: boolean;
     /** הקורס שהדיווח מכסה (אם יש) — לסימון "השיעור לא התקיים" */
     course?: Course;
+    /** דיווחים נוספים על אותו מפגש (כפילות) */
+    duplicates: WorkReport[];
   } | null>(null);
   /** הדיווח כבר הוצג — אם נעלם בחזרה מהעריכה, הוא נמחק */
   const hadReport = useRef(false);
@@ -92,7 +95,8 @@ export default function ReportViewScreen() {
         return;
       }
       hadReport.current = Boolean(report);
-      setData({ report, workplace, lockedStart, paid, course });
+      const duplicates = report ? sameSessionReports(report, reports) : [];
+      setData({ report, workplace, lockedStart, paid, course, duplicates });
     },
   );
 
@@ -184,6 +188,28 @@ export default function ReportViewScreen() {
         })}
       </View>
 
+      {data.duplicates.length ? (
+        <View style={styles.dupCard}>
+          <Text style={styles.dupTitle}>
+            ⚠ {data.duplicates.length === 1 ? 'יש עוד דיווח' : `יש עוד ${data.duplicates.length} דיווחים`} על אותו מפגש
+          </Text>
+          <Text style={styles.muted}>במסך הבית מוצג רק אחד. כדאי למחוק את מה שמיותר.</Text>
+          {data.duplicates.map((r) => (
+            <Pressable
+              key={r.id}
+              onPress={() => router.push({ pathname: '/report-view', params: { id: r.id } })}
+              accessibilityRole="link"
+              style={({ pressed }) => [styles.dupRow, pressed && styles.pressed]}
+            >
+              <Text style={styles.valueLink}>
+                ⁦{r.start}–{r.end}⁩{r.by ? ` · ${r.by.name || r.by.email}` : ''}
+              </Text>
+              <EnterChevron />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       {report.viaEmail ? <ViaEmail via={report.viaEmail} /> : null}
 
       {lockedStart && workplace ? (
@@ -258,4 +284,7 @@ const makeStyles = (colors: AppColors) =>
     label: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
     value: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     muted: { fontSize: 14, lineHeight: 20, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    dupCard: { backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs },
+    dupTitle: { fontSize: 15, fontWeight: '700', color: colors.dangerText, textAlign: TEXT_RIGHT },
+    dupRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 },
   });

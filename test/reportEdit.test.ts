@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changesMessage, editIntegrityError, reportChanges } from '../lib/reportEdit';
+import { changesMessage, editIntegrityError, reportChanges, sameSessionReports } from '../lib/reportEdit';
 import type { WorkReport, WorkReportDraft } from '../lib/reports';
 
 // המקרה מ־22–23.11.2026: דיווח מהמייל (יום ראשון 09:00–15:55) נשמר בעריכה על יום שני ובשעות של קורס אחר.
@@ -52,5 +52,19 @@ describe('בקרה על עדכון דיווח קיים', () => {
     const after = draft({ workplaceId: 'w2' });
     expect(editIntegrityError(mailReport, after, { dateChanged: false, workplaceChanged: false })).not.toBeNull();
     expect(editIntegrityError(mailReport, after, { dateChanged: false, workplaceChanged: true })).toBeNull();
+  });
+});
+
+describe('כפילות דיווחים על אותו מפגש', () => {
+  it('אותו קורס ותאריך — כפילות; מפגש נוסף / תאריך אחר — לא', () => {
+    const a = { id: 'a', courseId: 'c', date: '2026-11-23' };
+    const list = [
+      a,
+      { id: 'b', courseId: 'c', date: '2026-11-23' },
+      { id: 'x', courseId: 'c', date: '2026-11-23', extraKind: 'makeup' as const },
+      { id: 'y', courseId: 'c', date: '2026-11-22' },
+    ];
+    expect(sameSessionReports(a, list).map((r) => r.id)).toEqual(['b']);
+    expect(sameSessionReports({ id: 'n', courseId: 'c', date: '2026-11-21' }, list)).toEqual([]);
   });
 });

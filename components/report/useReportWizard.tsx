@@ -23,7 +23,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import { useWorkplaceColor } from '../../theme/workplaceColors';
 import { buildReportDraft, reportPreview, validateReportForm } from '../../lib/reportForm';
-import { changesMessage, editIntegrityError, reportChanges } from '../../lib/reportEdit';
+import { changesMessage, editIntegrityError, reportChanges, sameSessionReports } from '../../lib/reportEdit';
 import { BreakRow, DEFAULT_BREAK_MINUTES, Step, LeftoverChoice, Errors, AUTO_RETURN_SECONDS } from './shared';
 import { makeReportStyles as makeStyles } from './styles';
 import { useScreenData } from '../useScreenData';
@@ -340,6 +340,18 @@ export function useReportWizard() {
       { workplaces: workplaces ?? [], basis, course: selectedCourse, extraKind },
     );
     if (!editing) {
+      // המפגש כבר דווח — דיווח שני על אותו מפגש הוא כמעט תמיד טעות (כפילות שמוסתרת במסך הבית).
+      const dup = sameSessionReports({ id: '', ...draftReport }, await loadReports());
+      if (dup.length) {
+        confirm({
+          title: 'המפגש הזה כבר דווח',
+          message: `${dup.map((r) => `${r.start}–${r.end}`).join(', ')}\nלשמור בכל זאת דיווח נוסף על אותו מפגש? לתיקון הדיווח הקיים — פותחים אותו ולוחצים "עריכה".`,
+          confirmLabel: 'שמירת דיווח נוסף',
+          destructive: true,
+          onConfirm: () => commitSave(draftReport, carried),
+        });
+        return;
+      }
       await commitSave(draftReport, carried);
       return;
     }
