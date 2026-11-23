@@ -630,6 +630,8 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
   const markDay = (pinned ? scrollDay : null) ?? focusDay;
   const shownRange: DateRangeValue = rangeMode ? range : markDay ? { from: markDay, to: markDay } : null;
   const dayPress = rangeMode ? undefined : focusOn;
+  /** האריח של היום שמסומן בתאריכון (בגלילה או בלחיצה) — מודגש ברשימה */
+  const selectedDay = rangeMode ? null : markDay;
 
   const showCalendar = !periodMode;
 
@@ -659,6 +661,7 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     timeLabel,
     listKey,
     markDay,
+    selectedDay,
     shownRange,
     dayPress,
     showCalendar,

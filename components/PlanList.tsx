@@ -95,6 +95,7 @@ export function PlanList({
   expandedBefore,
   onHideEarlier,
   nearDays,
+  selectedDay,
 }: {
   courses: readonly Course[];
   workplaces: readonly Workplace[];
@@ -119,6 +120,8 @@ export function PlanList({
   onHideEarlier?: () => void;
   /** ימים שמוצגים תמיד (שלשום עד מחרתיים) — גם בלי מפגשים, עם תגית */
   nearDays?: readonly string[];
+  /** היום שמסומן בתאריכון — האריח שלו מודגש (רקע ומסגרת) */
+  selectedDay?: string | null;
 }) {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
@@ -211,7 +214,7 @@ export function PlanList({
             <MonthDivider month={date.slice(0, 7)} />
           ) : null}
           <View
-            style={[styles.day, date === today && styles.dayToday]}
+            style={[styles.day, date === today && styles.dayToday, date === selectedDay && styles.daySelected]}
             onLayout={
               onDayLayout
                 ? (e) => onDayLayout(date, e.nativeEvent.layout.y, e.nativeEvent.layout.height)
@@ -406,9 +409,14 @@ const makeStyles = (colors: AppColors) =>
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.xs,
+      // מסגרת שקופה קבועה — סימון האריח לא משנה את גובהו (והגלילה לא קופצת)
+      borderWidth: 2,
+      borderColor: 'transparent',
       ...cardShadow,
     },
-    dayToday: { borderWidth: 2, borderColor: colors.brandDark },
+    dayToday: { borderColor: colors.brandDark },
+    /** היום שמסומן בתאריכון — כמו היום הנבחר בו: מסגרת כהה ורקע בהיר */
+    daySelected: { borderColor: colors.brandDark, backgroundColor: colors.brandLight },
     dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     dayTitleToday: { color: colors.brandDark },
     nearChip: { backgroundColor: colors.brandLight, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },

@@ -84,6 +84,7 @@ export default function ReportsScreen() {
           from={w.listFrom}
           to={planTo}
           nearDays={w.nearDays}
+          selectedDay={w.selectedDay}
           wpFilter={wpFilter}
           basis={basis}
           onChanged={() => setReloadTick((n) => n + 1)}
