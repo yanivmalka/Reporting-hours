@@ -1,6 +1,6 @@
 /**
  * "תכנון" בדף "יומן": מפגשי הקורסים לפי יום בטווח שנבחר, עם סטטוס — מתוכנן
- * (עתידי, אפור) / ממתין (היום) / חסר (עבר ולא דווח) / דווח / בוטל / הועבר — וסיכום
+ * (עתידי, אפור) / ממתין לדיווח (היום) / חסר (עבר ולא דווח) / דווח / בוטל / הועבר — וסיכום
  * פוטנציאל וצפי. מפגש שנמחק מהתכנון לא מוצג.
  * לחיצה: מפגש שדווח → תצוגת הדיווח; שלא דווח → דיווח ישיר; שבוטל → דיאלוג המפגש.
  */
@@ -26,6 +26,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { mix } from '../theme/shades';
 import { workplaceColor } from '../theme/workplaceColors';
 import { beforeTracking, getTrackingStart } from '../lib/trackingStart';
 import { MonthDivider } from './MonthDivider';
@@ -334,7 +335,8 @@ export function SessionRow({
   const { colors } = useTheme();
   const tone: Record<Status, { label: string; fg: string; bg: string }> = {
     planned: { label: 'מתוכנן', fg: colors.textMuted, bg: colors.background },
-    pending: { label: 'ממתין', fg: colors.brandDark, bg: colors.brandLight },
+    // כמו תג "ממתין לדיווח" בלו״ז דף הבית
+    pending: { label: 'ממתין לדיווח', fg: colors.warning, bg: mix(colors.warning, colors.surface, 0.86) },
     now: { label: 'עכשיו', fg: colors.textOnBrand, bg: colors.brand },
     missing: { label: 'חסר', fg: colors.warning, bg: colors.background },
     reported: { label: 'דווח', fg: colors.success, bg: colors.brandLight },
@@ -427,6 +429,6 @@ const makeStyles = (colors: AppColors) =>
     fadedBar: { opacity: 0.4 },
     strike: { textDecorationLine: 'line-through', color: colors.textMuted },
     meta: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
-    chip: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },
+    chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     chipText: { fontSize: 12, fontWeight: '700' },
   });
