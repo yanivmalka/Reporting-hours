@@ -59,10 +59,16 @@ export function cloudFunctions(): Functions | null {
   return ensure() && app ? getFunctions(app) : null;
 }
 
-export type CloudUser = { uid: string; name: string | null; email: string | null };
+export type CloudUser = {
+  uid: string;
+  name: string | null;
+  email: string | null;
+  /** תמונת הפרופיל מחשבון Google (אם יש) */
+  photo?: string | null;
+};
 
 function toCloudUser(u: User | null): CloudUser | null {
-  return u ? { uid: u.uid, name: u.displayName, email: u.email } : null;
+  return u ? { uid: u.uid, name: u.displayName, email: u.email, photo: u.photoURL } : null;
 }
 
 /** מאזין לשינויי התחברות. מחזיר פונקציית ביטול. */
