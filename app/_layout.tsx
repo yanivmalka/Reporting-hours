@@ -17,6 +17,7 @@ import { PushScheduler } from '../components/PushScheduler';
 import { SyncProvider, useCloudSync } from '../components/CloudSync';
 import { BlockedWriteNotice } from '../components/Access';
 import { HeaderBadges, HeaderTitle } from '../components/HeaderTitle';
+import { BrandSplash } from '../components/BrandSplash';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -40,6 +41,8 @@ export default function RootLayout() {
             </SyncedTree>
           </SyncProvider>
         </UpdateProvider>
+        {/* מסך פתיחה ממותג — מעל הכול, מחוץ ל־SyncedTree כדי שטעינה מחדש לא תציג אותו שוב */}
+        <BrandSplash />
       </ThemeProvider>
     </I18nProvider>
   );
