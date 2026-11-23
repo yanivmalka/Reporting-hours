@@ -15,7 +15,7 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
-        <title>דיווח שעות</title>
+        <title>שיעור</title>
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: backgroundStyle }} />
       </head>

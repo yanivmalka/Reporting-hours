@@ -111,7 +111,7 @@ export async function sendTestPush(seconds = 5): Promise<boolean> {
   if (!pushPlatform) return false;
   if (!(await ensurePermission())) return false;
   await Notifications.scheduleNotificationAsync({
-    content: { title: 'דיווח שעות — התראת בדיקה', body: 'ההתראות מגיעות לטלפון 👍', data: { href: '/settings' } },
+    content: { title: 'שיעור — התראת בדיקה', body: 'ההתראות מגיעות לטלפון 👍', data: { href: '/settings' } },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, channelId: CHANNEL_ID },
   });
   return true;
