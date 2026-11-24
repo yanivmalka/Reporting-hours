@@ -360,7 +360,7 @@ export function useReportWizard() {
       if (dup.length) {
         confirm({
           title: 'המפגש הזה כבר דווח',
-          message: `${dup.map((r) => `${r.start}–${r.end}`).join(', ')}\nלשמור בכל זאת דיווח נוסף על אותו מפגש? לתיקון הדיווח הקיים — פותחים אותו ולוחצים "עריכה".`,
+          message: `${dup.map((r) => `\u2066${r.start}–${r.end}\u2069`).join(', ')}\nלשמור בכל זאת דיווח נוסף על אותו מפגש? לתיקון הדיווח הקיים — פותחים אותו ולוחצים "עריכה".`,
           confirmLabel: 'שמירת דיווח נוסף',
           destructive: true,
           onConfirm: () => commitSave(draftReport, carried),

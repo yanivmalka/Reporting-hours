@@ -497,7 +497,7 @@ export function homeAlerts(input: AlertInput): HomeAlert[] {
       icon: 'calendar-check-outline',
       tone: 'info',
       title: `${p.daysToExpected === 0 ? 'היום' : 'מחר'} צפוי תשלום — ${p.workplace.name}`,
-      body: `עבור ${shortDate(p.period.start)}–${shortDate(p.period.end)}.`,
+      body: `עבור \u2066${shortDate(p.period.start)}–${shortDate(p.period.end)}\u2069.`,
       action: { label: 'מעקב תשלומים', href: '/payments' },
     });
   }

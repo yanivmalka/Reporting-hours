@@ -38,7 +38,7 @@ export function reportChanges(before: WorkReport, after: WorkReportDraft, names:
       critical: true,
     });
   }
-  add('times', 'שעות', `${before.start}–${before.end}`, `${after.start}–${after.end}`, false);
+  add('times', 'שעות', `\u2066${before.start}–${before.end}\u2069`, `\u2066${after.start}–${after.end}\u2069`, false);
   const br = (r: Pick<WorkReport, 'breaks'>) => {
     const m = totalBreakMinutes(r.breaks);
     return m > 0 ? `${m} דק׳` : 'ללא';

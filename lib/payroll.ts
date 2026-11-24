@@ -24,7 +24,8 @@ import { signatureLines, type Profile } from './profile';
 import { KEYS } from './keys';
 import { isoDate } from './dates';
 import { groupItems, NO_COURSE_LABEL, reportCourseName, type GroupLevel } from './courseGrouping';
-import { FULL_DETAIL, type PayrollDetail } from './payrollTemplate';
+import { FULL_DETAIL, type PayrollDetail, type RedeemedEdge, type RedeemedPlacement } from './payrollTemplate';
+import { formatTime, parseTime } from './time';
 
 // ───────────────────────── מצב הדוחות ─────────────────────────
 
@@ -371,6 +372,45 @@ const COLUMNS: { key: keyof PayrollDetail | 'date'; title: string; width: number
   { key: 'carried', title: 'למונה', width: 6 },
 ];
 
+/** שיבוץ הפדיון בתוך מפגש: איזה מפגש, איזה קצה, והשעה החדשה. */
+export type RedeemedShift = { reportId: string; date: string; edge: RedeemedEdge; time: string; minutes: number };
+
+/**
+ * היכן משובצות הדקות שנפדו מהמונה (`report.redeemedMinutes`) בתוך יום בדוח:
+ * `lastDay` — תאריך הדיווח האחרון; `shortestDay` — התאריך עם הכי מעט דקות נטו בכל
+ * הדוח (בשוויון — המאוחר). בתוך היום: `start` — המפגש הראשון מתחיל מוקדם יותר,
+ * `end` — האחרון מסתיים מאוחר יותר. אם השעה תחצה חצות — הקצה השני; אם גם הוא —
+ * null (ואז שורה נפרדת). טהור.
+ */
+export function redeemedShift(
+  report: PayrollReport,
+  placement: RedeemedPlacement,
+  edge: RedeemedEdge,
+): RedeemedShift | null {
+  const minutes = report.redeemedMinutes;
+  if (placement === 'separate' || minutes <= 0) return null;
+  const all = report.groups.flatMap((g) => g.sessions);
+  if (all.length === 0) return null;
+  const byDate = new Map<string, PayrollSession[]>();
+  for (const s of all) byDate.set(s.date, [...(byDate.get(s.date) ?? []), s]);
+  const dates = [...byDate.keys()].sort();
+  const net = (d: string) => byDate.get(d)!.reduce((n, s) => n + s.netMinutes, 0);
+  const date =
+    placement === 'lastDay'
+      ? dates[dates.length - 1]
+      : dates.reduce((best, d) => (net(d) <= net(best) ? d : best), dates[dates.length - 1]);
+  const day = [...byDate.get(date)!].sort((a, b) => a.start.localeCompare(b.start));
+  const tryEdge = (e: RedeemedEdge): RedeemedShift | null => {
+    const s = e === 'start' ? day[0] : day.reduce((a, b) => (b.end > a.end ? b : a));
+    const t = parseTime(e === 'start' ? s.start : s.end);
+    if (t == null) return null;
+    const next = e === 'start' ? t - minutes : t + minutes;
+    if (next < 0 || next >= 24 * 60) return null;
+    return { reportId: s.reportId, date, edge: e, time: formatTime(next), minutes };
+  };
+  return tryEdge(edge) ?? tryEdge(edge === 'start' ? 'end' : 'start');
+}
+
 /**
  * גוף המייל (טקסט פשוט) לפי רמת הפירוט (lib/payrollTemplate.ts): טבלת מפגשים לכל
  * קבוצה (בברירת המחדל: תאריך, יום, שעות, שעות אקדמיות — בלי הפסקות), סה״כ שעות,
@@ -382,13 +422,24 @@ export function payrollBody(report: PayrollReport, profile?: Profile, detail: Pa
   lines.push('שלום,');
   lines.push('');
   lines.push(
-    `מצורף דיווח שעות העבודה שלי ב${workplace.name} לחודש ${periodTitle(period)} (${ddmmyyyy(period.start)}–${ddmmyyyy(period.end)}${
+    `מצורף דיווח שעות העבודה שלי ב${workplace.name} לחודש ${periodTitle(period)} (${ddmmyyyy(period.start)}-${ddmmyyyy(period.end)}${
       detail.hebrewPeriod ? ` · ${hebrewRange(period.start, period.end)} ${hebrewDate(period.end).split(' ').pop()}` : ''
     }).`,
   );
   const cols = COLUMNS.filter((c) => c.key === 'date' || detail[c.key as keyof PayrollDetail]);
   const W = cols.map((c) => c.width);
   const header = cols.map((c) => c.title);
+  // הפדיון בתוך יום — שעות המפגש, היום והקבוצה גדלות בדקות שנפדו
+  const shift = detail.redeemed ? redeemedShift(report, detail.redeemedPlacement, detail.redeemedEdge) : null;
+  const hasShift = (sessions: readonly PayrollSession[]) =>
+    shift != null && sessions.some((s) => s.reportId === shift.reportId);
+  const extra = (sessions: readonly PayrollSession[]) => (shift && hasShift(sessions) ? shift.minutes : 0);
+  const timesOf = (s: PayrollSession) =>
+    shift?.reportId === s.reportId
+      ? shift.edge === 'start'
+        ? `${shift.time}-${s.end}`
+        : `${s.start}-${shift.time}`
+      : `${s.start}-${s.end}`;
   const hoursPart = (minutes: number) =>
     [
       detail.academicHours || !detail.netHours ? `${academic(minutes)} שעות אקדמיות` : '',
@@ -402,7 +453,7 @@ export function payrollBody(report: PayrollReport, profile?: Profile, detail: Pa
     const days = g.days?.length ?? 0;
     if (detail.groupSummary || !detail.rows) {
       lines.push(
-        `■ ${g.name} — ${g.sessions.length} מפגשים${g.days ? ` · ${days} ימים` : ''} · ${hoursPart(g.netMinutes)}${
+        `■ ${g.name} — ${g.sessions.length} מפגשים${g.days ? ` · ${days} ימים` : ''} · ${hoursPart(g.netMinutes + extra(g.sessions))}${
           detail.carried && g.carriedMinutes > 0 ? ` · ${g.carriedMinutes} דק׳ למצטברות` : ''
         }`,
       );
@@ -422,10 +473,10 @@ export function payrollBody(report: PayrollReport, profile?: Profile, detail: Pa
         date: ddmmyyyy(day.date),
         weekday: WEEKDAYS[new Date(y, m - 1, d).getDay()],
         hebrewDate: hebrewDate(day.date, false),
-        times: day.sessions.map((s) => `${s.start}-${s.end}`).join(', '),
+        times: day.sessions.map(timesOf).join(', '),
         breaks: String(day.sessions.reduce((n, s) => n + s.breakMinutes, 0) || ''),
-        netHours: hm(day.netMinutes),
-        academicHours: academic(day.netMinutes),
+        netHours: hm(day.netMinutes + extra(day.sessions)),
+        academicHours: academic(day.netMinutes + extra(day.sessions)),
         carried: day.carriedMinutes > 0 ? String(day.carriedMinutes) : '',
       };
       lines.push(cols.map((c, k) => pad(cell[c.key], W[k])).join(' | '));
@@ -453,7 +504,7 @@ export function payrollBody(report: PayrollReport, profile?: Profile, detail: Pa
       );
     }
   }
-  if (detail.redeemed && report.redeemedMinutes > 0) {
+  if (detail.redeemed && report.redeemedMinutes > 0 && !shift) {
     lines.push('');
     lines.push(
       `■ פדיון דקות עבודה מצטברות (דקות עודפות מחודשים קודמים) — ${academic(report.redeemedMinutes)} שעות אקדמיות (${report.redeemedMinutes} דק׳)`,

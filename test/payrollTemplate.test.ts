@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { currentPayPeriod } from '../lib/dashboard';
-import { buildPayrollReport, payrollBody } from '../lib/payroll';
+import { buildPayrollReport, payrollBody, redeemedShift } from '../lib/payroll';
 import { buildExport, toCsv } from '../lib/exportReports';
 import {
   assignTemplate,
@@ -130,5 +130,41 @@ describe('תבניות', () => {
   it('תבנית מובנית לא נדרסת', () => {
     const s = upsertTemplate(sanitizeStore(null), { id: 'full', name: 'x', detail: SHORT_DETAIL });
     expect(s.templates).toHaveLength(0);
+  });
+});
+
+describe('הצגת הפדיון מהמונה', () => {
+  // 02/11: 09:00–12:10 (180 דק׳ לתשלום), 09/11: 09:00–12:00 (180), 16/11: 09:00–11:00 (120); פדיון 45
+  const reps = [...reports, r('c', '2026-11-16', { end: '11:00' })];
+  const rep = buildPayrollReport(wp, period, reps, [course], 'academic', 45);
+
+  it('בשורה נפרדת — כמו עד כה', () => {
+    expect(redeemedShift(rep, 'separate', 'end')).toBeNull();
+    expect(payrollBody(rep)).toContain('■ פדיון דקות עבודה מצטברות');
+  });
+  it('ביום הדיווח האחרון — בסוף היום', () => {
+    const d = { ...FULL_DETAIL, redeemedPlacement: 'lastDay' as const, redeemedEdge: 'end' as const };
+    expect(redeemedShift(rep, 'lastDay', 'end')).toMatchObject({ date: '2026-11-16', time: '11:45' });
+    const body = payrollBody(rep, undefined, d);
+    expect(body).toContain('09:00-11:45');
+    expect(body).not.toContain('■ פדיון דקות עבודה מצטברות');
+    // 120 + 45 = 165 דק׳ = 3.67 שע׳ אקד׳ ביום; הקבוצה 525 דק׳; הסה״כ לא משתנה
+    expect(body).toContain('■ תכנון — 3 מפגשים · 11.67 שעות אקדמיות');
+    expect(body).toContain('סה״כ שעות: 11.67 שעות אקדמיות');
+  });
+  it('ביום עם הכי מעט שעות — בתחילת היום', () => {
+    const reps2 = [r('c', '2026-11-02', { end: '10:00' }), r('d', '2026-11-16')];
+    const rep2 = buildPayrollReport(wp, period, reps2, [course], 'academic', 30);
+    expect(redeemedShift(rep2, 'shortestDay', 'start')).toMatchObject({ date: '2026-11-02', time: '08:30', edge: 'start' });
+    const body = payrollBody(rep2, undefined, { ...FULL_DETAIL, redeemedPlacement: 'shortestDay', redeemedEdge: 'start' });
+    expect(body).toContain('08:30-10:00');
+  });
+  it('אם ההקדמה חוצה חצות — מוסיף בסוף היום', () => {
+    const rep3 = buildPayrollReport(wp, period, [r('e', '2026-11-02', { start: '00:10', end: '02:00' })], [course], 'academic', 45);
+    expect(redeemedShift(rep3, 'lastDay', 'start')).toMatchObject({ edge: 'end', time: '02:45' });
+  });
+  it('תבנית ישנה בלי השדות — שורה נפרדת', () => {
+    expect(sanitizeDetail({}).redeemedPlacement).toBe('separate');
+    expect(sanitizeDetail({ redeemedPlacement: 'x' as never, redeemedEdge: 'start' }).redeemedEdge).toBe('start');
   });
 });
