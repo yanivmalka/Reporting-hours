@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
-import { academicOf, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
+import { academicOf, netMinutes, savedLabel, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { hebrewDate } from '../lib/hebrewDate';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
@@ -26,6 +26,8 @@ type ReportCardProps = {
   onPress?: () => void;
   /** צבע מקום העבודה — פס בצד האריח */
   color?: string;
+  /** היום של הדיווח מסומן בתאריכון — רקע בהיר (כמו אריח היום הנבחר בתכנון) */
+  highlight?: boolean;
 };
 
 /** תיאור השעות האקדמיות בדיווח, למשל "6 שע׳ אקדמיות ו־30 דק׳". */
@@ -39,7 +41,7 @@ function academicText(report: WorkReport): string {
 }
 
 /** שורת רשימה לדיווח יום עבודה: מקום, תאריך, טווח שעות, הפסקות, זמן נטו, שעות אקדמיות ושכר. */
-export function ReportCard({ report, workplaceName, pay, travel, locked, onPress, color }: ReportCardProps) {
+export function ReportCard({ report, workplaceName, pay, travel, locked, onPress, color, highlight }: ReportCardProps) {
   const styles = useThemedStyles(makeStyles);
   const breakTotal = totalBreakMinutes(report.breaks);
   const net = netMinutes(report);
@@ -52,6 +54,7 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onPress
       accessibilityLabel={`${workplaceName} · ${formatISODate(report.date)}${locked ? ' · נעול' : ''}`}
       style={({ pressed }) => [
         styles.card,
+        highlight && styles.cardHighlight,
         color ? { borderStartWidth: 5, borderStartColor: color } : null,
         pressed && styles.pressed,
       ]}
@@ -64,6 +67,8 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onPress
         </View>
       </View>
       {report.note ? <Text style={styles.note}>{report.note}</Text> : null}
+      {/* מתי נשמר / עודכן — שיהיה ברור שהשמירה נקלטה */}
+      <Text style={styles.saved}>{savedLabel(report)}</Text>
       <Text style={styles.line}>
         {`\u2066${report.start}–${report.end}\u2069`}
         {breakTotal > 0 ? ` · הפסקות ${formatDuration(breakTotal)}` : ''}
@@ -103,6 +108,7 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onPress
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    saved: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     travel: {
       fontSize: 13,
       fontWeight: '600',
@@ -162,6 +168,7 @@ const makeStyles = (colors: AppColors) =>
       gap: spacing.xs,
       ...cardShadow,
     },
+    cardHighlight: { backgroundColor: colors.brandLight },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',

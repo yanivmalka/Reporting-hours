@@ -13,12 +13,11 @@ import { MonthLink } from './MonthLinks';
 import type { Journal } from './useJournal';
 import { GroupedSummary } from './GroupedSummary';
 import { DaySummary } from '../DaySummary';
-import { dayTotalsByWorkplace } from '../../lib/daySummary';
-import { netMinutes } from '../../lib/reports';
+import { dayTotalsByWorkplace, reportEntry } from '../../lib/daySummary';
 
 /** לשונית "דיווחים": סיכום התקופה ורשימת הדיווחים, כולל מפגשים של היום ושעברו שלא דווחו. */
 export function ReportsTab({ w }: { w: Journal }) {
-  const { router, styles, colors, basis, reports, params, setWpFilter, setRange, setPeriodMode, listTop, filtered, onDayLayout, workplaceOf, nameOf, payOf, totals, travelOf, lockOf, items, missingCount, pendingCount, offCount, isFiltered, timeLabel, continuous, today } = w;
+  const { router, styles, colors, basis, reports, params, setWpFilter, setRange, setPeriodMode, listTop, filtered, onDayLayout, selectedDay, workplaceOf, nameOf, payOf, totals, travelOf, lockOf, items, missingCount, pendingCount, offCount, isFiltered, timeLabel, continuous, today } = w;
   const session = useOpenSession(() => w.setReloadTick((n) => n + 1));
   return (
     <>
@@ -33,6 +32,7 @@ export function ReportsTab({ w }: { w: Journal }) {
       <Text style={styles.summaryLine}>
         {Math.round((totals.netMinutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳ אקדמיות · שכר{' '}
         {formatShekels(Math.round(totals.pay))}
+        {totals.carriedMinutes > 0 ? ` · ${totals.carriedMinutes} דק׳ הועברו למצטברות` : ''}
         {totals.travel > 0 ? ` · נסיעות ${formatShekels(totals.travel)}` : ''}
       </Text>
       {isFiltered ? (
@@ -71,6 +71,7 @@ export function ReportsTab({ w }: { w: Journal }) {
             ) : null;
           // שלשום עד מחרתיים: תגית לפני הפריט הראשון של היום; היום — גם מסגרת.
           const isToday = date === today;
+          const frame = [styles.itemFrame, isToday && styles.todayFrame, date === selectedDay && styles.selectedFrame];
           const todayHead =
             prevDate !== date && nearDay(date, today) ? (
               <View style={styles.todayHead}>
@@ -84,7 +85,7 @@ export function ReportsTab({ w }: { w: Journal }) {
           {item.kind === 'session' ? (
             <View
               key={`s:${item.row.course.id}@${item.row.date}`}
-              style={[styles.dueCard, isToday && styles.todayFrame]}
+              style={[styles.dueCard, ...frame]}
               onLayout={(e) => onDayLayout(item.row.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height, `s:${item.row.course.id}@${item.row.date}`)}
             >
               <SessionRow row={item.row} showDate onPress={() => session.open(item.row)} />
@@ -92,7 +93,7 @@ export function ReportsTab({ w }: { w: Journal }) {
           ) : (
             <View
               key={item.report.id}
-              style={isToday ? styles.todayFrame : undefined}
+              style={frame}
               onLayout={(e) =>
                 onDayLayout(item.report.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height, item.report.id)
               }
@@ -108,6 +109,7 @@ export function ReportsTab({ w }: { w: Journal }) {
                 pay={payOf(item.report)}
                 travel={travelOf(item.report)}
                 locked={lockOf(item.report) != null}
+                highlight={date === selectedDay}
                 onPress={() => router.push({ pathname: '/report-view', params: { id: item.report.id } })}
               />
             </View>
@@ -126,11 +128,11 @@ export function ReportsTab({ w }: { w: Journal }) {
             }
             if (dayReports.length < 2) return null;
             const totals = dayTotalsByWorkplace(
-              dayReports.reverse().map((r) => ({ workplaceId: r.workplaceId, netMinutes: netMinutes(r) ?? 0 })),
+              dayReports.reverse().map(reportEntry),
             );
             return (
               <View style={styles.daySummary}>
-                <DaySummary totals={totals} workplaceOf={workplaceOf} basis={basis} noun="דיווחים" separated={false} />
+                <DaySummary totals={totals} workplaceOf={workplaceOf} basis={basis} separated={false} />
               </View>
             );
           })()}

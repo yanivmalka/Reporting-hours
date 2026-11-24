@@ -4,7 +4,7 @@
  * לכל ערכה נוצרת ערכת מסך פתיחה Theme.App.SplashScreen.<id> (יורשת מזו של
  * expo-splash-screen, רק הרקע שונה). האפליקציה בוחרת אותה בזמן ריצה
  * (modules/splash-theme ← setSplashTheme ב־theme/ThemeContext.tsx), ואנדרואיד
- * משתמש בה מהפתיחה הבאה. הצבעים — `brand` של כל ערכה ב־theme/palettes.ts
+ * משתמש בה מהפתיחה הבאה. הצבעים — `brandDark` של כל ערכה (כמו ברירת המחדל ב־app.json) ב־theme/palettes.ts
  * (test/splashTheme.test.ts מוודא שהם זהים).
  */
 const fs = require('fs');
@@ -12,11 +12,11 @@ const path = require('path');
 const { withAndroidColors, withAndroidStyles, withDangerousMod, AndroidConfig } = require('expo/config-plugins');
 
 const SPLASH_COLORS = {
-  teal: '#305A58',
-  indigo: '#323358',
-  ocean: '#54364B',
-  forest: '#335742',
-  graphite: '#334155',
+  teal: '#1B3C3B',
+  indigo: '#1C1D3B',
+  ocean: '#381E31',
+  forest: '#1D3A29',
+  graphite: '#1E293B',
 };
 
 const colorName = (id) => `splash_bg_${id}`;

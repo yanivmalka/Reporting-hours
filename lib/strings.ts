@@ -10,6 +10,10 @@ export type Lang = 'he' | 'en';
 export type StringTree = { [key: string]: string | StringTree };
 
 const he = {
+  splash: {
+    name: 'שיעור',
+    tagline: 'כל שיעור נספר. כל שקל מגיע.',
+  },
   common: {
     back: 'חזרה',
     add: 'הוספה',
@@ -27,7 +31,7 @@ const he = {
     language: 'שפה',
   },
   nav: {
-    home: 'דיווח שעות',
+    home: 'שיעור',
     homeLink: 'בית',
     report: 'דיווח יום עבודה',
     reports: 'יומן',
@@ -171,7 +175,7 @@ const he = {
     background: 'להמשיך ברקע',
     pausedHint: 'יציאה מהאפליקציה משהה את ההורדה, והיא ממשיכה מאותה נקודה כשחוזרים.',
     installing: 'פותח את ההתקנה…',
-    installHint: 'אם אנדרואיד מבקש — אשרו "התקנת אפליקציות לא מוכרות" עבור "דיווח שעות", חזרו ולחצו שוב "התקנה".',
+    installHint: 'אם אנדרואיד מבקש — אשרו "התקנת אפליקציות לא מוכרות" עבור "שיעור", חזרו ולחצו שוב "התקנה".',
     retryInstall: 'התקנה',
     downloadFailed: 'ההורדה נכשלה. בדקו חיבור לאינטרנט ונסו שוב.',
     retry: 'ניסיון חוזר',
@@ -182,6 +186,10 @@ const he = {
 } as const;
 
 const en: StringTree = {
+  splash: {
+    name: 'Shiur',
+    tagline: 'Every lesson counted. Every shekel paid.',
+  },
   common: {
     back: 'Back',
     add: 'Add',
@@ -200,7 +208,7 @@ const en: StringTree = {
   },
   nav: {
     homeLink: 'Home',
-    home: 'Hours Reporting',
+    home: 'Shiur',
     report: 'Log a Work Day',
     reports: 'Journal',
     workplaces: 'Workplaces',

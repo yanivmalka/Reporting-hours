@@ -24,6 +24,8 @@ import { signatureLines, type Profile } from './profile';
 import { KEYS } from './keys';
 import { isoDate } from './dates';
 import { groupItems, NO_COURSE_LABEL, reportCourseName, type GroupLevel } from './courseGrouping';
+import { FULL_DETAIL, type PayrollDetail, type RedeemedEdge, type RedeemedPlacement } from './payrollTemplate';
+import { formatTime, parseTime } from './time';
 
 // ───────────────────────── מצב הדוחות ─────────────────────────
 
@@ -149,6 +151,8 @@ export type PayrollSession = {
   end: string;
   breakMinutes: number;
   netMinutes: number;
+  /** דקות שהועברו מהמפגש למונה המצטבר (במקום אקדמי; אינן ב־netMinutes) */
+  carriedMinutes: number;
 };
 
 /** כל המפגשים של יום אחד (בקיבוץ לפי מקום עבודה) — שורה אחת בדוח, עם סה״כ השעות של היום. */
@@ -157,6 +161,7 @@ export type PayrollDay = {
   /** המפגשים של היום, לפי שעת ההתחלה */
   sessions: PayrollSession[];
   netMinutes: number;
+  carriedMinutes: number;
 };
 
 /** מפגשי הקבוצה מקובצים לפי תאריך (טהור). */
@@ -167,7 +172,12 @@ export function sessionsByDate(sessions: readonly PayrollSession[]): PayrollDay[
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, list]) => {
       const sorted = [...list].sort((a, b) => a.start.localeCompare(b.start));
-      return { date, sessions: sorted, netMinutes: sorted.reduce((n, x) => n + x.netMinutes, 0) };
+      return {
+        date,
+        sessions: sorted,
+        netMinutes: sorted.reduce((n, x) => n + x.netMinutes, 0),
+        carriedMinutes: sorted.reduce((n, x) => n + x.carriedMinutes, 0),
+      };
     });
 }
 
@@ -176,6 +186,8 @@ export type PayrollGroup = {
   name: string;
   sessions: PayrollSession[];
   netMinutes: number;
+  /** דקות שהועברו למונה מהמפגשים בקבוצה */
+  carriedMinutes: number;
   /** בקיבוץ לפי מקום עבודה — המפגשים מקובצים גם לפי תאריך (שורה ליום) */
   days?: PayrollDay[];
 };
@@ -204,6 +216,8 @@ export type PayrollReport = {
   netMinutes: number;
   /** דקות שנפדו מהמונה המצטבר לתוך הדוח (lib/redeem.ts) */
   redeemedMinutes: number;
+  /** דקות שהועברו מהדיווחים בתקופה למונה המצטבר (אינן ב־netMinutes) */
+  carriedMinutes: number;
   days: number;
   travel: number;
   /** שכר מחושב (ברוטו, לפי התעריפים שחלו בכל תאריך) */
@@ -241,6 +255,7 @@ export function buildPayrollReport(
     end: r.end,
     breakMinutes: totalBreakMinutes(r.breaks),
     netMinutes: Math.max(0, (netMinutes(r) ?? 0) - (basis === 'academic' ? r.carriedMinutes ?? 0 : 0)),
+    carriedMinutes: basis === 'academic' ? Math.max(0, r.carriedMinutes ?? 0) : 0,
   });
   const groups: PayrollGroup[] = groupItems(
     mine.map((r) => ({ r, course: reportCourseName(r, courses, plan) })),
@@ -252,6 +267,7 @@ export function buildPayrollReport(
       name: level === 'workplace' ? workplace.name : g.label,
       sessions,
       netMinutes: sessions.reduce((n, x) => n + x.netMinutes, 0),
+      carriedMinutes: sessions.reduce((n, x) => n + x.carriedMinutes, 0),
       ...(level === 'workplace' ? { days: sessionsByDate(sessions) } : {}),
     };
   });
@@ -286,6 +302,7 @@ export function buildPayrollReport(
     canceledPay,
     pay: workplacePay(workplace, mine, basis) + redeemedPay + canceledPay,
     redeemedMinutes: redeemed,
+    carriedMinutes: groups.reduce((s, g) => s + g.carriedMinutes, 0),
     rates: rates.length ? rates : [workplace.rate],
     paymentType,
     workplace,
@@ -343,89 +360,241 @@ export function payrollSubject(report: PayrollReport): string {
 /** ריפוד טקסט לרוחב קבוע — לטבלה בטקסט פשוט. */
 const pad = (t: string, n: number) => t + ' '.repeat(Math.max(0, n - t.length));
 
+/** עמודות אפשריות בשורת מפגש / יום — לפי הסדר, ורוחב לטבלה בטקסט פשוט. */
+const COLUMNS: { key: keyof PayrollDetail | 'date'; title: string; width: number }[] = [
+  { key: 'date', title: 'תאריך', width: 10 },
+  { key: 'weekday', title: 'יום', width: 5 },
+  { key: 'hebrewDate', title: 'תאריך עברי', width: 12 },
+  { key: 'times', title: 'שעות', width: 11 },
+  { key: 'breaks', title: 'הפסקה', width: 6 },
+  { key: 'netHours', title: 'נטו', width: 6 },
+  { key: 'academicHours', title: 'שע׳ אקד׳', width: 9 },
+  { key: 'carried', title: 'למונה', width: 6 },
+];
+
 /**
- * גוף המייל (טקסט פשוט): טבלת מפגשים לכל קורס (תאריך, יום, שעות, שעות
- * אקדמיות — בלי הפסקות), סה״כ שעות, נסיעות וסכום לתשלום. בלי תעריף לשעה.
+ * רכיב בעורך הפירוט ששורה בתצוגה המקדימה שייכת אליו — לחיצה על השורה גוללת אליו
+ * ומבליטה אותו. `columns` — קבוצת "מה מופיע בשורות".
  */
-export function payrollBody(report: PayrollReport, profile?: Profile): string {
+export type PreviewTarget = keyof PayrollDetail | 'columns';
+export type PreviewLine = { text: string; target?: PreviewTarget };
+
+/** שיבוץ הפדיון בתוך מפגש: איזה מפגש, איזה קצה, והשעה החדשה. */
+export type RedeemedShift = { reportId: string; date: string; edge: RedeemedEdge; time: string; minutes: number };
+
+/**
+ * היכן משובצות הדקות שנפדו מהמונה (`report.redeemedMinutes`) בתוך יום בדוח:
+ * `lastDay` — תאריך הדיווח האחרון; `shortestDay` — התאריך עם הכי מעט דקות נטו בכל
+ * הדוח (בשוויון — המאוחר). בתוך היום: `start` — המפגש הראשון מתחיל מוקדם יותר,
+ * `end` — האחרון מסתיים מאוחר יותר. אם השעה תחצה חצות — הקצה השני; אם גם הוא —
+ * null (ואז שורה נפרדת). טהור.
+ */
+export function redeemedShift(
+  report: PayrollReport,
+  placement: RedeemedPlacement,
+  edge: RedeemedEdge,
+): RedeemedShift | null {
+  const minutes = report.redeemedMinutes;
+  if (placement === 'separate' || minutes <= 0) return null;
+  const all = report.groups.flatMap((g) => g.sessions);
+  if (all.length === 0) return null;
+  const byDate = new Map<string, PayrollSession[]>();
+  for (const s of all) byDate.set(s.date, [...(byDate.get(s.date) ?? []), s]);
+  const dates = [...byDate.keys()].sort();
+  const net = (d: string) => byDate.get(d)!.reduce((n, s) => n + s.netMinutes, 0);
+  const date =
+    placement === 'lastDay'
+      ? dates[dates.length - 1]
+      : dates.reduce((best, d) => (net(d) <= net(best) ? d : best), dates[dates.length - 1]);
+  const day = [...byDate.get(date)!].sort((a, b) => a.start.localeCompare(b.start));
+  const tryEdge = (e: RedeemedEdge): RedeemedShift | null => {
+    const s = e === 'start' ? day[0] : day.reduce((a, b) => (b.end > a.end ? b : a));
+    const t = parseTime(e === 'start' ? s.start : s.end);
+    if (t == null) return null;
+    const next = e === 'start' ? t - minutes : t + minutes;
+    if (next < 0 || next >= 24 * 60) return null;
+    return { reportId: s.reportId, date, edge: e, time: formatTime(next), minutes };
+  };
+  return tryEdge(edge) ?? tryEdge(edge === 'start' ? 'end' : 'start');
+}
+
+/**
+ * גוף המייל (טקסט פשוט) לפי רמת הפירוט (lib/payrollTemplate.ts): טבלת מפגשים לכל
+ * קבוצה (בברירת המחדל: תאריך, יום, שעות, שעות אקדמיות — בלי הפסקות), סה״כ שעות,
+ * נסיעות וסכום לתשלום. בלי תעריף לשעה.
+ */
+export function payrollBodyLines(
+  report: PayrollReport,
+  profile?: Profile,
+  detail: PayrollDetail = FULL_DETAIL,
+): PreviewLine[] {
   const { workplace, period } = report;
-  const lines: string[] = [];
-  lines.push('שלום,');
-  lines.push('');
-  lines.push(
-    `מצורף דיווח שעות העבודה שלי ב${workplace.name} לחודש ${periodTitle(period)} (${ddmmyyyy(period.start)}–${ddmmyyyy(period.end)} · ${hebrewRange(period.start, period.end)} ${hebrewDate(period.end).split(' ').pop()}).`,
+  const out: PreviewLine[] = [];
+  /** הרכיב שהשורות הבאות שייכות אליו */
+  let at: PreviewTarget | undefined;
+  const push = (...texts: string[]) => {
+    for (const text of texts) out.push({ text, target: text ? at : undefined });
+  };
+  push('שלום,');
+  push('');
+  at = 'hebrewPeriod';
+  push(
+    `מצורף דיווח שעות העבודה שלי ב${workplace.name} לחודש ${periodTitle(period)} (${ddmmyyyy(period.start)}-${ddmmyyyy(period.end)}${
+      detail.hebrewPeriod ? ` · ${hebrewRange(period.start, period.end)} ${hebrewDate(period.end).split(' ').pop()}` : ''
+    }).`,
   );
-  const W = [10, 5, 11, 9];
-  const header = ['תאריך', 'יום', 'שעות', 'שע׳ אקד׳'];
+  const cols = COLUMNS.filter((c) => c.key === 'date' || detail[c.key as keyof PayrollDetail]);
+  const W = cols.map((c) => c.width);
+  const header = cols.map((c) => c.title);
+  // הפדיון בתוך יום — שעות המפגש, היום והקבוצה גדלות בדקות שנפדו
+  const shift = detail.redeemed ? redeemedShift(report, detail.redeemedPlacement, detail.redeemedEdge) : null;
+  const hasShift = (sessions: readonly PayrollSession[]) =>
+    shift != null && sessions.some((s) => s.reportId === shift.reportId);
+  const extra = (sessions: readonly PayrollSession[]) => (shift && hasShift(sessions) ? shift.minutes : 0);
+  const timesOf = (s: PayrollSession) =>
+    shift?.reportId === s.reportId
+      ? shift.edge === 'start'
+        ? `${shift.time}-${s.end}`
+        : `${s.start}-${shift.time}`
+      : `${s.start}-${s.end}`;
+  const hoursPart = (minutes: number) =>
+    [
+      detail.academicHours || !detail.netHours ? `${academic(minutes)} שעות אקדמיות` : '',
+      detail.netHours ? `${hm(minutes)} שעות נטו` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
   for (const g of report.groups) {
-    lines.push('');
+    if (!detail.groupSummary && !detail.rows) continue;
+    push('');
     const days = g.days?.length ?? 0;
-    lines.push(
-      `■ ${g.name} — ${g.sessions.length} מפגשים${g.days ? ` · ${days} ימים` : ''} · ${academic(g.netMinutes)} שעות אקדמיות`,
-    );
-    lines.push(header.map((h, k) => pad(h, W[k])).join(' | '));
-    lines.push(W.map((w) => '-'.repeat(w)).join('-+-'));
+    at = 'groupSummary';
+    if (detail.groupSummary || !detail.rows) {
+      push(
+        `■ ${g.name} — ${g.sessions.length} מפגשים${g.days ? ` · ${days} ימים` : ''} · ${hoursPart(g.netMinutes + extra(g.sessions))}${
+          detail.carried && g.carriedMinutes > 0 ? ` · ${g.carriedMinutes} דק׳ למצטברות` : ''
+        }`,
+      );
+    } else {
+      push(`■ ${g.name}`);
+    }
+    if (!detail.rows) continue;
+    at = 'columns';
+    push(header.map((h, k) => pad(h, W[k])).join(' | '));
+    push(W.map((w) => '-'.repeat(w)).join('-+-'));
     // בקיבוץ לפי מקום עבודה — שורה לכל תאריך, עם כל טווחי השעות של היום וסה״כ.
-    const rows = g.days ?? g.sessions.map((s) => ({ date: s.date, sessions: [s], netMinutes: s.netMinutes }));
+    const rows =
+      g.days ??
+      g.sessions.map((s) => ({ date: s.date, sessions: [s], netMinutes: s.netMinutes, carriedMinutes: s.carriedMinutes }));
     for (const day of rows) {
       const [y, m, d] = day.date.split('-').map(Number);
-      const row = [
-        ddmmyyyy(day.date),
-        WEEKDAYS[new Date(y, m - 1, d).getDay()],
-        day.sessions.map((s) => `${s.start}-${s.end}`).join(', '),
-        academic(day.netMinutes),
-      ];
-      lines.push(row.map((c, k) => pad(c, W[k])).join(' | '));
+      const cell: Record<string, string> = {
+        date: ddmmyyyy(day.date),
+        weekday: WEEKDAYS[new Date(y, m - 1, d).getDay()],
+        hebrewDate: hebrewDate(day.date, false),
+        times: day.sessions.map(timesOf).join(', '),
+        breaks: String(day.sessions.reduce((n, s) => n + s.breakMinutes, 0) || ''),
+        netHours: hm(day.netMinutes + extra(day.sessions)),
+        academicHours: academic(day.netMinutes + extra(day.sessions)),
+        carried: day.carriedMinutes > 0 ? String(day.carriedMinutes) : '',
+      };
+      at = hasShift(day.sessions) ? 'redeemedPlacement' : 'columns';
+      push(cols.map((c, k) => pad(cell[c.key], W[k])).join(' | '));
     }
   }
-  if (report.canceled.length) {
-    lines.push('');
-    lines.push(`■ מפגשים שבוטלו — ${report.canceled.length}`);
+  at = 'canceled';
+  if (detail.canceled && report.canceled.length) {
+    push('');
+    push(`■ מפגשים שבוטלו — ${report.canceled.length}`);
     for (const c of report.canceled) {
-      lines.push(
-        `${ddmmyyyy(c.date)} · ${c.course} · ${c.reason || 'ללא סיבה'}${c.amount > 0 ? ` · ${formatShekels(Math.round(c.amount))}` : ''}`,
+      push(
+        `${ddmmyyyy(c.date)} · ${c.course} · ${c.reason || 'ללא סיבה'}${
+          detail.canceledAmounts && c.amount > 0 ? ` · ${formatShekels(Math.round(c.amount))}` : ''
+        }`,
       );
     }
+  }
+  at = 'canceledSummary';
+  if (detail.canceledSummary && report.canceled.length) {
+    if (!detail.canceled) {
+      push('');
+      push(`■ מפגשים שבוטלו — ${report.canceled.length}`);
+    }
     for (const r of canceledByReason(report)) {
-      lines.push(`סה״כ ${r.reason}: ${r.count}${r.amount > 0 ? ` · ${formatShekels(Math.round(r.amount))}` : ''}`);
+      push(
+        `סה״כ ${r.reason}: ${r.count}${detail.canceledAmounts && r.amount > 0 ? ` · ${formatShekels(Math.round(r.amount))}` : ''}`,
+      );
     }
   }
-  if (report.redeemedMinutes > 0) {
-    lines.push('');
-    lines.push(
+  at = 'redeemed';
+  if (detail.redeemed && report.redeemedMinutes > 0 && !shift) {
+    push('');
+    push(
       `■ פדיון דקות עבודה מצטברות (דקות עודפות מחודשים קודמים) — ${academic(report.redeemedMinutes)} שעות אקדמיות (${report.redeemedMinutes} דק׳)`,
     );
   }
-  lines.push('');
-  lines.push('──────────');
-  lines.push(
-    `סה״כ שעות: ${academic(report.netMinutes)} שעות אקדמיות (${hm(report.netMinutes)} שעות נטו) · ${report.days} ימי עבודה`,
-  );
+  at = undefined;
+  push('');
+  push('──────────');
+  at = 'totalAcademic';
+  const totalParts = [
+    detail.totalAcademic ? `${academic(report.netMinutes)} שעות אקדמיות` : '',
+    detail.totalNet ? (detail.totalAcademic ? `(${hm(report.netMinutes)} שעות נטו)` : `${hm(report.netMinutes)} שעות נטו`) : '',
+  ].filter(Boolean);
+  if (totalParts.length || detail.totalDays) {
+    push(
+      [totalParts.length ? `סה״כ שעות: ${totalParts.join(' ')}` : '', detail.totalDays ? `${report.days} ימי עבודה` : '']
+        .filter(Boolean)
+        .join(' · '),
+    );
+  }
+  at = 'carriedTotal';
+  if (detail.carriedTotal && report.carriedMinutes > 0) {
+    push(`דקות עודפות שהועברו למונה המצטבר (לא נכללו בשעות): ${report.carriedMinutes} דק׳`);
+  }
   const travelW = workplaceAt(workplace, period.end);
-  lines.push(
-    hasTravelCost(travelW) || report.travel > 0
-      ? `סה״כ נסיעות: ${formatShekels(report.travel)} (${report.days} ימי עבודה)`
-      : 'סה״כ נסיעות: אין (הגעה ללא תחבורה ציבורית)',
-  );
-  lines.push(
-    report.paymentType === 'monthly'
-      ? `סכום לתשלום: ${formatShekels(Math.round(report.pay))} (משכורת חודשית) + נסיעות ${formatShekels(report.travel)}`
-      : `סכום לתשלום: ${formatShekels(Math.round(report.pay + report.travel))} (שכר ${formatShekels(Math.round(report.pay))} + נסיעות ${formatShekels(report.travel)})`,
-  );
-  lines.push('');
-  lines.push('בברכה,');
-  if (profile) lines.push(...signatureLines(profile, workplace.employeeNumber));
-  return lines.join('\n');
+  at = 'travel';
+  if (detail.travel) {
+    push(
+      hasTravelCost(travelW) || report.travel > 0
+        ? `סה״כ נסיעות: ${formatShekels(report.travel)} (${report.days} ימי עבודה)`
+        : 'סה״כ נסיעות: אין (הגעה ללא תחבורה ציבורית)',
+    );
+  }
+  at = 'pay';
+  if (detail.pay) {
+    push(
+      report.paymentType === 'monthly'
+        ? `סכום לתשלום: ${formatShekels(Math.round(report.pay))} (משכורת חודשית)${detail.travel ? ` + נסיעות ${formatShekels(report.travel)}` : ''}`
+        : detail.travel
+          ? `סכום לתשלום: ${formatShekels(Math.round(report.pay + report.travel))} (שכר ${formatShekels(Math.round(report.pay))} + נסיעות ${formatShekels(report.travel)})`
+          : `סכום לתשלום (שכר): ${formatShekels(Math.round(report.pay))}`,
+    );
+  }
+  at = undefined;
+  push('');
+  push('בברכה,');
+  at = 'signature';
+  if (profile && detail.signature) push(...signatureLines(profile, workplace.employeeNumber));
+  else if (profile?.fullName) push(profile.fullName);
+  return out;
+}
+
+/** גוף המייל (טקסט פשוט) — שורות `payrollBodyLines`. */
+export function payrollBody(report: PayrollReport, profile?: Profile, detail: PayrollDetail = FULL_DETAIL): string {
+  return payrollBodyLines(report, profile, detail)
+    .map((l) => l.text)
+    .join('\n');
 }
 
 /** קישור mailto: — פותח טיוטה מוכנה בתוכנת המייל של המכשיר. */
-export function payrollMailto(report: PayrollReport, profile?: Profile): string {
+export function payrollMailto(report: PayrollReport, profile?: Profile, detail: PayrollDetail = FULL_DETAIL): string {
   const to = report.workplace.payrollEmail ?? '';
   const params: string[] = [];
   const cc = (report.workplace.ccEmails ?? []).join(',');
   if (cc) params.push(`cc=${encodeURIComponent(cc)}`);
   params.push(`subject=${encodeURIComponent(payrollSubject(report))}`);
-  params.push(`body=${encodeURIComponent(payrollBody(report, profile))}`);
+  params.push(`body=${encodeURIComponent(payrollBody(report, profile, detail))}`);
   return `mailto:${encodeURIComponent(to).replace(/%40/g, '@')}?${params.join('&')}`;
 }
 

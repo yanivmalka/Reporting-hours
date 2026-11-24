@@ -84,6 +84,7 @@ export default function ReportsScreen() {
           from={w.listFrom}
           to={planTo}
           nearDays={w.nearDays}
+          selectedDay={w.selectedDay}
           wpFilter={wpFilter}
           basis={basis}
           onChanged={() => setReloadTick((n) => n + 1)}
@@ -112,6 +113,7 @@ export default function ReportsScreen() {
               params: {
                 wp: wpFilter ?? '',
                 date: shownRange && shownRange.from === shownRange.to ? shownRange.from : '',
+                back: '1',
               },
             })
           }

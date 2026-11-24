@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { recallJournal, rememberJournal } from './journalMemory';
 import { ScrollView, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { type DateRangeValue } from '../RangeCalendar';
 import { useDayStatus } from '../DayDot';
@@ -49,7 +50,11 @@ export function useJournal() {
     /** יום לגלול אליו ולסמן (למשל "הקורס הבא" מדף הבית) */
     day?: string;
   }>();
-  const [tab, setTab] = useState<'plan' | 'reports'>(params.tab === 'reports' ? 'reports' : 'plan');
+  // חזרה ליומן — לאותה לשונית, סינון ויום שמהם יצאו (journalMemory), אלא אם הכתובת קובעת אחרת.
+  const recalled = useRef(recallJournal()).current;
+  const [tab, setTab] = useState<'plan' | 'reports'>(
+    params.tab === 'reports' || params.tab === 'plan' ? params.tab : recalled?.tab ?? 'plan',
+  );
   useEffect(() => {
     if (params.tab === 'reports' || params.tab === 'plan') setTab(params.tab);
   }, [params.tab, params.n]);
@@ -57,7 +62,9 @@ export function useJournal() {
   const [reloadTick, setReloadTick] = useState(0);
   const [statuses, setStatuses] = useState<Record<string, PayrollStatus>>({});
   /** סינון: מזהה מקום עבודה; null = הכול */
-  const [wpFilter, setWpFilter] = useState<string | null>(params.wp || null);
+  const [wpFilter, setWpFilter] = useState<string | null>(
+    params.wp !== undefined ? params.wp || null : recalled?.wp ?? null,
+  );
   /** החודש המוצג בלוח השנה, "YYYY-MM" — ברירת מחדל: החודש הנוכחי */
   const [calMonth, setCalMonth] = useState(() => todayISO().slice(0, 7));
   /**
@@ -269,6 +276,17 @@ export function useJournal() {
     setCalMonth(today.slice(0, 7));
     setWeekStart(weekStartOf(today));
   }
+
+  // חזרה ליומן בלי יום מפורש — גלילה ליום שממנו יצאו.
+  useEffect(() => {
+    if (params.day || params.when || params.from || !recalled?.day) return;
+    focusOn(recalled.day);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // שמירת המקום ביומן לחזרה אליו.
+  useEffect(() => {
+    rememberJournal({ tab, wp: wpFilter, day: scrollDay ?? focusDay });
+  }, [tab, wpFilter, scrollDay, focusDay]);
 
   // ?day=YYYY-MM-DD — גלילה ליום וסימונו בתאריכון.
   useEffect(() => {
@@ -639,6 +657,8 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
   const markDay = (pinned ? scrollDay : null) ?? focusDay;
   const shownRange: DateRangeValue = rangeMode ? range : markDay ? { from: markDay, to: markDay } : null;
   const dayPress = rangeMode ? undefined : focusOn;
+  /** האריח של היום שמסומן בתאריכון (בגלילה או בלחיצה) — מודגש ברשימה */
+  const selectedDay = rangeMode ? null : markDay;
 
   const showCalendar = !periodMode;
 
@@ -669,6 +689,7 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     timeLabel,
     listKey,
     markDay,
+    selectedDay,
     shownRange,
     dayPress,
     showCalendar,

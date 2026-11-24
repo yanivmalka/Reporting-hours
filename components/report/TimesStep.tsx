@@ -9,14 +9,14 @@ import { SegmentedControl } from '../SegmentedControl';
 import { formatHours } from '../../lib/pay';
 import { EXTRA_SESSION_LABELS, type ExtraSessionKind } from '../../lib/reports';
 import { SelectField } from '../SelectField';
-import { courseScheduleLabel } from '../../lib/courses';
+import { courseScheduleLabel, sessionTimes } from '../../lib/courses';
 import { formatShekels } from '../../lib/travel';
 import { END_BEFORE_START, endNotAfterStart, formatDuration } from '../../lib/time';
 import type { ReportWizard } from './useReportWizard';
 
 /** שלב 3: שעות, הפסקות ותצוגה מקדימה של נטו, שעות ושכר. */
 export function TimesStep({ w }: { w: ReportWizard }) {
-  const { router, styles, direct, editing, courseId, extraKind, setExtraKind, step, viaCourse, endRef, start, setStart, end, setEnd, breaks, leftoverChoice, errors, setErrors, addBreak, updateBreak, removeBreak, shown, selectedCourse, extraCandidates, chooseExtraCourse } = w;
+  const { router, styles, direct, editing, courseId, extraKind, setExtraKind, step, viaCourse, endRef, start, setStart, end, setEnd, breaks, leftoverChoice, errors, setErrors, addBreak, updateBreak, removeBreak, shown, selectedCourse, extraCandidates, chooseExtraCourse, jointOffer, jointWith, applyJoint, undoJoint, date } = w;
   return (
     <>
     {/* ── 3. שעות ── */}
@@ -87,6 +87,28 @@ export function TimesStep({ w }: { w: ReportWizard }) {
           </View>
         </View>
         <Text style={styles.wheelHint}>אפשר גם לגרור למעלה או למטה בתוך התיבה: בצד שמאל — שעות, בצד ימין — דקות</Text>
+
+        {/* קורסים צמודים — הצעה לדיווח אחד ליום (lib/jointCourses.ts) */}
+        {jointOffer && selectedCourse ? (
+          <View style={styles.joint}>
+            <Text style={styles.jointTitle}>אחריו באותו יום: {jointOffer.course.name}</Text>
+            <Text style={styles.jointText}>
+              {`\u2066${sessionTimes(jointOffer.course, date).start}–${jointOffer.end}\u2069 · אותו מקום. אפשר לדווח את שניהם בדיווח אחד: הסיום ${jointOffer.end}${jointOffer.gap > 0 ? `, הפער (${jointOffer.gap} דק׳) כהפסקה` : ''}, ו"${jointOffer.course.name}" יסומן כבוטל — דווח יחד.`}
+            </Text>
+            <Pressable onPress={applyJoint} accessibilityRole="button" hitSlop={8}>
+              <Text style={styles.jointLink}>דיווח משותף עד {jointOffer.end}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {jointWith ? (
+          <View style={styles.joint}>
+            <Text style={styles.jointTitle}>דיווח משותף עם {jointWith.name}</Text>
+            <Text style={styles.jointText}>{`בשמירה "${jointWith.name}" יסומן כבוטל — דווח יחד עם ${selectedCourse?.name ?? ''}.`}</Text>
+            <Pressable onPress={undoJoint} accessibilityRole="button" hitSlop={8}>
+              <Text style={styles.jointLink}>ביטול הדיווח המשותף</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <FormField label="הפסקות (בדקות)" error={errors.breaks}>
           <View style={styles.breaks}>

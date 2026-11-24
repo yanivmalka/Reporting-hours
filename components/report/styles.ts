@@ -442,4 +442,15 @@ export const makeReportStyles = (colors: AppColors) =>
     color: colors.brandDark,
     textAlign: TEXT_RIGHT,
   },
+  // קורסים צמודים — הצעה לדיווח משותף (TimesStep)
+  joint: {
+    backgroundColor: colors.brandLight,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+  },
+  jointTitle: { fontSize: 14, fontWeight: '700', color: colors.brandDark, textAlign: TEXT_RIGHT },
+  jointText: { fontSize: 13, lineHeight: 19, color: colors.text, textAlign: TEXT_RIGHT },
+  jointLink: { fontSize: 14, fontWeight: '700', color: colors.brand, textAlign: TEXT_RIGHT, textDecorationLine: 'underline' },
 });

@@ -121,7 +121,7 @@ export function inviteMessage(email: string, role: ShareRole): string {
   const u = authUser();
   const name = u?.name || u?.email || '';
   return [
-    `${name} שיתף/ה איתך את אפליקציית "דיווח שעות" (${ROLE_LABELS[role]}).`,
+    `${name} שיתף/ה איתך את אפליקציית "שיעור" (${ROLE_LABELS[role]}).`,
     `להיכנס: ${APP_URL}`,
     `בתפריט ☰ ← "הגדרות" ← "חשבון" ← התחברות עם Google בחשבון ${emailKey(email)}, ואז לבחור את החשבון ששותף.`,
   ].join('\n');

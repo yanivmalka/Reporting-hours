@@ -1,3 +1,4 @@
+import { savedLabel } from '../lib/reports';
 import { describe, expect, it } from 'vitest';
 import { changesMessage, editIntegrityError, reportChanges, sameSessionReports } from '../lib/reportEdit';
 import type { WorkReport, WorkReportDraft } from '../lib/reports';
@@ -31,7 +32,7 @@ describe('בקרה על עדכון דיווח קיים', () => {
   it('שינוי שעות בלבד — לא קריטי', () => {
     const ch = reportChanges(mailReport, draft({ end: '16:00' }), names);
     expect(ch).toHaveLength(1);
-    expect(ch[0]).toMatchObject({ field: 'times', from: '09:00–15:55', to: '09:00–16:00', critical: false });
+    expect(ch[0]).toMatchObject({ field: 'times', from: '\u206609:00–15:55\u2069', to: '\u206609:00–16:00\u2069', critical: false });
   });
 
   it('המקרה מהתקלה: תאריך, קורס ושעות — מסומנים, והתאריך קריטי', () => {
@@ -66,5 +67,18 @@ describe('כפילות דיווחים על אותו מפגש', () => {
     ];
     expect(sameSessionReports(a, list).map((r) => r.id)).toEqual(['b']);
     expect(sameSessionReports({ id: 'n', courseId: 'c', date: '2026-11-21' }, list)).toEqual([]);
+  });
+});
+
+describe('savedLabel — מתי הדיווח נשמר', () => {
+  const now = new Date(2026, 10, 24, 9, 0);
+  const at = (h: number, m: number, d = 24, y = 2026) => new Date(y, 10, d, h, m).getTime();
+  it('נשמר · עודכן · מהמייל', () => {
+    expect(savedLabel({ createdAt: at(8, 5) }, now)).toBe('נשמר 24.11 · 08:05');
+    expect(savedLabel({ createdAt: at(8, 5), updatedAt: at(8, 40) }, now)).toBe('עודכן 24.11 · 08:40');
+    expect(savedLabel({ createdAt: at(8, 5), viaEmail: { text: 'x', receivedAt: at(7, 1, 23) } }, now)).toBe('התקבל מהמייל 23.11 · 07:01');
+  });
+  it('שנה אחרת — עם השנה', () => {
+    expect(savedLabel({ createdAt: at(8, 5, 3, 2025) }, now)).toBe('נשמר 3.11.2025 · 08:05');
   });
 });

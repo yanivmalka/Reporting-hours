@@ -63,6 +63,8 @@ export type WorkReport = {
   demo?: boolean;
   /** חותמת יצירה (מילישניות) — לסידור דיווחים באותו תאריך */
   createdAt: number;
+  /** עדכון אחרון בעריכה (מילישניות) — מוצג באריח ("עודכן …"); חסר — לא נערך מאז היצירה */
+  updatedAt?: number;
   /**
    * מי דיווח או ערך לאחרונה, כשזה מורשה שעובד על נתוני הבעלים (docs/sharing-spec.md).
    * חסר — הבעלים עצמם.
@@ -71,7 +73,28 @@ export type WorkReport = {
 };
 
 /** נתוני טופס לפני שמירה — בלי שדות שנוצרים אוטומטית. */
-export type WorkReportDraft = Omit<WorkReport, 'id' | 'createdAt' | 'demo' | 'by'>;
+export type WorkReportDraft = Omit<WorkReport, 'id' | 'createdAt' | 'updatedAt' | 'demo' | 'by'>;
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * מתי הדיווח נשמר, לתצוגה באריח — כדי שיהיה ברור שהשמירה נקלטה:
+ * "עודכן 24.11 · 08:12" אחרי עריכה, "התקבל מהמייל …" או "נשמר …".
+ * שנה מוצגת רק כשאינה השנה הנוכחית.
+ */
+export function savedLabel(
+  r: Pick<WorkReport, 'createdAt' | 'updatedAt' | 'viaEmail'>,
+  now: Date = new Date(),
+): string {
+  const when = (ms: number) => {
+    const d = new Date(ms);
+    const year = d.getFullYear() !== now.getFullYear() ? `.${d.getFullYear()}` : '';
+    return `${d.getDate()}.${d.getMonth() + 1}${year} · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  };
+  if (r.updatedAt) return `עודכן ${when(r.updatedAt)}`;
+  if (r.viaEmail?.receivedAt) return `התקבל מהמייל ${when(r.viaEmail.receivedAt)}`;
+  return `נשמר ${when(r.createdAt)}`;
+}
 
 const STORAGE_KEY = KEYS.reports;
 
@@ -204,7 +227,7 @@ export async function updateReport(
     if (r.id !== id) return r;
     const { note: _n, courseId: _c, extraKind: _k, ...rest } = r;
     // note, courseId ו־extraKind נמחקים כשהוסרו בטופס — לכן בונים מחדש בלי הישנים.
-    return { ...rest, ...draft, id: r.id, createdAt: r.createdAt };
+    return { ...rest, ...draft, id: r.id, createdAt: r.createdAt, updatedAt: Date.now() };
   });
   await saveReports(next);
   return next;

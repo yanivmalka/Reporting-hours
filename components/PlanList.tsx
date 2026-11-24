@@ -1,6 +1,6 @@
 /**
  * "תכנון" בדף "יומן": מפגשי הקורסים לפי יום בטווח שנבחר, עם סטטוס — מתוכנן
- * (עתידי, אפור) / ממתין (היום) / חסר (עבר ולא דווח) / דווח / בוטל / הועבר — וסיכום
+ * (עתידי, אפור) / ממתין לדיווח (היום) / חסר (עבר ולא דווח) / דווח / בוטל / הועבר — וסיכום
  * פוטנציאל וצפי. מפגש שנמחק מהתכנון לא מוצג.
  * לחיצה: מפגש שדווח → תצוגת הדיווח; שלא דווח → דיווח ישיר; שבוטל → דיאלוג המפגש.
  */
@@ -13,11 +13,12 @@ import { Icon } from './Icon';
 import { EnterChevron } from './Chevrons';
 import { useSessionCancel } from './SessionCancelDialog';
 import { allCourseSessions, courseReport, sessionTimes, timeRange, type Course } from '../lib/courses';
-import { dayTotalsByWorkplace, rangeNetMinutes } from '../lib/daySummary';
-import { netMinutes } from '../lib/reports';
+import { dayTotalsByWorkplace, plannedEntry, rangeNetMinutes, reportAcademicLine, reportEntry } from '../lib/daySummary';
+import { savedLabel } from '../lib/reports';
+import { useLeftoverMode } from '../lib/leftover';
 import { DaySummary } from './DaySummary';
 import { expectedFor, plannedFor } from '../lib/forecast';
-import type { PayBasis } from '../lib/payBasis';
+import { basisFor, type PayBasis } from '../lib/payBasis';
 import type { WorkReport } from '../lib/reports';
 import type { Cancellation } from '../lib/sessions';
 import { money } from '../lib/travel';
@@ -26,6 +27,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
+import { mix } from '../theme/shades';
 import { workplaceColor } from '../theme/workplaceColors';
 import { beforeTracking, getTrackingStart } from '../lib/trackingStart';
 import { MonthDivider } from './MonthDivider';
@@ -62,6 +64,10 @@ export type SessionRowData = {
   reportId?: string;
   /** השעות שדווחו בפועל ("HH:MM") — כשהמפגש דווח */
   reported?: { start: string; end: string };
+  /** מתי הדיווח נשמר / עודכן (`savedLabel`) — באריח, שיהיה ברור שהשמירה נקלטה */
+  saved?: string;
+  /** במקום אקדמי, מפגש שדווח: "2 שע׳ אקד׳ · 10 דק׳ למצטברות" */
+  academic?: string;
   cancel: Cancellation | null;
   movedFrom?: string;
 };
@@ -94,6 +100,7 @@ export function PlanList({
   expandedBefore,
   onHideEarlier,
   nearDays,
+  selectedDay,
 }: {
   courses: readonly Course[];
   workplaces: readonly Workplace[];
@@ -118,15 +125,18 @@ export function PlanList({
   onHideEarlier?: () => void;
   /** ימים שמוצגים תמיד (שלשום עד מחרתיים) — גם בלי מפגשים, עם תגית */
   nearDays?: readonly string[];
+  /** היום שמסומן בתאריכון — האריח שלו מודגש (רקע ומסגרת) */
+  selectedDay?: string | null;
 }) {
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const sessionDialog = useOpenSession(onChanged);
   const open = sessionDialog.open;
+  const [leftoverMode] = useLeftoverMode();
   const active = activeWorkplaces(workplaces).filter((w) => !wpFilter || w.id === wpFilter);
   // מפגשים שלפני תחילת המעקב ולא דווחו — לא מוצגים; רק שורת טקסט לפני הפריט הראשון.
-  const allRows = buildSessionRows(courses, active, reports, from, to);
+  const allRows = buildSessionRows(courses, active, reports, from, to, basis);
   const rows = allRows.filter((r) => r.status !== 'untracked');
   const hiddenBefore = allRows.length - rows.length;
   const trackingStart = getTrackingStart();
@@ -200,7 +210,7 @@ export function PlanList({
             <MonthDivider month={date.slice(0, 7)} />
           ) : null}
           <View
-            style={[styles.day, date === today && styles.dayToday]}
+            style={[styles.day, date === today && styles.dayToday, date === selectedDay && styles.daySelected]}
             onLayout={
               onDayLayout
                 ? (e) => onDayLayout(date, e.nativeEvent.layout.y, e.nativeEvent.layout.height)
@@ -223,10 +233,9 @@ export function PlanList({
                 held.map((r) => {
                   const rep = r.reportId ? reportById.get(r.reportId) : undefined;
                   const t = sessionTimes(r.course, r.date);
-                  return {
-                    workplaceId: r.workplace.id,
-                    netMinutes: rep ? netMinutes(rep) ?? 0 : rangeNetMinutes(t.start, t.end, t.breakMinutes),
-                  };
+                  return rep
+                    ? reportEntry(rep)
+                    : plannedEntry(r.workplace.id, rangeNetMinutes(t.start, t.end, t.breakMinutes), leftoverMode);
                 }),
               );
               return <DaySummary totals={totals} workplaceOf={(id) => wpById.get(id)} basis={basis} />;
@@ -252,6 +261,8 @@ export function buildSessionRows(
   reports: readonly WorkReport[],
   from: string,
   to: string,
+  /** הבסיס הכללי — כשניתן, מפגש שדווח במקום אקדמי מקבל את שורת השעות האקדמיות */
+  basis?: PayBasis,
 ): SessionRowData[] {
   const byId = new Map(workplaces.map((w) => [w.id, w]));
   const today = todayISO();
@@ -287,6 +298,9 @@ export function buildSessionRows(
         status,
         reportId: report?.id,
         reported: report ? { start: report.start, end: report.end } : undefined,
+        saved: report ? savedLabel(report) : undefined,
+        academic:
+          report && basis && basisFor(workplace, basis) === 'academic' ? reportAcademicLine(report) : undefined,
         cancel: s.cancel,
         movedFrom: s.movedFrom,
       });
@@ -318,7 +332,7 @@ export function useOpenSession(onChanged: () => void) {
         date: r.date,
         cancel: r.cancel,
         onDone: onChanged,
-        onHeld: () => router.push({ pathname: '/report', params: { course: r.course.id, date: r.date } }),
+        onHeld: () => router.push({ pathname: '/report', params: { course: r.course.id, date: r.date, back: '1' } }),
       });
   };
   return { open, dialog: sessionDialog.dialog };
@@ -327,7 +341,7 @@ export function useOpenSession(onChanged: () => void) {
 /** מפגש שדווח → תצוגת הדיווח; אחרת — דיווח ישיר. */
 export function openSession(router: ReturnType<typeof useRouter>, r: SessionRowData) {
   if (r.reportId) router.push({ pathname: '/report-view', params: { id: r.reportId } });
-  else router.push({ pathname: '/report', params: { course: r.course.id, date: r.date } });
+  else router.push({ pathname: '/report', params: { course: r.course.id, date: r.date, back: '1' } });
 }
 
 /** שורת מפגש: פס צבע המקום, שם הקורס, שעות / סיבה, ותג הסטטוס. */
@@ -345,7 +359,8 @@ export function SessionRow({
   const { colors } = useTheme();
   const tone: Record<Status, { label: string; fg: string; bg: string }> = {
     planned: { label: 'מתוכנן', fg: colors.textMuted, bg: colors.background },
-    pending: { label: 'ממתין', fg: colors.brandDark, bg: colors.brandLight },
+    // כמו תג "ממתין לדיווח" בלו״ז דף הבית
+    pending: { label: 'ממתין לדיווח', fg: colors.warning, bg: mix(colors.warning, colors.surface, 0.86) },
     now: { label: 'עכשיו', fg: colors.textOnBrand, bg: colors.brand },
     missing: { label: 'חסר', fg: colors.warning, bg: colors.background },
     reported: { label: 'דווח', fg: colors.success, bg: colors.brandLight },
@@ -387,6 +402,16 @@ export function SessionRow({
                 : timeRange(r.course.start, r.course.end)}
           {r.movedFrom ? ` · הועבר מ־${short(r.movedFrom)}` : ''} · {r.workplace.name}
         </Text>
+        {r.academic ? (
+          <Text style={styles.academic} numberOfLines={1}>
+            {r.academic}
+          </Text>
+        ) : null}
+        {r.saved ? (
+          <Text style={styles.saved} numberOfLines={1}>
+            {r.saved}
+          </Text>
+        ) : null}
       </View>
       {note?.flag ? (
         <Icon name={FLAG_ICON[note.flag]} size={16} color={colors.warning} />
@@ -415,9 +440,14 @@ const makeStyles = (colors: AppColors) =>
       borderRadius: radius.md,
       padding: spacing.md,
       gap: spacing.xs,
+      // מסגרת שקופה קבועה — סימון האריח לא משנה את גובהו (והגלילה לא קופצת)
+      borderWidth: 2,
+      borderColor: 'transparent',
       ...cardShadow,
     },
-    dayToday: { borderWidth: 2, borderColor: colors.brandDark },
+    dayToday: { borderColor: colors.brandDark },
+    /** היום שמסומן בתאריכון — כמו היום הנבחר בו: מסגרת כהה ורקע בהיר */
+    daySelected: { borderColor: colors.brandDark, backgroundColor: colors.brandLight },
     dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     dayTitleToday: { color: colors.brandDark },
     nearChip: { backgroundColor: colors.brandLight, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
@@ -438,6 +468,8 @@ const makeStyles = (colors: AppColors) =>
     fadedBar: { opacity: 0.4 },
     strike: { textDecorationLine: 'line-through', color: colors.textMuted },
     meta: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
-    chip: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },
+    saved: { fontSize: 11, color: colors.success, textAlign: TEXT_RIGHT },
+    academic: { fontSize: 13, fontWeight: '700', color: colors.brandDark, textAlign: TEXT_RIGHT },
+    chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     chipText: { fontSize: 12, fontWeight: '700' },
   });

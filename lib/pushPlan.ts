@@ -178,7 +178,7 @@ function missingPush(
       kind: 'missing',
       at: fire,
       title: open.length === 1 ? 'לא לשכוח לדווח' : `${open.length} מפגשים של היום לא דווחו`,
-      body: open.length === 1 ? `${first.c.name} · ${first.start}–${first.end}` : open.map((o) => o.c.name).join(' · '),
+      body: open.length === 1 ? `${first.c.name} · \u2066${first.start}–${first.end}\u2069` : open.map((o) => o.c.name).join(' · '),
       href:
         open.length === 1
           ? `/report?${q({ course: first.c.id, date })}`
@@ -210,8 +210,8 @@ function payrollPush(
       const minutes = inPeriod.reduce((s, r) => s + (netMinutes(r) ?? 0), 0);
       const summary =
         inPeriod.length === 0
-          ? `אין עדיין דיווחים בתקופה ${shortDate(p.start)}–${shortDate(p.end)}.`
-          : `בתקופה ${shortDate(p.start)}–${shortDate(p.end)}: ${inPeriod.length === 1 ? 'דיווח אחד' : `${inPeriod.length} דיווחים`} · ${formatDuration(minutes)}.`;
+          ? `אין עדיין דיווחים בתקופה \u2066${shortDate(p.start)}–${shortDate(p.end)}\u2069.`
+          : `בתקופה \u2066${shortDate(p.start)}–${shortDate(p.end)}\u2069: ${inPeriod.length === 1 ? 'דיווח אחד' : `${inPeriod.length} דיווחים`} · ${formatDuration(minutes)}.`;
       const href = `/payroll-report?${q({ wp: w.id, start: p.start })}`;
       const prev = isoDate(addDays(dateFromIso(p.end), -1));
       out.push({
