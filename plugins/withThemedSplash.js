@@ -2,7 +2,7 @@
  * מסך הפתיחה בצבע ערכת הצבעים הנבחרת (אנדרואיד 13+).
  *
  * לכל ערכה נוצרת ערכת מסך פתיחה Theme.App.SplashScreen.<id> (יורשת מזו של
- * expo-splash-screen, רק הרקע שונה). האפליקציה בוחרת אותה בזמן ריצה
+ * expo-splash-screen; הרקע ושעון החול — של הערכה). האפליקציה בוחרת אותה בזמן ריצה
  * (modules/splash-theme ← setSplashTheme ב־theme/ThemeContext.tsx), ואנדרואיד
  * משתמש בה מהפתיחה הבאה. הצבעים — `brandDark` של כל ערכה (כמו ברירת המחדל ב־app.json) ב־theme/palettes.ts
  * (test/splashTheme.test.ts מוודא שהם זהים).
@@ -39,6 +39,9 @@ function withThemedSplash(config) {
         item: [
           { $: { name: 'windowSplashScreenBackground' }, _: `@color/${colorName(id)}` },
           { $: { name: 'android:windowSplashScreenBackground' }, _: `@color/${colorName(id)}` },
+          // שעון החול בצבעי הערכה (drawable/splash_icon_<id>, מ־plugins/withThemedIcons.js)
+          { $: { name: 'windowSplashScreenAnimatedIcon' }, _: `@drawable/splash_icon_${id}` },
+          { $: { name: 'android:windowSplashScreenAnimatedIcon' }, _: `@drawable/splash_icon_${id}` },
         ],
       });
     }

@@ -23,13 +23,14 @@ import {
   useAppLockEnabled,
   useFinanceLocked,
 } from '../lib/appLock';
+import { brandImages } from '../theme/brandAssets';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 
 export function FinanceGate({ children }: { children: ReactNode }) {
   const locked = useFinanceLocked();
-  const { colors } = useTheme();
+  const { colors, paletteId } = useTheme();
   const [failed, setFailed] = useState(false);
   async function open() {
     setFailed(!(await unlockFinance()));
@@ -41,7 +42,7 @@ export function FinanceGate({ children }: { children: ReactNode }) {
   return (
     <View style={[styles.gate, { backgroundColor: colors.background }]}>
       <Image
-        source={require('../assets/finance-locked.png')}
+        source={brandImages(paletteId).locked}
         style={styles.gateIcon}
         accessibilityIgnoresInvertColors
         accessibilityLabel="שעון החול של שיעור עם מנעול במקום המטבעות"
