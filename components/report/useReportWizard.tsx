@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { setSessionMark } from '../../lib/sessions';
+import { jointCandidate, jointReason } from '../../lib/jointCourses';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { Keyboard, PanResponder } from 'react-native';
@@ -49,7 +51,10 @@ export function useReportWizard() {
     wp: presetWp,
     date: presetDate,
     course: presetCourse,
-  } = useLocalSearchParams<{ id?: string; wp?: string; date?: string; course?: string }>();
+    back: backParam,
+  } = useLocalSearchParams<{ id?: string; wp?: string; date?: string; course?: string; back?: string }>();
+  /** נפתח מהיומן (?back=1): אחרי שמירה חוזרים אליו — לאותו סינון ויום — ולא לדף הבית. */
+  const backToOrigin = backParam === '1';
   // מקום עבודה / תאריך שנבחרו מראש (למשל מ"יומן" המסונן) — פעם אחת.
   const presetApplied = useRef(false);
   /**
@@ -82,6 +87,11 @@ export function useReportWizard() {
   const [courseId, setCourseId] = useState<string | null>(null);
   /** מפגש נוסף לקורס (השלמה, הגשה…) — מחוץ למועד הקבוע; null = דיווח רגיל */
   const [extraKind, setExtraKind] = useState<ExtraSessionKind | null>(null);
+  /**
+   * דיווח משותף לקורסים צמודים (lib/jointCourses.ts): הקורס שהצטרף לדיווח — בשמירה המפגש
+   * שלו מסומן כבוטל ("דווח יחד עם…"). `prevEnd` / `breakId` — לביטול ההצטרפות.
+   */
+  const [jointWith, setJointWith] = useState<{ id: string; name: string; prevEnd: string; breakId?: string } | null>(null);
   /** שלב באשף: תאריך → קורס (או מקום עבודה) → שעות → סיכום → נשמר */
   const [step, setStep] = useState<Step>('date');
   /** האם הגענו לשעות דרך בחירת קורס (קובע לאן "חזרה") */
@@ -117,6 +127,8 @@ export function useReportWizard() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [breaks, setBreaks] = useState<BreakRow[]>([]);
+  // החלפת קורס / תאריך מבטלת הצטרפות שנבחרה.
+  useEffect(() => setJointWith(null), [courseId, date]);
   /** עמודת השעה שנגררת כגלגלת — מורמת מעל השכנה, כדי שהבועה לא תוסתר */
   // בזמן גרירת גלגלת החישובים שמתחת לשעות (דקות עודפות, נטו) לא מתעדכנים —
   // כדי שהתצוגה לא תקפוץ; מתעדכנים בעזיבה.
@@ -291,14 +303,14 @@ export function useReportWizard() {
     if (countdown == null) return;
     if (countdown <= 0) {
       setCountdown(null);
-      if (editId) router.back();
+      if (editId || (backToOrigin && router.canGoBack())) router.back();
       else if (router.canDismiss()) router.dismissAll();
       else router.replace('/');
       return;
     }
     const t = setTimeout(() => setCountdown((n) => (n == null ? null : n - 1)), 1000);
     return () => clearTimeout(t);
-  }, [countdown, editId, router]);
+  }, [countdown, editId, backToOrigin, router]);
 
 
   function addBreak() {
@@ -449,6 +461,12 @@ export function useReportWizard() {
       throw e;
     }
     setExisting(saved);
+    // דיווח משותף: המפגש של הקורס שהצטרף מסומן כבוטל — "דווח יחד עם <הקורס>".
+    if (jointWith) {
+      const first = courses.find((c) => c.id === draftReport.courseId)?.name ?? draftReport.note ?? '';
+      await setSessionMark(jointWith.id, draftReport.date, 'canceled', jointReason(first));
+      setJointWith(null);
+    }
 
     let toast: string | null = null;
     const name = workplaces?.find((w) => w.id === id)?.name ?? '';
@@ -565,6 +583,9 @@ export function useReportWizard() {
     validate,
     selectedCourse,
     handleSave,
+    jointWith,
+    setJointWith,
+    backToOrigin,
   };
 }
 
@@ -650,6 +671,32 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
   const extraCandidates = workplaceId
     ? courses.filter((c) => c.workplaceId === workplaceId && date >= c.from && date <= c.to)
     : [];
+
+  // ── קורסים צמודים: הצעה לדווח יחד עם המפגש הבא באותו מקום (lib/jointCourses.ts) ──
+  const { jointWith, setJointWith, selectedCourse: jointBase } = core;
+  const jointOffer =
+    jointBase && viaCourse && !core.extraKind && !jointWith
+      ? jointCandidate(jointBase, date, courses, workplaces, existing.filter((r) => r.id !== editing?.id))
+      : null;
+
+  /** דיווח משותף: הסיום — סוף המפגש הבא, והפער ביניהם — הפסקה. */
+  function applyJoint() {
+    if (!jointOffer) return;
+    setTouched(true);
+    const breakId = jointOffer.gap > 0 ? makeBreakId() : undefined;
+    setJointWith({ id: jointOffer.course.id, name: jointOffer.course.name, prevEnd: end, breakId });
+    setEnd(jointOffer.end);
+    if (breakId) setBreaks((prev) => [...prev, { id: breakId, minutes: String(jointOffer.gap) }]);
+    setErrors((prev) => ({ ...prev, end: undefined }));
+  }
+
+  /** ביטול הדיווח המשותף — השעות וההפסקה חוזרות. */
+  function undoJoint() {
+    if (!jointWith) return;
+    setEnd(jointWith.prevEnd);
+    if (jointWith.breakId) setBreaks((prev) => prev.filter((b) => b.id !== jointWith.breakId));
+    setJointWith(null);
+  }
 
   /** שיוך הדיווח לקורס כמפגש נוסף, או ביטול השיוך. */
   function chooseExtraCourse(id: string | null) {
@@ -866,6 +913,9 @@ export function reportWizardView(core: ReportWizardCore & { workplaces: Workplac
     leave,
     cancelSession,
     cancelEditedSession,
+    jointOffer,
+    applyJoint,
+    undoJoint,
   };
 }
 

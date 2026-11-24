@@ -7,7 +7,7 @@ import type { ReportWizard } from './useReportWizard';
 
 /** כפתורי הניווט בתחתית: הבא / חזרה / שמירה, וקישורי ביטול והעברת מפגש. */
 export function WizardNav({ w }: { w: ReportWizard }) {
-  const { router, styles, editId, direct, editing, setEditing, moveDialog, extraKind, step, setExitReason, date, setDate, saving, setCountdown, handleSave, selectedCourse, goNext, goBack, anotherReport, leave, cancelSession, cancelEditedSession } = w;
+  const { router, styles, editId, direct, editing, setEditing, moveDialog, extraKind, step, setExitReason, date, setDate, saving, setCountdown, handleSave, selectedCourse, goNext, goBack, anotherReport, leave, cancelSession, cancelEditedSession, backToOrigin } = w;
   return (
     <>
     {/* ── ניווט ── */}
@@ -29,7 +29,9 @@ export function WizardNav({ w }: { w: ReportWizard }) {
         <Pressable
           onPress={() => {
             setCountdown(null);
-            router.replace({ pathname: '/reports', params: { tab: 'reports' } });
+            // נפתח מהיומן — חזרה אליו כפי שהיה; אחרת — היומן על היום שדווח (הסינון נזכר ב־journalMemory).
+            if (backToOrigin && router.canGoBack()) router.back();
+            else router.replace({ pathname: '/reports', params: { tab: 'reports', day: date } });
           }}
           style={styles.cancel}
         >

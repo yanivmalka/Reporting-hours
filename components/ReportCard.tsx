@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
-import { academicOf, netMinutes, totalBreakMinutes, type WorkReport } from '../lib/reports';
+import { academicOf, netMinutes, savedLabel, totalBreakMinutes, type WorkReport } from '../lib/reports';
 import { hebrewDate } from '../lib/hebrewDate';
 import { formatDuration, formatISODate } from '../lib/time';
 import { formatShekels } from '../lib/travel';
@@ -67,6 +67,8 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onPress
         </View>
       </View>
       {report.note ? <Text style={styles.note}>{report.note}</Text> : null}
+      {/* מתי נשמר / עודכן — שיהיה ברור שהשמירה נקלטה */}
+      <Text style={styles.saved}>{savedLabel(report)}</Text>
       <Text style={styles.line}>
         {`\u2066${report.start}–${report.end}\u2069`}
         {breakTotal > 0 ? ` · הפסקות ${formatDuration(breakTotal)}` : ''}
@@ -106,6 +108,7 @@ export function ReportCard({ report, workplaceName, pay, travel, locked, onPress
 
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
+    saved: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     travel: {
       fontSize: 13,
       fontWeight: '600',
