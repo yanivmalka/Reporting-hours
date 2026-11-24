@@ -1,114 +1,149 @@
 /**
  * מסך פתיחה ממותג ("שיעור") — מוצג מיד אחרי מסך הפתיחה של המערכת, בהפעלה קרה בלבד.
  *
- * מסך הפתיחה של אנדרואיד 12+ מציג רק אייקון על צבע אחיד, ולכן הרקע המעוטר
- * (אייקונים קטנים של נושאי המערכת: שעות, הפסקה, שכר, נסיעות, קורסים, דוח שכר,
- * שיתוף והרשאות, מס, תשלום, דקות מצטברות, לוח בקרה, מקום עבודה ושיעור) מוצג כאן,
- * כשכבה מעל האפליקציה שנעלמת בדהייה אחרי 3 שניות (או בלחיצה). הצבעים קבועים (צבעי המותג), לא לפי ערכת הצבעים.
+ * המסך הוא "העולם" של האייקון: אותו רקע של אייקוני הנושאים (שעות, הפסקה, שכר, נסיעות,
+ * קורסים, דוח שכר, שיתוף והרשאות, מס, תשלום, דקות מצטברות, לוח בקרה, מקום עבודה, שיעור),
+ * באותו סדר, באותה רשת ובאותו מרווח כמו ברקע האייקון, ושעון החול במקומו ברשת.
+ * בפתיחה המסך מתחיל בגודל אייקון ומתרחב במהירות למסך מלא — כאילו נכנסים לתוך האייקון —
+ * ואז עולים השם והמשפט. אחרי 3 שניות נעלם בדהייה; לחיצה בכל מקום מדלגת.
+ *
+ * הרשת מחזורית בריבוע של 1024 יחידות אייקון (assets/splash-world.png נוצר מאותה הגדרה
+ * כמו רקע האייקון), ולכן אריח חוזר שמתחיל בכפולה של 1024 שומר על הסדר.
+ * הרקע בצבע brandDark של הערכה — כמו מסך הפתיחה של המערכת. את מסך הפתיחה של המערכת
+ * מסתיר ThemeContext כשהערכה נטענה (`loaded`), והתנועה מתחילה רק אז.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   Image,
   ImageBackground,
   Pressable,
   StyleSheet,
-  View,
-} from "react-native";
-import * as SplashScreen from "expo-splash-screen";
-import { useI18n } from "../lib/i18n";
-import { Text } from "./Text";
+  useWindowDimensions,
+} from 'react-native';
+import { useI18n } from '../lib/i18n';
+import { useTheme } from '../theme/ThemeContext';
+import { Text } from './Text';
 
-const BG = "#1B3C3B";
+/** dp ליחידת אייקון (האייקון הוא 512 יחידות). */
+const S = 0.79;
+const ICON = 512 * S;
+const TILE = 1024 * S;
+/** העולם מכסה ‎−1024…1536 יחידות סביב האייקון — כפולה של האריח, מספיק לכל מסך. */
+const WORLD = 2560 * S;
+/** גודל האייקון בתחילת התנועה (כמו במסך הבית). */
+const START = 96;
+const ZOOM_MS = 620;
+const TEXT_DELAY_MS = 520;
+const TEXT_MS = 380;
 /** מספיק זמן לקרוא את השם והמשפט; לחיצה בכל מקום מדלגת. */
 const SHOW_MS = 3000;
 const FADE_MS = 500;
-
-// מסך הפתיחה של המערכת נשאר עד שהמסך הממותג מוכן (onLayout), כדי שלא יבהבו
-// ביניהם מסך הבית או מסך ריק.
-SplashScreen.preventAutoHideAsync().catch(() => {});
 
 /** הפעלה קרה בלבד: טעינה מחדש של עץ המסכים (סנכרון, הדגמה) לא מציגה אותו שוב. */
 let shownOnce = false;
 
 export function BrandSplash() {
   const { t } = useI18n();
+  const { colors, loaded } = useTheme();
+  const { width: W, height: H } = useWindowDimensions();
   const [visible, setVisible] = useState(!shownOnce);
   const opacity = useRef(new Animated.Value(1)).current;
-
+  const zoom = useRef(new Animated.Value(0)).current;
+  const text = useRef(new Animated.Value(0)).current;
   const fading = useRef(false);
-  const [ready, setReady] = useState(false);
 
   const fadeOut = useCallback(() => {
     if (fading.current) return;
     fading.current = true;
-    Animated.timing(opacity, {
-      toValue: 0,
-      duration: FADE_MS,
-      useNativeDriver: true,
-    }).start(() => setVisible(false));
+    Animated.timing(opacity, { toValue: 0, duration: FADE_MS, useNativeDriver: true }).start(() =>
+      setVisible(false),
+    );
   }, [opacity]);
 
   useEffect(() => {
-    if (!visible) {
-      SplashScreen.hideAsync().catch(() => {});
-      return;
-    }
+    if (!visible) return;
     shownOnce = true;
-    if (!ready) return;
-    // הספירה מתחילה רק כשהמסך הממותג כבר מוצג.
-    const timer = setTimeout(fadeOut, SHOW_MS);
+    if (!loaded) return;
+    // התנועה והספירה מתחילות רק כשמסך הפתיחה של המערכת כבר הוסתר.
+    Animated.parallel([
+      Animated.timing(zoom, {
+        toValue: 1,
+        duration: ZOOM_MS,
+        easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+        useNativeDriver: false,
+      }),
+      Animated.timing(text, {
+        toValue: 1,
+        duration: TEXT_MS,
+        delay: TEXT_DELAY_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start();
+    const timer = setTimeout(fadeOut, TEXT_DELAY_MS + TEXT_MS + SHOW_MS);
     return () => clearTimeout(timer);
-  }, [visible, ready, fadeOut]);
+  }, [visible, loaded, fadeOut, zoom, text]);
 
   if (!visible) return null;
+
+  const bg = colors.brandDark;
+  // מרכז שעון החול על המסך.
+  const cx = W / 2;
+  const cy = H * 0.45;
+  const lerp = (from: number, to: number) => zoom.interpolate({ inputRange: [0, 1], outputRange: [from, to] });
+  // חלון החיתוך: מריבוע מעוגל בגודל אייקון ועד המסך כולו.
+  const clip = {
+    left: lerp(cx - START / 2, 0),
+    top: lerp(cy - START / 2, 0),
+    width: lerp(START, W),
+    height: lerp(START, H),
+    borderRadius: lerp(START * 0.23, 0),
+  };
+  // העולם ממורכז תמיד על שעון החול (בקואורדינטות חלון החיתוך).
+  const world = {
+    left: lerp(START / 2 - WORLD / 2, cx - WORLD / 2),
+    top: lerp(START / 2 - WORLD / 2, cy - WORLD / 2),
+    transform: [{ scale: lerp(START / ICON, 1) }],
+  };
+  const textShift = text.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+
   return (
-    <Animated.View
-      style={[StyleSheet.absoluteFill, styles.root, { opacity }]}
-      onLayout={() => {
-        SplashScreen.hideAsync().catch(() => {});
-        setReady(true);
-      }}
-    >
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        onPress={fadeOut}
-        accessibilityLabel={t("splash.name")}
-      >
-        <ImageBackground
-          source={require("../assets/splash-pattern.png")}
-          resizeMode="repeat"
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.center}>
-          <Image
-            source={require("../assets/icon.png")}
-            style={styles.icon}
-            accessibilityIgnoresInvertColors
-          />
-          <Text style={styles.name}>{t("splash.name")}</Text>
-          <Text style={styles.tagline}>{t("splash.tagline")}</Text>
-        </View>
+    <Animated.View style={[StyleSheet.absoluteFill, styles.root, { backgroundColor: bg, opacity }]}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={fadeOut} accessibilityLabel={t('splash.name')}>
+        <Animated.View style={[styles.clip, { backgroundColor: bg }, clip]}>
+          <Animated.View style={[styles.world, world]}>
+            <ImageBackground
+              source={require('../assets/splash-world.png')}
+              resizeMode="repeat"
+              style={StyleSheet.absoluteFill}
+              imageStyle={{ width: TILE, height: TILE }}
+            />
+            <Image
+              source={require('../assets/splash-icon.png')}
+              style={[styles.hourglass, { left: WORLD / 2 - ICON / 2, top: WORLD / 2 - ICON / 2 }]}
+              accessibilityIgnoresInvertColors
+            />
+          </Animated.View>
+        </Animated.View>
+        <Animated.View
+          style={[styles.texts, { top: cy + ICON * 0.39, opacity: text, transform: [{ translateY: textShift }] }]}
+        >
+          <Text style={styles.name}>{t('splash.name')}</Text>
+          <Text style={styles.tagline}>{t('splash.tagline')}</Text>
+        </Animated.View>
       </Pressable>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { backgroundColor: BG, zIndex: 1000, elevation: 1000 },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 18,
-    paddingBottom: 96,
-  },
-  icon: { width: 168, height: 168, borderRadius: 38 },
-  name: {
-    fontSize: 44,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    textAlign: "center",
-  },
-  tagline: { fontSize: 17, color: "#C9E3E2", textAlign: "center" },
+  root: { zIndex: 1000, elevation: 1000 },
+  clip: { position: 'absolute', overflow: 'hidden' },
+  world: { position: 'absolute', width: WORLD, height: WORLD },
+  hourglass: { position: 'absolute', width: ICON, height: ICON },
+  texts: { position: 'absolute', left: 0, right: 0, alignItems: 'center', gap: 10 },
+  name: { fontSize: 46, fontWeight: '700', color: '#FFFFFF', textAlign: 'center' },
+  tagline: { fontSize: 18, color: '#C9E3E2', textAlign: 'center' },
 });
