@@ -1,10 +1,11 @@
 /**
- * עורך רמת הפירוט של דוח השכר שנשלח (lib/payrollTemplate.ts): תיבת סימון לכל רכיב
- * בדוח, תצוגה מקדימה חיה של המייל, ושמירה כתבנית (חדשה / עדכון). מורשה בלי `canEdit`
- * יכול להחיל את הפירוט לשליחה הזו בלבד.
+ * עורך רמת הפירוט של דוח השכר שנשלח (lib/payrollTemplate.ts). למעלה, קבוע — תצוגה
+ * מקדימה חיה של המייל; לחיצה על שורה בה גוללת לפקד של הרכיב ומבליטה אותו. מתחת,
+ * בגלילה — הפקדים, ובסופם הכפתורים (החלה / עדכון / שמירה כתבנית חדשה / ביטול).
+ * מורשה בלי `canEdit` יכול להחיל את הפירוט לשליחה הזו בלבד.
  */
-import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
 import { Text } from '../Text';
 import { Button } from '../Button';
 import { Checkbox } from '../Checkbox';
@@ -12,6 +13,7 @@ import { Dialog } from '../Dialog';
 import { SelectField } from '../SelectField';
 import { TextField } from '../TextField';
 import { MailPreview } from './MailPreview';
+import type { PreviewLine, PreviewTarget } from '../../lib/payroll';
 import { GROUP_LEVEL_OPTIONS, groupLevelTitle, type GroupLevel } from '../../lib/courseGrouping';
 import {
   REDEEMED_EDGE_OPTIONS,
@@ -27,7 +29,8 @@ import { TEXT_RIGHT } from '../../theme/align';
 
 type Item = { key: keyof PayrollDetail; label: string; hint?: string; when?: (d: PayrollDetail) => boolean };
 
-const SECTIONS: { title: string; items: Item[] }[] = [
+/** `anchor` — הקבוצה כולה היא היעד של שורה בתצוגה (עמודות הטבלה) */
+const SECTIONS: { title: string; anchor?: PreviewTarget; items: Item[] }[] = [
   {
     title: 'פתיחה',
     items: [{ key: 'hebrewPeriod', label: 'טווח התאריכים העברי' }],
@@ -41,6 +44,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
   },
   {
     title: 'מה מופיע בשורות',
+    anchor: 'columns',
     items: [
       { key: 'weekday', label: 'יום בשבוע', when: (d) => d.rows },
       { key: 'hebrewDate', label: 'תאריך עברי', when: (d) => d.rows },
@@ -107,7 +111,7 @@ export function DetailEditor({
   /** רמת הקיבוץ שנבחרה במסך (ההגדרה המשותפת) */
   screenLevel: GroupLevel;
   canSave: boolean;
-  preview: (d: PayrollDetail) => { subject: string; body: string };
+  preview: (d: PayrollDetail) => { subject: string; lines: PreviewLine[] };
   onApply: (d: PayrollDetail) => void;
   onSaveNew: (name: string, d: PayrollDetail) => void;
   onUpdate: (d: PayrollDetail) => void;
@@ -130,8 +134,56 @@ export function DetailEditor({
   const set = (k: keyof PayrollDetail, v: boolean) => setD((x) => ({ ...x, [k]: v }));
   const p = preview(d);
   const own = !template.builtIn;
+  const { height: screenH } = useWindowDimensions();
 
-  const actions = naming
+  // עוגנים לגלילה: מיקום כל קבוצה בתוכן הנגלל, ומיקום כל פקד בתוך הקבוצה שלו
+  const scrollRef = useRef<ScrollView | null>(null);
+  const sectionY = useRef<Record<string, number>>({});
+  const itemY = useRef<Record<string, { section: string; y: number }>>({});
+  const [flash, setFlash] = useState<PreviewTarget | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+  }, []);
+
+  /** הפקד של רכיב, או החלופה כשהוא מוסתר (עמודות — כשאין שורות; שיבוץ הפדיון — כשהפדיון כבוי) */
+  const anchorOf = (t: PreviewTarget): { key: PreviewTarget; y: number } | null => {
+    const chain: PreviewTarget[] =
+      t === 'columns' ? ['columns', 'rows'] : t === 'redeemedPlacement' ? ['redeemedPlacement', 'redeemed'] : [t];
+    for (const k of chain) {
+      if (k in sectionY.current) return { key: k, y: sectionY.current[k] };
+      const it = itemY.current[k];
+      if (it && it.section in sectionY.current) return { key: k, y: sectionY.current[it.section] + it.y };
+    }
+    return null;
+  };
+  const jumpTo = (t: PreviewTarget) => {
+    const a = anchorOf(t);
+    if (!a) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, a.y - spacing.sm), animated: true });
+    setFlash(a.key);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 1800);
+  };
+  const onSection = (key: string) => (e: LayoutChangeEvent) => {
+    sectionY.current[key] = e.nativeEvent.layout.y;
+  };
+  const onItem = (section: string, key: string) => (e: LayoutChangeEvent) => {
+    itemY.current[key] = { section, y: e.nativeEvent.layout.y };
+  };
+  /** עטיפה לפקד — עוגן גלילה ורקע מודגש כשקופצים אליו */
+  // פונקציה (לא קומפוננטה) — כדי שהפקד לא ייבנה מחדש בכל רינדור
+  const anchor = (section: string, k: PreviewTarget, children: ReactNode) => (
+    <View
+      key={k}
+      onLayout={onItem(section, k)}
+      style={[styles.anchor, flash === k && { backgroundColor: colors.brandLight, borderColor: colors.brand }]}
+    >
+      {children}
+    </View>
+  );
+
+  const buttons = naming
     ? [
         <Button
           key="save"
@@ -153,7 +205,21 @@ export function DetailEditor({
       ];
 
   return (
-    <Dialog visible={visible} onClose={onClose} title="פירוט הדוח לשכר" maxWidth={560} actions={actions}>
+    <Dialog
+      visible={visible}
+      onClose={onClose}
+      title="פירוט הדוח לשכר"
+      maxWidth={560}
+      scrollRef={scrollRef}
+      head={
+        <View style={styles.previewWrap}>
+          <ScrollView style={{ maxHeight: Math.max(160, screenH * 0.36) }} nestedScrollEnabled>
+            <MailPreview compact subject={p.subject} lines={p.lines} onLinePress={jumpTo} />
+          </ScrollView>
+          <Text style={[styles.hint, { color: colors.textMuted }]}>לחיצה על שורה — מעבר לפקד שמשנה אותה</Text>
+        </View>
+      }
+    >
       {naming ? (
         <View style={styles.section}>
           <Text style={[styles.title, { color: colors.text }]}>שם התבנית</Text>
@@ -163,7 +229,10 @@ export function DetailEditor({
           </Text>
         </View>
       ) : null}
-      <View style={styles.section}>
+      <View
+        onLayout={onSection('level')}
+        style={[styles.section, styles.anchor, flash === 'level' && { backgroundColor: colors.brandLight, borderColor: colors.brand }]}
+      >
         <Text style={[styles.title, { color: colors.text }]}>קיבוץ המפגשים</Text>
         <SelectField<LevelValue>
           value={d.level ?? 'screen'}
@@ -178,20 +247,38 @@ export function DetailEditor({
       {SECTIONS.map((sec) => ({ sec, items: sec.items.filter((it) => !it.when || it.when(d)) }))
         .filter((x) => x.items.length > 0)
         .map(({ sec, items }) => (
-        <View key={sec.title} style={styles.section}>
+        <View
+          key={sec.title}
+          onLayout={onSection(sec.anchor ?? sec.title)}
+          style={[
+            styles.section,
+            sec.anchor && styles.anchor,
+            sec.anchor && flash === sec.anchor && { backgroundColor: colors.brandLight, borderColor: colors.brand },
+          ]}
+        >
           <Text style={[styles.title, { color: colors.text }]}>{sec.title}</Text>
           {items
             .map((it) => (
-              <Checkbox
-                key={it.key}
-                checked={Boolean(d[it.key])}
-                onChange={(v) => set(it.key, v)}
-                label={it.label}
-                hint={it.hint}
-              />
+              anchor(
+                sec.anchor ?? sec.title,
+                it.key,
+                <Checkbox
+                  checked={Boolean(d[it.key])}
+                  onChange={(v) => set(it.key, v)}
+                  label={it.label}
+                  hint={it.hint}
+                />,
+              )
             ))}
           {sec.title === 'דקות מצטברות' && d.redeemed ? (
-            <View style={styles.sub}>
+            <View
+              style={[
+                styles.sub,
+                styles.anchor,
+                flash === 'redeemedPlacement' && { backgroundColor: colors.brandLight, borderColor: colors.brand },
+              ]}
+              onLayout={onItem(sec.title, 'redeemedPlacement')}
+            >
               <SelectField<RedeemedPlacement>
                 label="הצגת הפדיון:"
                 title="היכן להציג את הדקות שנפדו"
@@ -217,10 +304,7 @@ export function DetailEditor({
           ) : null}
         </View>
       ))}
-      <View style={styles.section}>
-        <Text style={[styles.title, { color: colors.text }]}>תצוגה מקדימה</Text>
-        <MailPreview compact subject={p.subject} body={p.body} />
-      </View>
+      <View style={styles.buttons}>{buttons}</View>
       {canSave && own && !naming ? (
         <Button label={`מחיקת התבנית "${template.name}"`} variant="dangerLink" onPress={onDelete} />
       ) : null}
@@ -238,4 +322,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 14, fontWeight: '700', textAlign: TEXT_RIGHT },
   hint: { fontSize: 12, textAlign: TEXT_RIGHT },
   sub: { gap: spacing.xs, marginTop: spacing.xs },
+  anchor: { borderRadius: 8, borderWidth: 1, borderColor: 'transparent', paddingHorizontal: 4 },
+  previewWrap: { gap: 4, marginTop: spacing.xs },
+  buttons: { gap: spacing.sm, marginTop: spacing.sm },
 });
