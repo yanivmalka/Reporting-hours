@@ -229,6 +229,7 @@ export default function WorkplaceDetailScreen() {
                         <Text style={styles.muted}>
                           {timeRange(r.start, r.end)}
                           {ac ? ` · ${Math.round(ac.decimalHours * 10) / 10} שע׳ אקד׳` : ''}
+                          {r.carriedMinutes > 0 ? ` · ${r.carriedMinutes} דק׳ למצטברות` : ''}
                           {pay != null ? ` · ${money(pay)}` : ''}
                         </Text>
                       </View>

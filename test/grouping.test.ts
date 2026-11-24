@@ -152,7 +152,7 @@ describe('לפי מקום עבודה — שעות לפי תאריך', () => {
     expect(buildPayrollReport(wp, period, twice, courses, 'academic').groups[0].days).toBeUndefined();
   });
   it('sessionsByDate — ממוין', () => {
-    const s = (date: string, start: string) => ({ reportId: date + start, date, start, end: start, breakMinutes: 0, netMinutes: 10 });
+    const s = (date: string, start: string) => ({ reportId: date + start, date, start, end: start, breakMinutes: 0, netMinutes: 10, carriedMinutes: 0 });
     expect(sessionsByDate([s('2026-01-02', '10:00'), s('2026-01-01', '09:00'), s('2026-01-02', '08:00')]).map((d) => [d.date, d.sessions[0].start, d.netMinutes])).toEqual([
       ['2026-01-01', '09:00', 10],
       ['2026-01-02', '08:00', 20],

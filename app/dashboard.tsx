@@ -576,6 +576,8 @@ function DashboardScreen() {
             value={`${money(s.totals.pay)} · ${Math.round(s.share * 100)}%`}
             fraction={s.share / (view.shares[0]?.share || 1)}
             sub={`${s.totals.days} ימים · ${hoursText(academicHours(s.totals.netMinutes))} שע׳ אקדמיות${
+              s.totals.carriedMinutes > 0 ? ` · ${s.totals.carriedMinutes} דק׳ למצטברות` : ''
+            }${
               s.workplace.paymentType === 'monthly' ? ' · משכורת חודשית' : ` · ${s.workplace.rate} ₪ לשעה`
             }`}
           />

@@ -30,6 +30,8 @@ export type Totals = {
   netMinutes: number;
   /** דקות הפסקה */
   breakMinutes: number;
+  /** דקות שהועברו למונה המצטבר (כלולות ב־netMinutes, לא בשעות לתשלום) */
+  carriedMinutes: number;
   /** ימי עבודה ייחודיים (תאריכים) */
   days: number;
   /** מספר דיווחים */
@@ -113,9 +115,11 @@ export function totalsFor(
 ): Totals {
   let net = 0;
   let breaks = 0;
+  let carried = 0;
   for (const r of reports) {
     net += netMinutes(r) ?? 0;
     breaks += totalBreakMinutes(r.breaks);
+    carried += Math.max(0, r.carriedMinutes ?? 0);
   }
   let pay = 0;
   let travel = 0;
@@ -128,6 +132,7 @@ export function totalsFor(
     travel,
     netMinutes: net,
     breakMinutes: breaks,
+    carriedMinutes: carried,
     days: new Set(reports.map((r) => r.date)).size,
     reports: reports.length,
   };
@@ -195,10 +200,11 @@ export function sumTotals(list: readonly Totals[]): Totals {
       travel: acc.travel + t.travel,
       netMinutes: acc.netMinutes + t.netMinutes,
       breakMinutes: acc.breakMinutes + t.breakMinutes,
+      carriedMinutes: acc.carriedMinutes + t.carriedMinutes,
       days: acc.days + t.days,
       reports: acc.reports + t.reports,
     }),
-    { pay: 0, travel: 0, netMinutes: 0, breakMinutes: 0, days: 0, reports: 0 },
+    { pay: 0, travel: 0, netMinutes: 0, breakMinutes: 0, carriedMinutes: 0, days: 0, reports: 0 },
   );
 }
 
