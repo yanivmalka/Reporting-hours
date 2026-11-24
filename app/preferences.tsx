@@ -27,6 +27,7 @@ import { useI18n } from '../lib/i18n';
 import type { Lang } from '../lib/strings';
 import { setShowHebrewDates, useShowHebrewDates } from '../lib/hebrewDatePref';
 import { setTrackingStart, useTrackingStart } from '../lib/trackingStart';
+import { useOpenings } from '../lib/openingBalance';
 import { todayISO } from '../lib/time';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
@@ -42,6 +43,7 @@ export default function PreferencesScreen() {
   const viewOnly = useViewOnly();
   const showHeb = useShowHebrewDates();
   const trackingStart = useTrackingStart();
+  const openings = useOpenings();
   const [langNotice, setLangNotice] = useState(false);
   // ב־web הדף מרונדר מראש; החשבון, העדכונים וההגדרות המקומיות שונים בדפדפן —
   // הרינדור הראשון זהה לשרת (טעינה), ורק אחריו התוכן (כמו app/workplace-form.tsx).
@@ -100,6 +102,14 @@ export default function PreferencesScreen() {
               <Text style={styles.action}>קביעת תאריך</Text>
             </Pressable>
           </>
+        )}
+        {link(
+          '/opening',
+          'flag-checkered',
+          'נקודת פתיחה מדו״ח שכר קודם',
+          openings.length
+            ? `${openings.length === 1 ? 'נקודת פתיחה אחת' : `${openings.length} נקודות פתיחה`} · נספרות בצפי לתשלום כדיווח רגיל`
+            : 'ימים, שעות וקורס שכבר עבדת לפני תחילת העבודה עם המערכת — לצפי לתשלום',
         )}
         <Text style={styles.label}>{t('drawer.language')}</Text>
         <SegmentedControl<Lang>

@@ -25,7 +25,8 @@ import { GroupLevelPicker } from '../components/GroupLevelPicker';
 import { forecastMonths, monthsInView, paymentSchedule, semesterOf, shiftAnchor, STATUS_LABEL, type ChartResolution, type ForecastMode, type MonthRef, type PeriodStatus } from '../lib/forecast';
 import { hebrewMonthNames, hebrewYearSpan } from '../lib/hebrewDate';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
-import { usePayBasis } from '../lib/payBasis';
+import { basisFor, usePayBasis } from '../lib/payBasis';
+import { loadOpenings, openingLabel } from '../lib/openingBalance';
 import { todayISO } from '../lib/time';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels, money } from '../lib/travel';
@@ -141,7 +142,7 @@ function DashboardScreen() {
     });
 
   useScreenData(
-    () => Promise.all([loadReports(), loadWorkplaces(), loadAccumulated(), loadCourses(), loadPayrollStatus()]),
+    () => Promise.all([loadReports(), loadWorkplaces(), loadAccumulated(), loadCourses(), loadPayrollStatus(), loadOpenings()]),
     [],
     ([reports, workplaces, accumulated, courses, statuses]) => {
       setData({
@@ -414,6 +415,10 @@ function DashboardScreen() {
       out.push({ text: `סיכום ${listTitle} · לחיצה על חודש בגרף מציגה צפי תשלום` });
     }
     if (row.workplace.paymentType === 'monthly') out.push({ text: 'משכורת חודשית קבועה' });
+    // נקודת פתיחה מדו"ח שכר קודם — כלולה ב"דווח" כדיווח רגיל, ומסומנת שהוזנה ידנית.
+    for (const p of row.periods) {
+      if (p.opening) out.push({ text: openingLabel(p.opening, basisFor(row.workplace, basis)), tone: 'muted' });
+    }
     return out;
   };
   const filtered = selWp != null || selMonth != null;

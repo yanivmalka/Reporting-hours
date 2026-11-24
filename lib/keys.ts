@@ -36,6 +36,7 @@ const REGISTRY = {
   redeemMode: def('reporting-hours/redeem-mode/v1', 'synced'),
   payBasis: def('reporting-hours/pay-basis/v1', 'synced'),
   trackingStart: def('reporting-hours/tracking-start/v1', 'synced'),
+  openingBalance: def('reporting-hours/opening-balance/v1', 'synced'),
   leftoverMode: def('reporting-hours/leftover-mode/v1', 'synced'),
   profile: def('reporting-hours/profile/v1', 'synced'),
   emailReport: def('reporting-hours/email-report/v1', 'synced'),
