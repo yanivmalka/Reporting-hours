@@ -25,8 +25,6 @@ type Props = {
   planned: number;
   /** צפי: הפוטנציאל בלי המפגשים שבוטלו */
   forecast: number;
-  /** הסכומים נטו; שורת הברוטו והמס שמתחת לסכום (components/netGross.ts) */
-  grossNote?: string;
   /** פירוט המפגשים לפי קורס — במצב מורחב */
   sessions?: ReactNode;
   /** סקאלת הפס המשותפת לכל האריחים (מקסימום בפועל + שליש) */
@@ -47,7 +45,6 @@ export function WorkplaceTile({
   reported,
   planned,
   forecast,
-  grossNote,
   sessions,
   scale,
   expanded,
@@ -82,7 +79,6 @@ export function WorkplaceTile({
           <Text style={styles.name}>{name}</Text>
           <View style={styles.valueBox}>
             <Text style={styles.value}>{money(reported)}</Text>
-            {grossNote ? <Text style={styles.valueSub}>נטו</Text> : null}
           </View>
           <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
         </View>
@@ -117,7 +113,6 @@ export function WorkplaceTile({
           </View>
           <Text style={[styles.pct, over && styles.pctOver]}>{pct == null ? '—' : `${pct}%`}</Text>
         </View>
-        {grossNote ? <Text style={styles.gross}>{grossNote}</Text> : null}
         {over ? (
           <Text style={styles.sub}>מעל התכנון · פוטנציאל {money(planned)}</Text>
         ) : planned > 0 ? (

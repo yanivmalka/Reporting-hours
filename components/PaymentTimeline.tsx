@@ -1,6 +1,6 @@
 /**
  * ציר מועדי התשלום בלוח הבקרה, בתחתית רשימת המקומות — מקופל כברירת מחדל (כותרת עם
- * תקציר: מספר התשלומים וסכום הנטו). מציג רק את התשלומים של התקופה שבתצוגה.
+ * תקציר: מספר התשלומים והסכום — נטו או ברוטו לפי הבחירה). מציג רק את התשלומים של התקופה שבתצוגה.
  * לכל תשלום נקודה בתאריך הצפוי, בצבע מקום העבודה — טבעת: צפוי · מלאה: שולם בזמן ·
  * מלאה עם מסגרת אדומה: שולם באיחור · טבעת אדומה: עבר המועד ולא סומן. מתחת — רשימה
  * לפי תאריך; לחיצה פותחת את דוח השכר. תאריכים מוקדמים מימין (RTL).
@@ -15,6 +15,7 @@ import { isoDate, shortDate } from '../lib/dashboard';
 import type { ReactNode } from 'react';
 import type { ScheduledPayment } from '../lib/forecast';
 import { money } from '../lib/travel';
+import { AMOUNT_MODE_LABEL, useAmountMode } from '../lib/amountMode';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { workplaceColor } from '../theme/workplaceColors';
@@ -50,6 +51,9 @@ export function PaymentTimeline({
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const amountMode = useAmountMode();
+  // תשלום שהתקבל — הסכום שסומן; אחרת נטו או ברוטו לפי הבחירה ("נטו | ברוטו" בלוח הבקרה).
+  const shownAmount = (p: ScheduledPayment) => (p.paidAt || amountMode === 'net' ? p.amount : p.gross);
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const span = t(to) - t(from) || DAY;
@@ -126,7 +130,7 @@ export function PaymentTimeline({
             {scope ? `${scope} · ` : ''}
             {payments.length === 0
               ? 'אין תשלומים בתקופה'
-              : `${payments.length} תשלומים · ${money(payments.reduce((n, p) => n + p.amount, 0))} נטו`}
+              : `${payments.length} תשלומים · ${money(payments.reduce((n, p) => n + shownAmount(p), 0))} ${AMOUNT_MODE_LABEL[amountMode]}`}
           </Text>
         </View>
         <FoldChevron open={open} color={colors.textMuted} />
@@ -213,13 +217,9 @@ export function PaymentTimeline({
                 </Text>
               </View>
               <View style={styles.rowAmounts}>
-                <Text style={[styles.rowAmount, p.estimate && styles.estimate]}>{money(p.amount)}</Text>
+                <Text style={[styles.rowAmount, p.estimate && styles.estimate]}>{money(shownAmount(p))}</Text>
                 <Text style={styles.rowTax} numberOfLines={1}>
-                  {p.paidAt
-                    ? 'התקבל בפועל'
-                    : p.taxPercent > 0
-                      ? `נטו · ברוטו ${money(p.gross)}`
-                      : 'לא הוגדר מס'}
+                  {p.paidAt ? 'התקבל בפועל' : AMOUNT_MODE_LABEL[amountMode]}
                 </Text>
               </View>
               <EnterChevron size={16} />

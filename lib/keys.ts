@@ -46,6 +46,7 @@ const REGISTRY = {
   journalCalendarPin: def('reporting-hours/journal-calendar-pin/v1', 'viewerDevice'),
   showHebrewDates: def('reporting-hours/show-hebrew-dates/v1', 'viewerDevice'),
   courseGrouping: def('reporting-hours/course-grouping/v1', 'viewerDevice'),
+  amountMode: def('reporting-hours/amount-mode/v1', 'viewerDevice'),
   // ── לכל מכשיר בנפרד ──
   lang: def('reporting-hours/lang/v1', 'device'),
   theme: def('reporting-hours/theme/v1', 'device'),
