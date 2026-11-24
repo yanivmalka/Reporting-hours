@@ -40,6 +40,8 @@ type ThemeContextValue = {
   /** כל הערכות הזמינות, לבניית בורר בתפריט */
   palettes: readonly Palette[];
   setPaletteId: (id: PaletteId) => void;
+  /** הערכה השמורה נטענה ומסך הפתיחה של המערכת הוסתר (מסך הפתיחה הממותג מתחיל ממנו) */
+  loaded: boolean;
 };
 
 const STORAGE_KEY = KEYS.theme;
@@ -49,6 +51,7 @@ const DEFAULT_VALUE: ThemeContextValue = {
   paletteId: DEFAULT_PALETTE_ID,
   palettes: PALETTES,
   setPaletteId: () => {},
+  loaded: false,
 };
 
 const ThemeContext = createContext<ThemeContextValue>(DEFAULT_VALUE);
@@ -101,8 +104,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       paletteId,
       palettes: PALETTES,
       setPaletteId,
+      loaded,
     };
-  }, [paletteId]);
+  }, [paletteId, loaded]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

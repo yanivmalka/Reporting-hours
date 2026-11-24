@@ -7,7 +7,7 @@
  *  - `FinanceLockToggle` — מתג קטן בדף הבית: מנעול סגור (הצגה) / פתוח (נעילה).
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -40,7 +40,12 @@ export function FinanceGate({ children }: { children: ReactNode }) {
   if (!locked) return <>{children}</>;
   return (
     <View style={[styles.gate, { backgroundColor: colors.background }]}>
-      <Icon name="lock-outline" size={56} color={colors.brand} />
+      <Image
+        source={require('../assets/finance-locked.png')}
+        style={styles.gateIcon}
+        accessibilityIgnoresInvertColors
+        accessibilityLabel="שעון החול של שיעור עם מנעול במקום המטבעות"
+      />
       <Text style={[styles.title, { color: colors.text }]}>מידע כספי נעול</Text>
       <Text style={[styles.body, { color: colors.textMuted }]}>
         {failed ? 'הזיהוי לא הושלם. אפשר לנסות שוב.' : 'פתיחה בטביעת אצבע או בקוד המכשיר.'}
@@ -141,6 +146,7 @@ export function AppLockSetting() {
 }
 
 const styles = StyleSheet.create({
+  gateIcon: { width: 120, height: 120, borderRadius: 28 },
   gate: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
   title: { fontSize: 22, fontWeight: '700' },
   body: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
