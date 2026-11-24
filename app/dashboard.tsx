@@ -8,7 +8,8 @@ import { Panel, ShareRow, StatTile, TileGrid } from '../components/Charts';
 import { ForecastChart, HEADROOM, realization } from '../components/ForecastChart';
 import { PaymentTimeline } from '../components/PaymentTimeline';
 import { isoDate } from '../lib/dates';
-import { grossNote } from '../components/netGross';
+import { AmountModeToggle } from '../components/AmountModeToggle';
+import { AMOUNT_MODE_LABEL, forecastForMode, useAmountMode } from '../lib/amountMode';
 import { useFlash } from '../components/useFlash';
 import { WorkplaceTile } from '../components/WorkplaceTile';
 import { SessionDotsByMonth, SessionDotsLegend, sessionDots } from '../components/SessionDots';
@@ -184,10 +185,11 @@ function DashboardScreen() {
     };
   }, [data, basis, which]);
 
+  const amountMode = useAmountMode();
   const forecast = useMemo(
     () =>
       data
-        ? forecastMonths(
+        ? forecastForMode(forecastMonths(
             monthsInView(res, anchor),
             data.workplaces,
             data.reports,
@@ -195,9 +197,9 @@ function DashboardScreen() {
             data.statuses,
             basis,
             mode,
-          )
+          ), amountMode)
         : null,
-    [data, basis, res, anchor, mode],
+    [data, basis, res, anchor, mode, amountMode],
   );
 
   // מועדי תשלום — רק של התקופה שבתצוגה (חודש / סמסטר / שנה, או החודש שנבחר בגרף), לפי אותו
@@ -488,32 +490,31 @@ function DashboardScreen() {
 
 
       <Animated.View style={[styles.periodHead, listFlash]}>
-        <Text style={styles.periodTitle}>{listTitle}</Text>
-        <Text style={styles.periodSub}>
-          {mode === 'pay' ? 'לפי מועד התשלום הצפוי' : 'לפי חודש העבודה'} · סכומים נטו אחרי מס, הברוטו לצדם
-          {sel ? ` · מסונן: ${sel.workplace.name}` : ''}
-        </Text>
+        <View style={styles.periodHeadText}>
+          <Text style={styles.periodTitle}>{listTitle}</Text>
+          <Text style={styles.periodSub}>
+            {mode === 'pay' ? 'לפי מועד התשלום הצפוי' : 'לפי חודש העבודה'} · {amountMode === 'net' ? 'נטו אחרי מס' : 'ברוטו לפני מס'}
+            {sel ? ` · מסונן: ${sel.workplace.name}` : ''}
+          </Text>
+        </View>
+        <AmountModeToggle />
       </Animated.View>
 
       <View style={styles.totalsBox}>
         {(() => {
           const t = sel ?? totalAll;
-          // מס של כל המקומות בתצוגה: אחיד — מציינים אותו; משתנה — רק הברוטו.
-          const taxes = [...new Set((sel ? [sel] : rows).map((r) => r.tax))];
-          const taxText = taxes.length === 1 ? (taxes[0] > 0 ? ` · מס ${taxes[0]}%` : ' · לא הוגדר מס') : '';
+          const L = AMOUNT_MODE_LABEL[amountMode];
           return (
             <>
               <View style={styles.totalsRow}>
                 <View>
-                  <Text style={styles.totalLabel}>{sel ? 'דווח במקום הנבחר · נטו' : 'דווח · נטו'}</Text>
+                  <Text style={styles.totalLabel}>{sel ? `דווח במקום הנבחר · ${L}` : `דווח · ${L}`}</Text>
                   <Text style={styles.totalValue}>{money(t.reported)}</Text>
-                  <Text style={styles.totalOf}>ברוטו {money(t.gross.reported)}{taxText}</Text>
-                  {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.reported)} נטו בכל המקומות</Text> : null}
+                  {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.reported)} {L} בכל המקומות</Text> : null}
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.totalLabel}>פוטנציאל · נטו</Text>
+                  <Text style={styles.totalLabel}>פוטנציאל · {L}</Text>
                   <Text style={[styles.totalValue, styles.totalPlanned]}>{money(t.planned)}</Text>
-                  <Text style={styles.totalOf}>ברוטו {money(t.gross.planned)}</Text>
                 </View>
               </View>
               {/* מימוש מימין, ומשמאל — הצפי, רק כשהוא שונה מהפוטנציאל */}
@@ -526,10 +527,9 @@ function DashboardScreen() {
                       : `מימוש ${pctTotal}% מהפוטנציאל`}
                 </Text>
                 {Math.round(t.forecast) !== Math.round(t.planned) ? (
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.totalForecast}>צפי נטו {money(t.forecast)}</Text>
-                    <Text style={styles.totalOf}>ברוטו {money(t.gross.forecast)}</Text>
-                  </View>
+                  <Text style={styles.totalForecast}>
+                    צפי {L} {money(t.forecast)}
+                  </Text>
                 ) : null}
               </View>
             </>
@@ -545,7 +545,6 @@ function DashboardScreen() {
           reported={row.reported}
           planned={row.planned}
           forecast={row.forecast}
-          grossNote={grossNote(row.gross.reported, row.tax)}
           sessions={open.has(row.workplace.id) ? sessionsOf(row) : null}
           scale={scaleRows}
           expanded={open.has(row.workplace.id)}
@@ -700,7 +699,8 @@ const makeStyles = (colors: AppColors) =>
     modeChipOn: { backgroundColor: colors.brandDark, borderColor: colors.brandDark },
     modeText: { fontSize: 14, fontWeight: '600', color: colors.text },
     modeTextOn: { color: colors.textOnBrand },
-    periodHead: { gap: 2, marginTop: spacing.xs },
+    periodHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
+    periodHeadText: { flex: 1, gap: 2 },
     periodTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     periodSub: { fontSize: 13, color: colors.textMuted, textAlign: TEXT_RIGHT },
     link: { fontSize: 14, fontWeight: '700', color: colors.brand },

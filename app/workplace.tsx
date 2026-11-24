@@ -30,7 +30,8 @@ import { basisFor, usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { parseTime } from '../lib/time';
 import { ARRIVAL_MODE_LABELS, deadlineLabel, isArchived, loadWorkplaces, setWorkplaceArchived, paymentTermsLabel, taxPercentOf, taxStatus, workplaceAt, type Workplace } from '../lib/workplaces';
-import { grossNote } from '../components/netGross';
+import { AmountModeToggle } from '../components/AmountModeToggle';
+import { AMOUNT_MODE_LABEL, useAmountMode } from '../lib/amountMode';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
@@ -52,6 +53,7 @@ export default function WorkplaceDetailScreen() {
   const { canEdit } = useAccess();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
+  const amountMode = useAmountMode();
   const { basis } = usePayBasis();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [data, setData] = useState<Loaded | null | undefined>(undefined);
@@ -265,10 +267,12 @@ export default function WorkplaceDetailScreen() {
       <View style={[styles.hero, { borderStartWidth: 8, borderStartColor: workplaceColor(colors, w) }]}>
         <Text style={styles.heroLabel}>{next === current ? 'התקופה הנוכחית' : 'התשלום הבא'}</Text>
         <View style={styles.heroAmountRow}>
-          <Text style={styles.heroAmount}>{money(next.reportedNet)}</Text>
-          <Text style={styles.heroSub}>נטו</Text>
+          <Text style={styles.heroAmount}>{money(amountMode === 'net' ? next.reportedNet : next.reported)}</Text>
+          <Text style={styles.heroSub}>{AMOUNT_MODE_LABEL[amountMode]}</Text>
+          <View style={styles.heroToggle}>
+            <AmountModeToggle />
+          </View>
         </View>
-        <Text style={styles.heroSub}>{grossNote(next.reported, next.taxPercent)}</Text>
         <Text style={styles.heroLine}>
           עבור {monthName(periodMonthKey(next.period))} · צפי {shortDate(next.expected)} ({paymentTermsLabel(w)})
         </Text>
@@ -345,9 +349,9 @@ export default function WorkplaceDetailScreen() {
       ) : (
         groups[tab].map((c) => {
           let line: string;
-          // קו אחיד: נטו אחרי מס, והברוטו בסוגריים כשיש מס.
+          // נטו או ברוטו — לפי הבחירה בכפתור "נטו | ברוטו".
           const amt = (a: { net: number; gross: number; taxPercent: number }) =>
-            a.taxPercent > 0 ? `${money(a.net)} נטו (${money(a.gross)} ברוטו)` : money(a.net);
+            `${money(amountMode === 'net' ? a.net : a.gross)} ${AMOUNT_MODE_LABEL[amountMode]}`;
           if (tab === 'active') {
             const count = occurrences(c, current.period.start, current.period.end).length;
             line = `החודש: ${count} מפגשים · ${amt(courseAmounts(w, [c], current.period, basis, false))} לפי תכנון`;
@@ -509,6 +513,7 @@ const makeStyles = (colors: AppColors) =>
     hero: { backgroundColor: colors.brand, borderRadius: 18, padding: spacing.md, gap: spacing.sm },
     heroLabel: { fontSize: 13, color: colors.textOnBrand, opacity: 0.9, textAlign: TEXT_RIGHT },
     heroAmountRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+    heroToggle: { marginStart: 'auto', alignSelf: 'center' },
     heroAmount: { fontSize: 28, fontWeight: '800', color: colors.textOnBrand },
     heroSub: { fontSize: 14, color: colors.textOnBrand, opacity: 0.9 },
     heroLine: { fontSize: 14, color: colors.textOnBrand, textAlign: TEXT_RIGHT },
