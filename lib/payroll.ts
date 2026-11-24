@@ -372,6 +372,13 @@ const COLUMNS: { key: keyof PayrollDetail | 'date'; title: string; width: number
   { key: 'carried', title: 'למונה', width: 6 },
 ];
 
+/**
+ * רכיב בעורך הפירוט ששורה בתצוגה המקדימה שייכת אליו — לחיצה על השורה גוללת אליו
+ * ומבליטה אותו. `columns` — קבוצת "מה מופיע בשורות".
+ */
+export type PreviewTarget = keyof PayrollDetail | 'columns';
+export type PreviewLine = { text: string; target?: PreviewTarget };
+
 /** שיבוץ הפדיון בתוך מפגש: איזה מפגש, איזה קצה, והשעה החדשה. */
 export type RedeemedShift = { reportId: string; date: string; edge: RedeemedEdge; time: string; minutes: number };
 
@@ -416,12 +423,22 @@ export function redeemedShift(
  * קבוצה (בברירת המחדל: תאריך, יום, שעות, שעות אקדמיות — בלי הפסקות), סה״כ שעות,
  * נסיעות וסכום לתשלום. בלי תעריף לשעה.
  */
-export function payrollBody(report: PayrollReport, profile?: Profile, detail: PayrollDetail = FULL_DETAIL): string {
+export function payrollBodyLines(
+  report: PayrollReport,
+  profile?: Profile,
+  detail: PayrollDetail = FULL_DETAIL,
+): PreviewLine[] {
   const { workplace, period } = report;
-  const lines: string[] = [];
-  lines.push('שלום,');
-  lines.push('');
-  lines.push(
+  const out: PreviewLine[] = [];
+  /** הרכיב שהשורות הבאות שייכות אליו */
+  let at: PreviewTarget | undefined;
+  const push = (...texts: string[]) => {
+    for (const text of texts) out.push({ text, target: text ? at : undefined });
+  };
+  push('שלום,');
+  push('');
+  at = 'hebrewPeriod';
+  push(
     `מצורף דיווח שעות העבודה שלי ב${workplace.name} לחודש ${periodTitle(period)} (${ddmmyyyy(period.start)}-${ddmmyyyy(period.end)}${
       detail.hebrewPeriod ? ` · ${hebrewRange(period.start, period.end)} ${hebrewDate(period.end).split(' ').pop()}` : ''
     }).`,
@@ -449,20 +466,22 @@ export function payrollBody(report: PayrollReport, profile?: Profile, detail: Pa
       .join(' · ');
   for (const g of report.groups) {
     if (!detail.groupSummary && !detail.rows) continue;
-    lines.push('');
+    push('');
     const days = g.days?.length ?? 0;
+    at = 'groupSummary';
     if (detail.groupSummary || !detail.rows) {
-      lines.push(
+      push(
         `■ ${g.name} — ${g.sessions.length} מפגשים${g.days ? ` · ${days} ימים` : ''} · ${hoursPart(g.netMinutes + extra(g.sessions))}${
           detail.carried && g.carriedMinutes > 0 ? ` · ${g.carriedMinutes} דק׳ למצטברות` : ''
         }`,
       );
     } else {
-      lines.push(`■ ${g.name}`);
+      push(`■ ${g.name}`);
     }
     if (!detail.rows) continue;
-    lines.push(header.map((h, k) => pad(h, W[k])).join(' | '));
-    lines.push(W.map((w) => '-'.repeat(w)).join('-+-'));
+    at = 'columns';
+    push(header.map((h, k) => pad(h, W[k])).join(' | '));
+    push(W.map((w) => '-'.repeat(w)).join('-+-'));
     // בקיבוץ לפי מקום עבודה — שורה לכל תאריך, עם כל טווחי השעות של היום וסה״כ.
     const rows =
       g.days ??
@@ -479,63 +498,72 @@ export function payrollBody(report: PayrollReport, profile?: Profile, detail: Pa
         academicHours: academic(day.netMinutes + extra(day.sessions)),
         carried: day.carriedMinutes > 0 ? String(day.carriedMinutes) : '',
       };
-      lines.push(cols.map((c, k) => pad(cell[c.key], W[k])).join(' | '));
+      at = hasShift(day.sessions) ? 'redeemedPlacement' : 'columns';
+      push(cols.map((c, k) => pad(cell[c.key], W[k])).join(' | '));
     }
   }
+  at = 'canceled';
   if (detail.canceled && report.canceled.length) {
-    lines.push('');
-    lines.push(`■ מפגשים שבוטלו — ${report.canceled.length}`);
+    push('');
+    push(`■ מפגשים שבוטלו — ${report.canceled.length}`);
     for (const c of report.canceled) {
-      lines.push(
+      push(
         `${ddmmyyyy(c.date)} · ${c.course} · ${c.reason || 'ללא סיבה'}${
           detail.canceledAmounts && c.amount > 0 ? ` · ${formatShekels(Math.round(c.amount))}` : ''
         }`,
       );
     }
   }
+  at = 'canceledSummary';
   if (detail.canceledSummary && report.canceled.length) {
     if (!detail.canceled) {
-      lines.push('');
-      lines.push(`■ מפגשים שבוטלו — ${report.canceled.length}`);
+      push('');
+      push(`■ מפגשים שבוטלו — ${report.canceled.length}`);
     }
     for (const r of canceledByReason(report)) {
-      lines.push(
+      push(
         `סה״כ ${r.reason}: ${r.count}${detail.canceledAmounts && r.amount > 0 ? ` · ${formatShekels(Math.round(r.amount))}` : ''}`,
       );
     }
   }
+  at = 'redeemed';
   if (detail.redeemed && report.redeemedMinutes > 0 && !shift) {
-    lines.push('');
-    lines.push(
+    push('');
+    push(
       `■ פדיון דקות עבודה מצטברות (דקות עודפות מחודשים קודמים) — ${academic(report.redeemedMinutes)} שעות אקדמיות (${report.redeemedMinutes} דק׳)`,
     );
   }
-  lines.push('');
-  lines.push('──────────');
+  at = undefined;
+  push('');
+  push('──────────');
+  at = 'totalAcademic';
   const totalParts = [
     detail.totalAcademic ? `${academic(report.netMinutes)} שעות אקדמיות` : '',
     detail.totalNet ? (detail.totalAcademic ? `(${hm(report.netMinutes)} שעות נטו)` : `${hm(report.netMinutes)} שעות נטו`) : '',
   ].filter(Boolean);
   if (totalParts.length || detail.totalDays) {
-    lines.push(
+    push(
       [totalParts.length ? `סה״כ שעות: ${totalParts.join(' ')}` : '', detail.totalDays ? `${report.days} ימי עבודה` : '']
         .filter(Boolean)
         .join(' · '),
     );
   }
+  at = 'carriedTotal';
   if (detail.carriedTotal && report.carriedMinutes > 0) {
-    lines.push(`דקות עודפות שהועברו למונה המצטבר (לא נכללו בשעות): ${report.carriedMinutes} דק׳`);
+    push(`דקות עודפות שהועברו למונה המצטבר (לא נכללו בשעות): ${report.carriedMinutes} דק׳`);
   }
   const travelW = workplaceAt(workplace, period.end);
+  at = 'travel';
   if (detail.travel) {
-    lines.push(
+    push(
       hasTravelCost(travelW) || report.travel > 0
         ? `סה״כ נסיעות: ${formatShekels(report.travel)} (${report.days} ימי עבודה)`
         : 'סה״כ נסיעות: אין (הגעה ללא תחבורה ציבורית)',
     );
   }
+  at = 'pay';
   if (detail.pay) {
-    lines.push(
+    push(
       report.paymentType === 'monthly'
         ? `סכום לתשלום: ${formatShekels(Math.round(report.pay))} (משכורת חודשית)${detail.travel ? ` + נסיעות ${formatShekels(report.travel)}` : ''}`
         : detail.travel
@@ -543,11 +571,20 @@ export function payrollBody(report: PayrollReport, profile?: Profile, detail: Pa
           : `סכום לתשלום (שכר): ${formatShekels(Math.round(report.pay))}`,
     );
   }
-  lines.push('');
-  lines.push('בברכה,');
-  if (profile && detail.signature) lines.push(...signatureLines(profile, workplace.employeeNumber));
-  else if (profile?.fullName) lines.push(profile.fullName);
-  return lines.join('\n');
+  at = undefined;
+  push('');
+  push('בברכה,');
+  at = 'signature';
+  if (profile && detail.signature) push(...signatureLines(profile, workplace.employeeNumber));
+  else if (profile?.fullName) push(profile.fullName);
+  return out;
+}
+
+/** גוף המייל (טקסט פשוט) — שורות `payrollBodyLines`. */
+export function payrollBody(report: PayrollReport, profile?: Profile, detail: PayrollDetail = FULL_DETAIL): string {
+  return payrollBodyLines(report, profile, detail)
+    .map((l) => l.text)
+    .join('\n');
 }
 
 /** קישור mailto: — פותח טיוטה מוכנה בתוכנת המייל של המכשיר. */

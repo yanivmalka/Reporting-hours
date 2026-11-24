@@ -19,7 +19,7 @@ import { loadCourses } from '../lib/courses';
 import { dateRange, deadlineRelative, shortDate } from '../lib/dashboard';
 import { useGroupLevel } from '../lib/courseGrouping';
 import { GroupLevelPicker } from '../components/GroupLevelPicker';
-import { buildPayrollReport, canceledByReason, expectedPayment, grossAmount, netAmount, loadPayrollStatus, payrollBody, payrollMailto, payrollSubject, periodStartingAt, periodTitle, redeemedShift, statusKey, updatePayrollStatus, type PayrollReport, type PayrollStatus } from '../lib/payroll';
+import { buildPayrollReport, canceledByReason, expectedPayment, grossAmount, netAmount, loadPayrollStatus, payrollBody, payrollBodyLines, payrollMailto, payrollSubject, periodStartingAt, periodTitle, redeemedShift, statusKey, updatePayrollStatus, type PayrollReport, type PayrollStatus } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
 import { formatShekels, hasTravelCost } from '../lib/travel';
 import { formatISODate } from '../lib/time';
@@ -528,7 +528,7 @@ function PayrollReportScreen() {
           const r = d.level === current.level
             ? report
             : buildPayrollReport(workplace, period, data?.reports ?? [], data?.courses ?? [], basis, status.redeemedMinutes ?? 0, undefined, d.level ?? level);
-          return { subject: payrollSubject(r), body: payrollBody(r, profile, d) };
+          return { subject: payrollSubject(r), lines: payrollBodyLines(r, profile, d) };
         }}
         onApply={(d) => {
           setDetail(d);
