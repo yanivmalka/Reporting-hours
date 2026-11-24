@@ -13,8 +13,7 @@ import { MonthLink } from './MonthLinks';
 import type { Journal } from './useJournal';
 import { GroupedSummary } from './GroupedSummary';
 import { DaySummary } from '../DaySummary';
-import { dayTotalsByWorkplace } from '../../lib/daySummary';
-import { netMinutes } from '../../lib/reports';
+import { dayTotalsByWorkplace, reportEntry } from '../../lib/daySummary';
 
 /** לשונית "דיווחים": סיכום התקופה ורשימת הדיווחים, כולל מפגשים של היום ושעברו שלא דווחו. */
 export function ReportsTab({ w }: { w: Journal }) {
@@ -126,11 +125,11 @@ export function ReportsTab({ w }: { w: Journal }) {
             }
             if (dayReports.length < 2) return null;
             const totals = dayTotalsByWorkplace(
-              dayReports.reverse().map((r) => ({ workplaceId: r.workplaceId, netMinutes: netMinutes(r) ?? 0 })),
+              dayReports.reverse().map(reportEntry),
             );
             return (
               <View style={styles.daySummary}>
-                <DaySummary totals={totals} workplaceOf={workplaceOf} basis={basis} noun="דיווחים" separated={false} />
+                <DaySummary totals={totals} workplaceOf={workplaceOf} basis={basis} separated={false} />
               </View>
             );
           })()}
