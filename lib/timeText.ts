@@ -78,3 +78,14 @@ export function finish(text: string): string | null {
   if (t.length === 4) return valid(Number(t.slice(0, 2)), Number(t.slice(2)));
   return null;
 }
+
+/**
+ * עריכה חופשית: ספרות ומפריד אחד בלבד. מפריד שהוקלד אחרי הנקודתיים שנוספו לבד
+ * ("10:" + ":") לא מכפיל אותן — "10::3" → "10:3".
+ */
+export function cleanTyped(text: string): string {
+  const t = text.replace(/[^\d:.,]/g, '').replace(/[.,]/g, ':');
+  const i = t.indexOf(':');
+  const one = i < 0 ? t : t.slice(0, i + 1) + t.slice(i + 1).replace(/:/g, '');
+  return one.slice(0, 5);
+}

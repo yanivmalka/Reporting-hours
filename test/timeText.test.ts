@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { complete, finish, typed, typedText } from '../lib/timeText';
+import { cleanTyped, complete, finish, typed, typedText } from '../lib/timeText';
 
 describe('timeText', () => {
   it('הקלדה רציפה: נקודתיים לבד והשלמת 0', () => {
@@ -33,5 +33,14 @@ describe('timeText', () => {
     expect(finish('25')).toBeNull();
     expect(finish(':30')).toBeNull();
     expect(finish('12345')).toBeNull();
+  });
+});
+
+describe('cleanTyped', () => {
+  it('מפריד שהוקלד אחרי הנקודתיים האוטומטיות לא מכפיל אותן', () => {
+    expect(cleanTyped('10::')).toBe('10:');
+    expect(cleanTyped('10::3')).toBe('10:3');
+    expect(cleanTyped('10:.30')).toBe('10:30');
+    expect(cleanTyped('9.30')).toBe('9:30');
   });
 });
