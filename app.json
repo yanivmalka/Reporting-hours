@@ -70,7 +70,8 @@
           "backgroundColor": "#1B3C3B"
         }
       ],
-      "./plugins/withLeanAndroid"
+      "./plugins/withLeanAndroid",
+      "./plugins/withThemedSplash"
     ],
     "extra": {
       "supportsRTL": true

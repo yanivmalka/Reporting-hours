@@ -8,13 +8,15 @@
  *  - `reminder` — תזכורת מפגש מ"פרטי המפגש" (הגשה, מבחן, תזכורת ידנית).
  *  - `missing`  — מפגש שהתקיים היום ולא דווח (בערב, או חצי שעה אחרי הסיום אם מאוחר יותר).
  *  - `payroll`  — סיכום התקופה יום לפני היום האחרון לדיווח שכר, ובבוקר היום האחרון.
+ *  - `payment`  — בדיקת הפקדה: בבוקר מועד התשלום הצפוי ("שוטף +") של דוח שנשלח, ותזכורת
+ *                 אחרי 3 ו־7 ימים כל עוד לא סומן "התקבל".
  * בלי סכומי כסף: התראה מוצגת גם במסך הנעול (צנעת הפרט, כמו דף הבית).
  */
 import { courseReport, courseReported, coursesOn, sessionCancel, sessionTimes, type Course } from './courses';
 import { currentPayPeriod, isoDate } from './dashboard';
 import { dateFromIso } from './dates';
 import { addDays, longDayLabel } from './home';
-import { isLocked, statusKey, type StatusMap } from './payroll';
+import { expectedPayment, isLocked, payrollItems, statusKey, type StatusMap } from './payroll';
 import { netMinutes, type WorkReport } from './reports';
 import { currentPlan, type PlanIndex } from './sessions';
 import { effectiveReminder, FLAG_LABEL, type SessionNote } from './sessionNotes';
@@ -22,9 +24,9 @@ import { formatDuration, formatTime, parseTime } from './time';
 import { beforeTracking } from './trackingStart';
 import { activeWorkplaces, isTaxi, type Workplace } from './workplaces';
 
-export type PushKind = 'taxi' | 'reminder' | 'missing' | 'payroll';
+export type PushKind = 'taxi' | 'reminder' | 'missing' | 'payroll' | 'payment';
 
-export const PUSH_KINDS: readonly PushKind[] = ['taxi', 'reminder', 'missing', 'payroll'];
+export const PUSH_KINDS: readonly PushKind[] = ['taxi', 'reminder', 'missing', 'payroll', 'payment'];
 
 export type PushItem = {
   /** מזהה יציב — תזמון מחדש מחליף את אותה התראה ולא מכפיל אותה */
@@ -58,6 +60,9 @@ export const MISSING_TIME = '22:00';
 /** שעות ההתראה על היום האחרון לדיווח שכר: בערב שלפני ובבוקר עצמו. */
 export const PAYROLL_EVE_TIME = '19:00';
 export const PAYROLL_DAY_TIME = '09:00';
+/** שעת התראת בדיקת ההפקדה, והימים אחרי המועד שבהם היא חוזרת כל עוד לא סומן "התקבל". */
+export const PAYMENT_TIME = '09:00';
+export const PAYMENT_FOLLOWUPS = [3, 7];
 
 /** תאריך + "HH:MM" → Date מקומי. */
 function at(date: string, time: string): Date {
@@ -230,6 +235,37 @@ function payrollPush(
   return out;
 }
 
+/** בדיקת הפקדה: לכל דוח שנשלח ולא סומן כשולם — במועד הצפוי ואחריו. */
+function paymentPush(workplaces: readonly Workplace[], reports: readonly WorkReport[], payroll: StatusMap, now: Date): PushItem[] {
+  const out: PushItem[] = [];
+  for (const item of payrollItems(workplaces, reports, payroll, now)) {
+    if (!item.status.sentAt || item.status.paidAt) continue;
+    const w = item.workplace;
+    const due = expectedPayment(w, item.period, item.status, now);
+    const href = `/payments?${q({ mark: statusKey(w.id, item.period.start) })}`;
+    const range = `${shortDate(item.period.start)}–${shortDate(item.period.end)}`;
+    out.push({
+      id: `payment|${w.id}|${item.period.start}|0`,
+      kind: 'payment',
+      at: at(due, PAYMENT_TIME),
+      title: `לבדוק הפקדה — ${w.name}`,
+      body: `היום מועד התשלום הצפוי עבור ${range}. נכנס? אפשר לסמן "התקבל".`,
+      href,
+    });
+    for (const n of PAYMENT_FOLLOWUPS) {
+      out.push({
+        id: `payment|${w.id}|${item.period.start}|${n}`,
+        kind: 'payment',
+        at: at(isoDate(addDays(dateFromIso(due), n)), PAYMENT_TIME),
+        title: `התשלום מ${w.name} עוד לא סומן`,
+        body: `עברו ${n} ימים ממועד התשלום הצפוי (${shortDate(due)}) עבור ${range}. לבדוק בבנק ולסמן "התקבל".`,
+        href,
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * כל ההתראות לתזמון, מהמוקדמת למאוחרת — רק עתידיות, בטווח התזמון ועד `PUSH_MAX`.
  * מקומות עבודה בארכיון ונתוני הדגמה — בלי התראות (דוח שכר — גם למקום בארכיון שעוד לא נשלח).
@@ -247,6 +283,7 @@ export function planPush(input: PushInput, plan: PlanIndex = currentPlan()): Pus
   if (kinds.has('reminder')) out.push(...reminderPush(input.notes, active, courses, input.reports, plan));
   if (kinds.has('missing')) out.push(...missingPush(active, courses, input.reports, dates, plan, input.missingTime));
   if (kinds.has('payroll')) out.push(...payrollPush(all, courses, input.reports, input.payroll, now, horizonEnd));
+  if (kinds.has('payment')) out.push(...paymentPush(all, input.reports, input.payroll, now));
   const limit = addDays(now, PUSH_HORIZON_DAYS + 1).getTime();
   return out
     .filter((p) => p.at.getTime() > now.getTime() && p.at.getTime() <= limit)

@@ -131,7 +131,8 @@ export function PlanList({
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
-  const sessionDialog = useSessionCancel();
+  const sessionDialog = useOpenSession(onChanged);
+  const open = sessionDialog.open;
   const [leftoverMode] = useLeftoverMode();
   const active = activeWorkplaces(workplaces).filter((w) => !wpFilter || w.id === wpFilter);
   // מפגשים שלפני תחילת המעקב ולא דווחו — לא מוצגים; רק שורת טקסט לפני הפריט הראשון.
@@ -161,17 +162,6 @@ export function PlanList({
     canceled: rows.filter((r) => r.status === 'canceled').length,
   };
 
-  const open = (r: SessionRowData) => {
-    if (r.reportId || !(r.status === 'canceled' || r.status === 'moved')) openSession(router, r);
-    else
-      sessionDialog.open({
-        course: r.course,
-        date: r.date,
-        cancel: r.cancel,
-        onDone: onChanged,
-        onHeld: () => router.push({ pathname: '/report', params: { course: r.course.id, date: r.date, back: '1' } }),
-      });
-  };
 
   return (
     <View style={styles.wrap}>
@@ -325,6 +315,27 @@ function sessionLive(course: Course, nowMin: number): boolean {
   const s = parseTime(course.start);
   const e = parseTime(course.end);
   return s != null && e != null && nowMin >= s && nowMin < e;
+}
+
+/**
+ * לחיצה על מפגש: שדווח / שמתקיים → `openSession`; שבוטל / הועבר ולא דווח → דיאלוג המפגש.
+ * מחזיר את הפעולה ואת הדיאלוג לרינדור.
+ */
+export function useOpenSession(onChanged: () => void) {
+  const router = useRouter();
+  const sessionDialog = useSessionCancel();
+  const open = (r: SessionRowData) => {
+    if (r.reportId || !(r.status === 'canceled' || r.status === 'moved')) openSession(router, r);
+    else
+      sessionDialog.open({
+        course: r.course,
+        date: r.date,
+        cancel: r.cancel,
+        onDone: onChanged,
+        onHeld: () => router.push({ pathname: '/report', params: { course: r.course.id, date: r.date, back: '1' } }),
+      });
+  };
+  return { open, dialog: sessionDialog.dialog };
 }
 
 /** מפגש שדווח → תצוגת הדיווח; אחרת — דיווח ישיר. */

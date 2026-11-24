@@ -6,6 +6,7 @@ import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { Panel, ShareRow, StatTile, TileGrid } from '../components/Charts';
 import { ForecastChart, HEADROOM, realization } from '../components/ForecastChart';
+import { PaymentTimeline, timelineWindow } from '../components/PaymentTimeline';
 import { useFlash } from '../components/useFlash';
 import { WorkplaceTile } from '../components/WorkplaceTile';
 import { SessionDotsByMonth, SessionDotsLegend, sessionDots } from '../components/SessionDots';
@@ -18,7 +19,7 @@ import { currentPeriods, dateRange, monthName, periodMonthKey, monthlyTrend, rou
 import { loadCourses, type Course } from '../lib/courses';
 import { groupCoursesForDisplay, useGroupLevel } from '../lib/courseGrouping';
 import { GroupLevelPicker } from '../components/GroupLevelPicker';
-import { forecastMonths, monthsInView, semesterOf, shiftAnchor, STATUS_LABEL, type ChartResolution, type ForecastMode, type MonthRef, type PeriodStatus } from '../lib/forecast';
+import { forecastMonths, monthsInView, paymentSchedule, semesterOf, shiftAnchor, STATUS_LABEL, type ChartResolution, type ForecastMode, type MonthRef, type PeriodStatus } from '../lib/forecast';
 import { hebrewMonthNames, hebrewYearSpan } from '../lib/hebrewDate';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { usePayBasis } from '../lib/payBasis';
@@ -196,6 +197,13 @@ function DashboardScreen() {
         : null,
     [data, basis, res, anchor, mode],
   );
+
+  const payments = useMemo(() => {
+    if (!data) return null;
+    const win = timelineWindow();
+    const list = paymentSchedule(data.workplaces, data.reports, data.courses, data.statuses, basis, win.from, win.to);
+    return { ...win, list: selWp ? list.filter((p) => p.workplace.id === selWp) : list };
+  }, [data, basis, selWp]);
 
   if (!data || !view) {
     return <LoadingScreen />;
@@ -446,6 +454,10 @@ function DashboardScreen() {
           onClearFilter={filtered ? clearFilter : undefined}
           onToday={!atNow || res !== 'month' ? goToday : undefined}
         />
+      ) : null}
+
+      {payments ? (
+        <PaymentTimeline payments={payments.list} from={payments.from} to={payments.to} today={todayISO()} />
       ) : null}
 
       <Animated.View style={[styles.periodHead, listFlash]}>

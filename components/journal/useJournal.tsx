@@ -607,7 +607,15 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
         : planFrom > today
           ? []
           : buildSessionRows(courses, dueWorkplaces, reports, planFrom, planTo > today ? today : planTo);
-  const due = dueRows.filter((r) => r.status === 'pending' || r.status === 'now' || r.status === 'missing');
+  // גם מפגשים שלא התקיימו (בוטל / הועבר) — כדי שהתמונה של כל יום תהיה מלאה.
+  const due = dueRows.filter(
+    (r) =>
+      r.status === 'pending' ||
+      r.status === 'now' ||
+      r.status === 'missing' ||
+      r.status === 'canceled' ||
+      r.status === 'moved',
+  );
   type Item = { kind: 'report'; report: WorkReport } | { kind: 'session'; row: SessionRowData };
   const items: Item[] = [
     ...filtered.map((report) => ({ kind: 'report' as const, report })),
@@ -621,7 +629,8 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     return sa.localeCompare(sb);
   });
   const missingCount = due.filter((r) => r.status === 'missing').length;
-  const pendingCount = due.length - missingCount;
+  const pendingCount = due.filter((r) => r.status === 'pending' || r.status === 'now').length;
+  const offCount = due.filter((r) => r.status === 'canceled' || r.status === 'moved').length;
 
   const isFiltered = wpFilter != null || range != null || periodMode != null;
   const timeLabel = periodMode
@@ -675,6 +684,7 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
     items,
     missingCount,
     pendingCount,
+    offCount,
     isFiltered,
     timeLabel,
     listKey,

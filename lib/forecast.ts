@@ -339,3 +339,76 @@ export function forecastMonths(
     return y[r.month0];
   });
 }
+
+// ───────────────────────── מועדי תשלום (ציר זמן) ─────────────────────────
+
+/** מצב תשלום בציר: צפוי · שולם בזמן · שולם באיחור · עבר המועד ולא סומן */
+export type PaymentState = 'upcoming' | 'paidOnTime' | 'paidLate' | 'overdue';
+
+export type ScheduledPayment = {
+  workplace: Workplace;
+  period: PayPeriod;
+  /** מועד התשלום הצפוי ("YYYY-MM-DD") */
+  expected: string;
+  /** תאריך הקבלה בפועל, אם סומן */
+  paidAt?: string;
+  /** הסכום: שהתקבל (שולם), שדווח (תקופה שהסתיימה) או הצפי (תקופה נוכחית / עתידית) */
+  amount: number;
+  /** הסכום הוא צפי ולא דיווח בפועל */
+  estimate: boolean;
+  state: PaymentState;
+  /** ימים בין המועד הצפוי לקבלה (חיובי — איחור), או ימי האיחור עד היום כשלא סומן */
+  daysLate: number;
+};
+
+const DAY = 86_400_000;
+const daysBetween = (a: string, b: string) =>
+  Math.round((new Date(`${b}T12:00:00`).getTime() - new Date(`${a}T12:00:00`).getTime()) / DAY);
+
+/**
+ * התשלומים שמועדם הצפוי בטווח [from, to], מכל מקומות העבודה, לפי סדר התאריך.
+ * תקופה בלי דיווח ובלי צפי — לא מוצגת.
+ */
+export function paymentSchedule(
+  workplaces: readonly Workplace[],
+  reports: readonly WorkReport[],
+  courses: readonly Course[],
+  statuses: StatusMap,
+  basis: PayBasis,
+  from: string,
+  to: string,
+  today: Date = new Date(),
+  plan: PlanIndex = currentPlan(),
+): ScheduledPayment[] {
+  const todayIso = isoDate(today);
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  const out: ScheduledPayment[] = [];
+  for (const w of workplaces) {
+    // תקופה מסתיימת לפחות חודש לפני התשלום, ושוטף + עד כמה חודשים.
+    const months = (ty - fy) * 12 + (tm - fm);
+    const back = Math.ceil(paymentTermsOf(w) / 28) + 2;
+    for (let i = -back; i <= months; i++) {
+      const d = new Date(fy, fm - 1 + i, 1);
+      const period = periodInMonth(w, d.getFullYear(), d.getMonth());
+      const f = periodForecast(w, period, reports, courses, statuses, basis, today, plan);
+      if (f.expected < from || f.expected > to) continue;
+      if (out.some((p) => p.workplace.id === w.id && p.period.start === period.start)) continue;
+      const st = statuses[statusKey(w.id, period.start)] ?? {};
+      const ended = f.status !== 'planned' && f.status !== 'open';
+      const estimate = !st.paidAt && !ended;
+      const amount = st.paidAt ? st.paidAmount ?? f.reported : estimate ? Math.max(f.reported, f.forecast) : f.reported;
+      if (!st.paidAt && amount <= 0) continue;
+      const late = st.paidAt ? daysBetween(f.expected, st.paidAt) : daysBetween(f.expected, todayIso);
+      const state: PaymentState = st.paidAt
+        ? late > 0
+          ? 'paidLate'
+          : 'paidOnTime'
+        : f.expected < todayIso
+          ? 'overdue'
+          : 'upcoming';
+      out.push({ workplace: w, period, expected: f.expected, paidAt: st.paidAt, amount, estimate, state, daysLate: Math.max(0, late) });
+    }
+  }
+  return out.sort((a, b) => a.expected.localeCompare(b.expected) || a.workplace.name.localeCompare(b.workplace.name));
+}
