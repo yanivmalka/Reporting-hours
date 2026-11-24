@@ -32,7 +32,7 @@ describe('בקרה על עדכון דיווח קיים', () => {
   it('שינוי שעות בלבד — לא קריטי', () => {
     const ch = reportChanges(mailReport, draft({ end: '16:00' }), names);
     expect(ch).toHaveLength(1);
-    expect(ch[0]).toMatchObject({ field: 'times', from: '09:00–15:55', to: '09:00–16:00', critical: false });
+    expect(ch[0]).toMatchObject({ field: 'times', from: '\u206609:00–15:55\u2069', to: '\u206609:00–16:00\u2069', critical: false });
   });
 
   it('המקרה מהתקלה: תאריך, קורס ושעות — מסומנים, והתאריך קריטי', () => {

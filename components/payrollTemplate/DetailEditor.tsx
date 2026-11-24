@@ -13,7 +13,14 @@ import { SelectField } from '../SelectField';
 import { TextField } from '../TextField';
 import { MailPreview } from './MailPreview';
 import { GROUP_LEVEL_OPTIONS, groupLevelTitle, type GroupLevel } from '../../lib/courseGrouping';
-import type { PayrollDetail, PayrollTemplate } from '../../lib/payrollTemplate';
+import {
+  REDEEMED_EDGE_OPTIONS,
+  REDEEMED_PLACEMENT_OPTIONS,
+  type PayrollDetail,
+  type PayrollTemplate,
+  type RedeemedEdge,
+  type RedeemedPlacement,
+} from '../../lib/payrollTemplate';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing } from '../../theme/colors';
 import { TEXT_RIGHT } from '../../theme/align';
@@ -183,6 +190,31 @@ export function DetailEditor({
                 hint={it.hint}
               />
             ))}
+          {sec.title === 'דקות מצטברות' && d.redeemed ? (
+            <View style={styles.sub}>
+              <SelectField<RedeemedPlacement>
+                label="הצגת הפדיון:"
+                title="היכן להציג את הדקות שנפדו"
+                value={d.redeemedPlacement}
+                onChange={(v) => setD((x) => ({ ...x, redeemedPlacement: v }))}
+                options={REDEEMED_PLACEMENT_OPTIONS}
+              />
+              {d.redeemedPlacement !== 'separate' ? (
+                <>
+                  <SelectField<RedeemedEdge>
+                    label="בתוך היום:"
+                    title="היכן ביום להוסיף את הדקות"
+                    value={d.redeemedEdge}
+                    onChange={(v) => setD((x) => ({ ...x, redeemedEdge: v }))}
+                    options={REDEEMED_EDGE_OPTIONS}
+                  />
+                  <Text style={[styles.hint, { color: colors.textMuted }]}>
+                    שעות היום ושעות הקבוצה גדלות בדקות שנפדו, ושורת הפדיון הנפרדת לא מופיעה. הסה״כ לא משתנה.
+                  </Text>
+                </>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ))}
       <View style={styles.section}>
@@ -205,4 +237,5 @@ const styles = StyleSheet.create({
   section: { gap: 2, marginBottom: spacing.sm },
   title: { fontSize: 14, fontWeight: '700', textAlign: TEXT_RIGHT },
   hint: { fontSize: 12, textAlign: TEXT_RIGHT },
+  sub: { gap: spacing.xs, marginTop: spacing.xs },
 });

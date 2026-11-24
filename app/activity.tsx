@@ -67,7 +67,7 @@ export default function ActivityScreen() {
   const courseName = (id: string | undefined) => (id ? data.courses.find((c) => c.id === id)?.name ?? '' : '');
   const names = { workplace: wpName, course: courseName };
   const summary = (r: WorkReport) =>
-    [r.note || courseName(r.courseId) || wpName(r.workplaceId), formatISODate(r.date), `${r.start}–${r.end}`]
+    [r.note || courseName(r.courseId) || wpName(r.workplaceId), formatISODate(r.date), `\u2066${r.start}–${r.end}\u2069`]
       .filter(Boolean)
       .join(' · ');
   const undoneBy = (e: LogEntry) => data.log.find((x) => x.undoOf === e.id);

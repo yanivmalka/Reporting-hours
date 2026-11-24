@@ -10,6 +10,24 @@ import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
 import { parseGroupLevel, type GroupLevel } from './courseGrouping';
 
+/**
+ * איך מוצגות במייל הדקות שנפדו מהמונה לתוך הדוח: בשורה נפרדת, או בתוך יום — הדיווח
+ * האחרון בחודש / היום עם הכי מעט שעות — ואז שעות היום משתנות (התחלה מוקדמת יותר או
+ * סיום מאוחר יותר, לפי `redeemedEdge`). הסיכום הכולל לא משתנה (הפדיון כבר בו).
+ */
+export type RedeemedPlacement = 'separate' | 'lastDay' | 'shortestDay';
+export type RedeemedEdge = 'start' | 'end';
+
+export const REDEEMED_PLACEMENT_OPTIONS: { value: RedeemedPlacement; label: string }[] = [
+  { value: 'separate', label: 'בשורה נפרדת' },
+  { value: 'lastDay', label: 'ביום הדיווח האחרון בחודש' },
+  { value: 'shortestDay', label: 'ביום עם הכי מעט שעות בחודש' },
+];
+export const REDEEMED_EDGE_OPTIONS: { value: RedeemedEdge; label: string }[] = [
+  { value: 'start', label: 'בתחילת היום (התחלה מוקדמת יותר)' },
+  { value: 'end', label: 'בסוף היום (סיום מאוחר יותר)' },
+];
+
 export type PayrollDetail = {
   /** רמת הקיבוץ בדוח; null — כפי שנבחר במסך (ההגדרה המשותפת) */
   level: GroupLevel | null;
@@ -36,6 +54,10 @@ export type PayrollDetail = {
   canceledAmounts: boolean;
   /** שורת הפדיון מהמונה */
   redeemed: boolean;
+  /** היכן מוצג הפדיון (כשהוא מוצג) */
+  redeemedPlacement: RedeemedPlacement;
+  /** בהצגה בתוך יום — בתחילתו או בסופו */
+  redeemedEdge: RedeemedEdge;
   /** שורת "הועברו למונה" בסיכום */
   carriedTotal: boolean;
   /** בסיכום: */
@@ -65,6 +87,8 @@ export const FULL_DETAIL: PayrollDetail = {
   canceledSummary: true,
   canceledAmounts: true,
   redeemed: true,
+  redeemedPlacement: 'separate',
+  redeemedEdge: 'end',
   carriedTotal: true,
   totalAcademic: true,
   totalNet: true,
@@ -109,11 +133,13 @@ const EMPTY: PayrollTemplateStore = { templates: [], byWorkplace: {} };
 export function sanitizeDetail(d: Partial<PayrollDetail> | null | undefined): PayrollDetail {
   const out = { ...FULL_DETAIL };
   for (const k of Object.keys(FULL_DETAIL) as (keyof PayrollDetail)[]) {
-    if (k === 'level') continue;
+    if (k === 'level' || k === 'redeemedPlacement' || k === 'redeemedEdge') continue;
     const v = d?.[k];
     if (typeof v === 'boolean') (out as Record<string, unknown>)[k] = v;
   }
   out.level = d?.level == null ? null : parseGroupLevel(d.level);
+  if (REDEEMED_PLACEMENT_OPTIONS.some((o) => o.value === d?.redeemedPlacement)) out.redeemedPlacement = d!.redeemedPlacement!;
+  if (d?.redeemedEdge === 'start' || d?.redeemedEdge === 'end') out.redeemedEdge = d.redeemedEdge;
   return out;
 }
 

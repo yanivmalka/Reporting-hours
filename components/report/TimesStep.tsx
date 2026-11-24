@@ -93,7 +93,7 @@ export function TimesStep({ w }: { w: ReportWizard }) {
           <View style={styles.joint}>
             <Text style={styles.jointTitle}>אחריו באותו יום: {jointOffer.course.name}</Text>
             <Text style={styles.jointText}>
-              {`${sessionTimes(jointOffer.course, date).start}–${jointOffer.end} · אותו מקום. אפשר לדווח את שניהם בדיווח אחד: הסיום ${jointOffer.end}${jointOffer.gap > 0 ? `, הפער (${jointOffer.gap} דק׳) כהפסקה` : ''}, ו"${jointOffer.course.name}" יסומן כבוטל — דווח יחד.`}
+              {`\u2066${sessionTimes(jointOffer.course, date).start}–${jointOffer.end}\u2069 · אותו מקום. אפשר לדווח את שניהם בדיווח אחד: הסיום ${jointOffer.end}${jointOffer.gap > 0 ? `, הפער (${jointOffer.gap} דק׳) כהפסקה` : ''}, ו"${jointOffer.course.name}" יסומן כבוטל — דווח יחד.`}
             </Text>
             <Pressable onPress={applyJoint} accessibilityRole="button" hitSlop={8}>
               <Text style={styles.jointLink}>דיווח משותף עד {jointOffer.end}</Text>

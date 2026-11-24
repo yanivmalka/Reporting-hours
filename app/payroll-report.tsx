@@ -19,7 +19,7 @@ import { loadCourses } from '../lib/courses';
 import { dateRange, deadlineRelative, shortDate } from '../lib/dashboard';
 import { useGroupLevel } from '../lib/courseGrouping';
 import { GroupLevelPicker } from '../components/GroupLevelPicker';
-import { buildPayrollReport, canceledByReason, expectedPayment, grossAmount, netAmount, loadPayrollStatus, payrollBody, payrollMailto, payrollSubject, periodStartingAt, periodTitle, statusKey, updatePayrollStatus, type PayrollReport, type PayrollStatus } from '../lib/payroll';
+import { buildPayrollReport, canceledByReason, expectedPayment, grossAmount, netAmount, loadPayrollStatus, payrollBody, payrollMailto, payrollSubject, periodStartingAt, periodTitle, redeemedShift, statusKey, updatePayrollStatus, type PayrollReport, type PayrollStatus } from '../lib/payroll';
 import { loadReports } from '../lib/reports';
 import { formatShekels, hasTravelCost } from '../lib/travel';
 import { formatISODate } from '../lib/time';
@@ -298,6 +298,16 @@ function PayrollReportScreen() {
             options={templates.map((t) => ({ value: t.id, label: t.name, sub: t.builtIn ? 'מובנית' : undefined }))}
           />
           {modified ? <Text style={styles.cc}>הפירוט שונה לשליחה הזו (לא נשמר בתבנית)</Text> : null}
+          {(() => {
+            const sh = current.redeemed ? redeemedShift(report, current.redeemedPlacement, current.redeemedEdge) : null;
+            return sh ? (
+              <Text style={styles.cc}>
+                {`במייל: ${sh.minutes} הדק׳ שנפדו משובצות ב־${formatISODate(sh.date)} — ${
+                  sh.edge === 'start' ? 'התחלה' : 'סיום'
+                } ב־${sh.time}`}
+              </Text>
+            ) : null;
+          })()}
           {current.level ? (
             <Text style={styles.cc}>קיבוץ לפי התבנית: {groupLevelTitle(current.level)}</Text>
           ) : (
