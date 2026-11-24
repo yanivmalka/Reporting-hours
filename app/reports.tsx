@@ -113,6 +113,7 @@ export default function ReportsScreen() {
               params: {
                 wp: wpFilter ?? '',
                 date: shownRange && shownRange.from === shownRange.to ? shownRange.from : '',
+                back: '1',
               },
             })
           }

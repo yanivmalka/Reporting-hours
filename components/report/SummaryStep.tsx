@@ -15,7 +15,7 @@ import { sumBreaks } from './shared';
 
 /** שלב 4: סיכום לפני שמירה. */
 export function SummaryStep({ w }: { w: ReportWizard }) {
-  const { styles, editing, confirm, basis, step, setTouched, setExitReason, workplaceId, note, setNote, start, setStart, end, setEnd, breaks, setBreaks, leftoverChoice, errors, netPreview, academicPreview, leftoverPreview, academicHoursNow, workplace, pay, hoursForPay, travelCounted, travel, workplaceName, wAt } = w;
+  const { styles, editing, confirm, basis, step, setTouched, setExitReason, workplaceId, note, setNote, start, setStart, end, setEnd, breaks, setBreaks, leftoverChoice, errors, netPreview, academicPreview, leftoverPreview, academicHoursNow, workplace, pay, hoursForPay, travelCounted, travel, workplaceName, wAt, jointWith } = w;
   return (
     <>
     {/* ── 4. סיכום ── */}
@@ -34,6 +34,12 @@ export function SummaryStep({ w }: { w: ReportWizard }) {
               {sumBreaks(breaks) > 0 ? ` · הפסקות ${sumBreaks(breaks)} דק׳` : ''}
             </Text>
           </View>
+          {jointWith ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLine}>דיווח משותף</Text>
+              <Text style={styles.summaryValue}>{`כולל ${jointWith.name} (יסומן כבוטל)`}</Text>
+            </View>
+          ) : null}
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLine}>זמן עבודה נטו</Text>
             <Text style={styles.summaryValue}>

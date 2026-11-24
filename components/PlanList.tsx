@@ -14,7 +14,7 @@ import { EnterChevron } from './Chevrons';
 import { useSessionCancel } from './SessionCancelDialog';
 import { allCourseSessions, courseReport, sessionTimes, timeRange, type Course } from '../lib/courses';
 import { dayTotalsByWorkplace, rangeNetMinutes } from '../lib/daySummary';
-import { netMinutes } from '../lib/reports';
+import { netMinutes, savedLabel } from '../lib/reports';
 import { DaySummary } from './DaySummary';
 import { expectedFor, plannedFor } from '../lib/forecast';
 import type { PayBasis } from '../lib/payBasis';
@@ -63,6 +63,8 @@ export type SessionRowData = {
   reportId?: string;
   /** השעות שדווחו בפועל ("HH:MM") — כשהמפגש דווח */
   reported?: { start: string; end: string };
+  /** מתי הדיווח נשמר / עודכן (`savedLabel`) — באריח, שיהיה ברור שהשמירה נקלטה */
+  saved?: string;
   cancel: Cancellation | null;
   movedFrom?: string;
 };
@@ -163,7 +165,7 @@ export function PlanList({
         date: r.date,
         cancel: r.cancel,
         onDone: onChanged,
-        onHeld: () => router.push({ pathname: '/report', params: { course: r.course.id, date: r.date } }),
+        onHeld: () => router.push({ pathname: '/report', params: { course: r.course.id, date: r.date, back: '1' } }),
       });
   };
 
@@ -301,6 +303,7 @@ export function buildSessionRows(
         status,
         reportId: report?.id,
         reported: report ? { start: report.start, end: report.end } : undefined,
+        saved: report ? savedLabel(report) : undefined,
         cancel: s.cancel,
         movedFrom: s.movedFrom,
       });
@@ -320,7 +323,7 @@ function sessionLive(course: Course, nowMin: number): boolean {
 /** מפגש שדווח → תצוגת הדיווח; אחרת — דיווח ישיר. */
 export function openSession(router: ReturnType<typeof useRouter>, r: SessionRowData) {
   if (r.reportId) router.push({ pathname: '/report-view', params: { id: r.reportId } });
-  else router.push({ pathname: '/report', params: { course: r.course.id, date: r.date } });
+  else router.push({ pathname: '/report', params: { course: r.course.id, date: r.date, back: '1' } });
 }
 
 /** שורת מפגש: פס צבע המקום, שם הקורס, שעות / סיבה, ותג הסטטוס. */
@@ -381,6 +384,11 @@ export function SessionRow({
                 : timeRange(r.course.start, r.course.end)}
           {r.movedFrom ? ` · הועבר מ־${short(r.movedFrom)}` : ''} · {r.workplace.name}
         </Text>
+        {r.saved ? (
+          <Text style={styles.saved} numberOfLines={1}>
+            {r.saved}
+          </Text>
+        ) : null}
       </View>
       {note?.flag ? (
         <Icon name={FLAG_ICON[note.flag]} size={16} color={colors.warning} />
@@ -437,6 +445,7 @@ const makeStyles = (colors: AppColors) =>
     fadedBar: { opacity: 0.4 },
     strike: { textDecorationLine: 'line-through', color: colors.textMuted },
     meta: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    saved: { fontSize: 11, color: colors.success, textAlign: TEXT_RIGHT },
     chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     chipText: { fontSize: 12, fontWeight: '700' },
   });
