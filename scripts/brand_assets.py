@@ -3,7 +3,7 @@
 יצירת האייקונים ומסך הפתיחה לכל ערכת צבעים (assets/brand/<id>/).
 
 המקור — assets/brand/src/*.svg בצבעי ערכת "טורקיז" (שעון החול, רקע אייקוני הנושאים,
-שעון החול עם המנעול). לכל ערכה מוחלפים שלושה צבעים:
+שעון החול עם המנעול הסגור ועם המנעול הפתוח). לכל ערכה מוחלפים שלושה צבעים:
   רקע         #1B3C3B → brandDark
   מסגרת ורשת  #E8F3F2 → brandLight
   פנים הזכוכית #234746 → brandDark מעורבב ב־35% brand
@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'assets', 'brand', 'src')
 OUT = os.path.join(ROOT, 'assets', 'brand')
 
-TEAL_BG, TEAL_LIGHT, TEAL_GLASS = '#1B3C3B', '#E8F3F2', '#234746'
+TEAL_BG, TEAL_LIGHT, TEAL_GLASS, TEAL_BRAND = '#1B3C3B', '#E8F3F2', '#234746', '#305A58'
 
 
 def palettes():
@@ -45,8 +45,8 @@ def body(name):
     return re.search(r'<svg[^>]*>(.*)</svg>', svg, re.S).group(1)
 
 
-def recolor(s, dark, light, glass):
-    return s.replace(TEAL_BG, dark).replace(TEAL_LIGHT, light).replace(TEAL_GLASS, glass)
+def recolor(s, dark, light, glass, brand=TEAL_BRAND):
+    return s.replace(TEAL_BG, dark).replace(TEAL_LIGHT, light).replace(TEAL_GLASS, glass).replace(TEAL_BRAND, brand)
 
 
 def render(inner, size, path):
@@ -57,7 +57,7 @@ def render(inner, size, path):
 
 
 def main():
-    art, pattern, locked = body('art.svg'), body('pattern.svg'), body('locked.svg')
+    art, pattern, locked, unlocked = body('art.svg'), body('pattern.svg'), body('locked.svg'), body('unlocked.svg')
     scale = 0.62  # אזור בטוח של אייקון מותאם באנדרואיד
     shift = 256 * (1 - scale)
     for pid, (brand, dark, light) in palettes().items():
@@ -73,6 +73,7 @@ def main():
         render(bg + p, 1024, os.path.join(out, 'icon-bg.png'))
         render(a, 768, os.path.join(out, 'splash.png'))
         render(recolor(locked, dark, light, glass), 480, os.path.join(out, 'locked.png'))
+        render(recolor(unlocked, dark, light, glass, brand), 480, os.path.join(out, 'unlocked.png'))
         print(pid, dark, light, glass)
 
 
