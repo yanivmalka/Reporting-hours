@@ -51,7 +51,7 @@ export function GroupedSummary({ w }: { w: Journal }) {
             )}
             <Text style={[styles.meta, { color: colors.textMuted }]}>
               {g.items.length} דיווחים · {Math.round((minutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳ אקד׳
-              {carried > 0 ? ` · ${carried} דק׳ למונה` : ''}
+              {carried > 0 ? ` · ${carried} דק׳ למצטברות` : ''}
               {hasPay ? ` · ${formatShekels(Math.round(pay))}` : ''}
             </Text>
           </View>

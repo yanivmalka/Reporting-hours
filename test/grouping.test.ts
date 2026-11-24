@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { groupItems, parseGroupLevel } from '../lib/courseGrouping';
 import { currentPayPeriod } from '../lib/dashboard';
 import { buildPayrollReport, NO_COURSE, payrollBody, sessionsByDate } from '../lib/payroll';
-import { dayTotalsByWorkplace, dayTotalText, rangeNetMinutes } from '../lib/daySummary';
+import { dayTotalsByWorkplace, dayTotalText, plannedEntry, rangeNetMinutes, reportAcademicLine, reportEntry } from '../lib/daySummary';
 import { buildExport, toCsv, toHtml } from '../lib/exportReports';
 import type { Course } from '../lib/courses';
 import type { WorkReport } from '../lib/reports';
@@ -167,20 +167,24 @@ describe('סיכום יומי לפי מקום', () => {
       { workplaceId: 'a', netMinutes: 60 },
       { workplaceId: 'b', netMinutes: 345 },
     ]);
-    expect(t).toEqual([
-      { workplaceId: 'b', count: 2, netMinutes: 435, carriedMinutes: 0 },
-      { workplaceId: 'a', count: 1, netMinutes: 60, carriedMinutes: 0 },
+    expect(t.map((x) => [x.workplaceId, x.count, x.netMinutes])).toEqual([
+      ['b', 2, 435],
+      ['a', 1, 60],
     ]);
-    expect(dayTotalText(t[0], true)).toBe('2 מפגשים · 7:15 שעות נטו · 9.67 שע׳ אקד׳');
-    expect(dayTotalText(t[1], false, 'דיווחים')).toBe('דיווח אחד · 1:00 שעות נטו');
+    expect(dayTotalText(t[1], false)).toBe('1:00 שעות נטו');
   });
-  it('דקות שהועברו למונה — מחוץ לשעות האקדמיות ומוצגות בנפרד', () => {
-    const [t] = dayTotalsByWorkplace([
-      { workplaceId: 'a', netMinutes: 100, carriedMinutes: 10 },
-      { workplaceId: 'a', netMinutes: 100, carriedMinutes: 10 },
-    ]);
-    expect(dayTotalText(t, true)).toBe('2 מפגשים · 3:20 שעות נטו · 4 שע׳ אקד׳ · 20 דק׳ למונה');
-    expect(dayTotalText(t, false)).toBe('2 מפגשים · 3:20 שעות נטו');
+  it('שעות אקדמיות עגולות ודקות למצטברות (כמו 23.11: 90 + 325 דק׳)', () => {
+    const r1 = { workplaceId: 'w', start: '09:00', end: '10:30', breaks: [], carriedMinutes: 0 };
+    const r2 = { workplaceId: 'w', start: '10:45', end: '16:10', breaks: [], carriedMinutes: 10 };
+    const t = dayTotalsByWorkplace([reportEntry(r1), reportEntry(r2)]);
+    expect(dayTotalText(t[0], true)).toBe('9 שע׳ אקד׳ · 10 דק׳ למצטברות');
+    expect(reportAcademicLine(r1)).toBe('2 שע׳ אקד׳');
+    expect(reportAcademicLine(r2)).toBe('7 שע׳ אקד׳ · 10 דק׳ למצטברות');
+    // דקות שנכללו בדיווח (בלי מונה)
+    expect(reportAcademicLine({ ...r2, carriedMinutes: 0 })).toBe('7 שע׳ אקד׳ ו־10 דק׳');
+    // מפגש שטרם דווח — לפי ההגדרה הכללית
+    const p = dayTotalsByWorkplace([plannedEntry('w', 90, 'carry'), plannedEntry('w', 325, 'carry')]);
+    expect(dayTotalText(p[0], true)).toBe('9 שע׳ אקד׳ · 10 דק׳ למצטברות');
   });
   it('דקות נטו של טווח', () => {
     expect(rangeNetMinutes('10:45', '16:10', 15)).toBe(310);

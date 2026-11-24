@@ -13,11 +13,12 @@ import { Icon } from './Icon';
 import { EnterChevron } from './Chevrons';
 import { useSessionCancel } from './SessionCancelDialog';
 import { allCourseSessions, courseReport, sessionTimes, timeRange, type Course } from '../lib/courses';
-import { dayTotalsByWorkplace, rangeNetMinutes } from '../lib/daySummary';
-import { netMinutes, savedLabel } from '../lib/reports';
+import { dayTotalsByWorkplace, plannedEntry, rangeNetMinutes, reportAcademicLine, reportEntry } from '../lib/daySummary';
+import { savedLabel } from '../lib/reports';
+import { useLeftoverMode } from '../lib/leftover';
 import { DaySummary } from './DaySummary';
 import { expectedFor, plannedFor } from '../lib/forecast';
-import type { PayBasis } from '../lib/payBasis';
+import { basisFor, type PayBasis } from '../lib/payBasis';
 import type { WorkReport } from '../lib/reports';
 import type { Cancellation } from '../lib/sessions';
 import { money } from '../lib/travel';
@@ -65,6 +66,8 @@ export type SessionRowData = {
   reported?: { start: string; end: string };
   /** מתי הדיווח נשמר / עודכן (`savedLabel`) — באריח, שיהיה ברור שהשמירה נקלטה */
   saved?: string;
+  /** במקום אקדמי, מפגש שדווח: "2 שע׳ אקד׳ · 10 דק׳ למצטברות" */
+  academic?: string;
   cancel: Cancellation | null;
   movedFrom?: string;
 };
@@ -129,9 +132,10 @@ export function PlanList({
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const sessionDialog = useSessionCancel();
+  const [leftoverMode] = useLeftoverMode();
   const active = activeWorkplaces(workplaces).filter((w) => !wpFilter || w.id === wpFilter);
   // מפגשים שלפני תחילת המעקב ולא דווחו — לא מוצגים; רק שורת טקסט לפני הפריט הראשון.
-  const allRows = buildSessionRows(courses, active, reports, from, to);
+  const allRows = buildSessionRows(courses, active, reports, from, to, basis);
   const rows = allRows.filter((r) => r.status !== 'untracked');
   const hiddenBefore = allRows.length - rows.length;
   const trackingStart = getTrackingStart();
@@ -239,11 +243,9 @@ export function PlanList({
                 held.map((r) => {
                   const rep = r.reportId ? reportById.get(r.reportId) : undefined;
                   const t = sessionTimes(r.course, r.date);
-                  return {
-                    workplaceId: r.workplace.id,
-                    netMinutes: rep ? netMinutes(rep) ?? 0 : rangeNetMinutes(t.start, t.end, t.breakMinutes),
-                    carriedMinutes: rep?.carriedMinutes ?? 0,
-                  };
+                  return rep
+                    ? reportEntry(rep)
+                    : plannedEntry(r.workplace.id, rangeNetMinutes(t.start, t.end, t.breakMinutes), leftoverMode);
                 }),
               );
               return <DaySummary totals={totals} workplaceOf={(id) => wpById.get(id)} basis={basis} />;
@@ -269,6 +271,8 @@ export function buildSessionRows(
   reports: readonly WorkReport[],
   from: string,
   to: string,
+  /** הבסיס הכללי — כשניתן, מפגש שדווח במקום אקדמי מקבל את שורת השעות האקדמיות */
+  basis?: PayBasis,
 ): SessionRowData[] {
   const byId = new Map(workplaces.map((w) => [w.id, w]));
   const today = todayISO();
@@ -305,6 +309,8 @@ export function buildSessionRows(
         reportId: report?.id,
         reported: report ? { start: report.start, end: report.end } : undefined,
         saved: report ? savedLabel(report) : undefined,
+        academic:
+          report && basis && basisFor(workplace, basis) === 'academic' ? reportAcademicLine(report) : undefined,
         cancel: s.cancel,
         movedFrom: s.movedFrom,
       });
@@ -385,6 +391,11 @@ export function SessionRow({
                 : timeRange(r.course.start, r.course.end)}
           {r.movedFrom ? ` · הועבר מ־${short(r.movedFrom)}` : ''} · {r.workplace.name}
         </Text>
+        {r.academic ? (
+          <Text style={styles.academic} numberOfLines={1}>
+            {r.academic}
+          </Text>
+        ) : null}
         {r.saved ? (
           <Text style={styles.saved} numberOfLines={1}>
             {r.saved}
@@ -447,6 +458,7 @@ const makeStyles = (colors: AppColors) =>
     strike: { textDecorationLine: 'line-through', color: colors.textMuted },
     meta: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     saved: { fontSize: 11, color: colors.success, textAlign: TEXT_RIGHT },
+    academic: { fontSize: 13, fontWeight: '700', color: colors.brandDark, textAlign: TEXT_RIGHT },
     chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     chipText: { fontSize: 12, fontWeight: '700' },
   });

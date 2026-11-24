@@ -328,7 +328,7 @@ function PayrollReportScreen() {
             </View>
             <Text style={styles.cc}>
               {g.sessions.length} מפגשים{g.days ? ` · ${g.days.length} ימים` : ''} · {hm(g.netMinutes)} שעות נטו
-              {g.carriedMinutes > 0 ? ` · ${g.carriedMinutes} דק׳ הועברו למונה` : ''}
+              {g.carriedMinutes > 0 ? ` · ${g.carriedMinutes} דק׳ הועברו למצטברות` : ''}
             </Text>
             {g.days
               ? // לפי מקום עבודה — שורה לכל תאריך: כל טווחי השעות של היום (כל אחד מוביל לדיווח שלו) וסה״כ.
@@ -351,7 +351,7 @@ function PayrollReportScreen() {
                           <Text style={styles.dayTime}>
                             {`⁦${s.start}–${s.end}⁩`}
                             {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
-                            {s.carriedMinutes > 0 ? ` · ${s.carriedMinutes} דק׳ למונה` : ''}
+                            {s.carriedMinutes > 0 ? ` · ${s.carriedMinutes} דק׳ למצטברות` : ''}
                           </Text>
                         </Pressable>
                       ))}
@@ -375,7 +375,7 @@ function PayrollReportScreen() {
                     <Text style={styles.sessionTime}>
                       {`⁦${s.start}–${s.end}⁩`}
                       {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
-                      {s.carriedMinutes > 0 ? ` · ${s.carriedMinutes} דק׳ למונה` : ''}
+                      {s.carriedMinutes > 0 ? ` · ${s.carriedMinutes} דק׳ למצטברות` : ''}
                     </Text>
                     <Text style={styles.sessionHours}>{academic(s.netMinutes)}</Text>
                   </Pressable>
@@ -433,7 +433,7 @@ function PayrollReportScreen() {
             style={({ pressed }) => [styles.totalRow, pressed && { opacity: 0.6 }]}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-              <Text style={styles.totalLabel}>הועברו למונה המצטבר</Text>
+              <Text style={styles.totalLabel}>הועברו למצטברות</Text>
               <EnterChevron size={14} color={colors.brandDark} />
             </View>
             <Text style={styles.totalValue}>{report.carriedMinutes} דק׳ (לא בשעות)</Text>

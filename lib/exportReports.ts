@@ -257,7 +257,7 @@ export function toHtml(
         `${t.reports} דיווחים`,
         `${t.workdays} ימי עבודה`,
         `${hoursText(t.netMinutes)} שעות נטו`,
-        t.carriedMinutes > 0 ? `${t.carriedMinutes} דק׳ למונה` : '',
+        t.carriedMinutes > 0 ? `${t.carriedMinutes} דק׳ למצטברות` : '',
         withPay ? `שכר ${formatShekels(t.pay)}` : '',
       ]
         .filter(Boolean)
@@ -275,7 +275,7 @@ export function toHtml(
     `${data.totals.reports} דיווחים`,
     `${data.totals.workdays} ימי עבודה`,
     `${hoursText(data.totals.netMinutes)} שעות נטו`,
-    data.totals.carriedMinutes > 0 ? `${data.totals.carriedMinutes} דק׳ הועברו למונה המצטבר` : '',
+    data.totals.carriedMinutes > 0 ? `${data.totals.carriedMinutes} דק׳ הועברו למצטברות` : '',
     withPay ? `שכר לפי דיווחים: ${formatShekels(data.totals.pay)}` : '',
   ]
     .filter(Boolean)

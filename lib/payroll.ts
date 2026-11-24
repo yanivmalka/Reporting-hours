@@ -403,7 +403,7 @@ export function payrollBody(report: PayrollReport, profile?: Profile, detail: Pa
     if (detail.groupSummary || !detail.rows) {
       lines.push(
         `■ ${g.name} — ${g.sessions.length} מפגשים${g.days ? ` · ${days} ימים` : ''} · ${hoursPart(g.netMinutes)}${
-          detail.carried && g.carriedMinutes > 0 ? ` · ${g.carriedMinutes} דק׳ למונה` : ''
+          detail.carried && g.carriedMinutes > 0 ? ` · ${g.carriedMinutes} דק׳ למצטברות` : ''
         }`,
       );
     } else {

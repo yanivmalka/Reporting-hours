@@ -59,7 +59,7 @@ describe('דקות שהועברו למונה בדוח השכר', () => {
   it('עמודת "למונה" לכל מפגש לפי הפירוט', () => {
     const body = payrollBody(report, undefined, { ...FULL_DETAIL, carried: true });
     expect(body).toContain('למונה');
-    expect(body).toContain('· 10 דק׳ למונה');
+    expect(body).toContain('· 10 דק׳ למצטברות');
   });
   it('בייצוא — עמודה וסיכום', () => {
     const csv = toCsv(
