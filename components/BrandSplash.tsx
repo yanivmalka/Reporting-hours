@@ -4,7 +4,7 @@
  * המסך הוא "העולם" של האייקון: אותו רקע של אייקוני הנושאים (שעות, הפסקה, שכר, נסיעות,
  * קורסים, דוח שכר, שיתוף והרשאות, מס, תשלום, דקות מצטברות, לוח בקרה, מקום עבודה, שיעור),
  * באותו סדר, באותה רשת ובאותו מרווח כמו ברקע האייקון, ושעון החול במקומו ברשת.
- * בפתיחה המסך מתחיל בגודל אייקון ומתרחב במהירות למסך מלא — כאילו נכנסים לתוך האייקון —
+ * בפתיחה המסך מתחיל בגודל אייקון (שעון החול בגודל ובמקום של מסך הפתיחה של המערכת) ומתרחב במהירות למסך מלא — כאילו נכנסים לתוך האייקון —
  * ואז עולים השם והמשפט. אחרי 3 שניות נעלם בדהייה; לחיצה בכל מקום מדלגת.
  *
  * הרשת מחזורית בריבוע של 1024 יחידות אייקון (assets/splash-world.png נוצר מאותה הגדרה
@@ -23,6 +23,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useI18n } from '../lib/i18n';
+import { brandImages } from '../theme/brandAssets';
 import { useTheme } from '../theme/ThemeContext';
 import { Text } from './Text';
 
@@ -32,8 +33,11 @@ const ICON = 512 * S;
 const TILE = 1024 * S;
 /** העולם מכסה ‎−1024…1536 יחידות סביב האייקון — כפולה של האריח, מספיק לכל מסך. */
 const WORLD = 2560 * S;
-/** גודל האייקון בתחילת התנועה (כמו במסך הבית). */
-const START = 96;
+/**
+ * גודל האייקון בתחילת התנועה — כך ששעון החול באותו גודל ובאותו מקום כמו במסך הפתיחה של
+ * המערכת (אייקון 288dp, שעון החול באזור הבטוח 0.62 → כ־128dp גובה; 368 מתוך 512 יחידות).
+ */
+const START = Math.round((512 * 128) / 368);
 const ZOOM_MS = 620;
 const TEXT_DELAY_MS = 520;
 const TEXT_MS = 380;
@@ -46,7 +50,7 @@ let shownOnce = false;
 
 export function BrandSplash() {
   const { t } = useI18n();
-  const { colors, loaded } = useTheme();
+  const { colors, loaded, paletteId } = useTheme();
   const { width: W, height: H } = useWindowDimensions();
   const [visible, setVisible] = useState(!shownOnce);
   const opacity = useRef(new Animated.Value(1)).current;
@@ -91,7 +95,7 @@ export function BrandSplash() {
   const bg = colors.brandDark;
   // מרכז שעון החול על המסך.
   const cx = W / 2;
-  const cy = H * 0.45;
+  const cy = H / 2;
   const lerp = (from: number, to: number) => zoom.interpolate({ inputRange: [0, 1], outputRange: [from, to] });
   // חלון החיתוך: מריבוע מעוגל בגודל אייקון ועד המסך כולו.
   const clip = {
@@ -121,7 +125,7 @@ export function BrandSplash() {
               imageStyle={{ width: TILE, height: TILE }}
             />
             <Image
-              source={require('../assets/splash-icon.png')}
+              source={brandImages(paletteId).splash}
               style={[styles.hourglass, { left: WORLD / 2 - ICON / 2, top: WORLD / 2 - ICON / 2 }]}
               accessibilityIgnoresInvertColors
             />

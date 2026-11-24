@@ -18,7 +18,7 @@ import {
 } from './palettes';
 import { KEYS } from '../lib/keys';
 import * as SplashScreen from 'expo-splash-screen';
-import { setSplashTheme } from '../modules/splash-theme/src';
+import { setLauncherIcon, setSplashTheme } from '../modules/splash-theme/src';
 
 // מסך הפתיחה נשאר עד שהערכה השמורה נטענת — כך האפליקציה לא מהבהבת בצבע ברירת המחדל.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -96,6 +96,8 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     writeJSON(STORAGE_KEY, { paletteId });
     // מסך הפתיחה בפתיחה הבאה — בצבע הערכה (אנדרואיד 13+).
     setSplashTheme(paletteId);
+    // ואייקון האפליקציה — בצבעי הערכה (משתנה רק כשצריך).
+    setLauncherIcon(paletteId, PALETTES.map((p) => p.id));
   }, [loaded, paletteId]);
 
   const value = useMemo<ThemeContextValue>(() => {

@@ -71,7 +71,8 @@
         }
       ],
       "./plugins/withLeanAndroid",
-      "./plugins/withThemedSplash"
+      "./plugins/withThemedSplash",
+      "./plugins/withThemedIcons"
     ],
     "extra": {
       "supportsRTL": true
