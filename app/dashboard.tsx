@@ -6,7 +6,8 @@ import { Pressable } from '../components/Pressable';
 import { Button } from '../components/Button';
 import { Panel, ShareRow, StatTile, TileGrid } from '../components/Charts';
 import { ForecastChart, HEADROOM, realization } from '../components/ForecastChart';
-import { PaymentTimeline, timelineWindow } from '../components/PaymentTimeline';
+import { PaymentTimeline } from '../components/PaymentTimeline';
+import { isoDate } from '../lib/dates';
 import { grossNote } from '../components/netGross';
 import { useFlash } from '../components/useFlash';
 import { WorkplaceTile } from '../components/WorkplaceTile';
@@ -199,12 +200,28 @@ function DashboardScreen() {
     [data, basis, res, anchor, mode],
   );
 
+  // מועדי תשלום — רק של התקופה שבתצוגה (חודש / סמסטר / שנה, או החודש שנבחר בגרף), לפי אותו
+  // שיוך כמו הגרף: "לפי מועד תשלום" — חודש התשלום הצפוי; "לפי חודש עבודה" — חודש התקופה.
   const payments = useMemo(() => {
     if (!data) return null;
-    const win = timelineWindow();
-    const list = paymentSchedule(data.workplaces, data.reports, data.courses, data.statuses, basis, win.from, win.to);
-    return { ...win, list: selWp ? list.filter((p) => p.workplace.id === selWp) : list };
-  }, [data, basis, selWp]);
+    const refs = monthsInView(res, anchor);
+    const keyOf = (r: MonthRef) => `${r.year}-${String(r.month0 + 1).padStart(2, '0')}`;
+    const keys = new Set(refs.map(keyOf).filter((k) => !selMonth || k === selMonth));
+    const first = refs[0];
+    const last = refs[refs.length - 1];
+    const viewFrom = isoDate(new Date(first.year, first.month0, 1));
+    const viewTo = isoDate(new Date(last.year, last.month0 + 1, 0));
+    // לפי חודש עבודה התשלום מגיע אחרי סוף התקופה ("שוטף +") — מחפשים עד 4 חודשים קדימה.
+    const searchTo = mode === 'pay' ? viewTo : isoDate(new Date(last.year, last.month0 + 5, 0));
+    const list = paymentSchedule(data.workplaces, data.reports, data.courses, data.statuses, basis, viewFrom, searchTo)
+      .filter((p) => !selWp || p.workplace.id === selWp)
+      .filter((p) => keys.has(mode === 'pay' ? p.expected.slice(0, 7) : periodMonthKey(p.period)));
+    // הציר — מתחילת התקופה ועד סוף החודש של התשלום האחרון.
+    const maxExpected = list.reduce((m, p) => (p.expected > m ? p.expected : m), viewTo);
+    const [my, mm] = maxExpected.split('-').map(Number);
+    const to = maxExpected > viewTo ? isoDate(new Date(my, mm, 0)) : viewTo;
+    return { from: viewFrom, to, list };
+  }, [data, basis, selWp, selMonth, res, anchor, mode]);
 
   if (!data || !view) {
     return <LoadingScreen />;
@@ -469,9 +486,6 @@ function DashboardScreen() {
         />
       ) : null}
 
-      {payments ? (
-        <PaymentTimeline payments={payments.list} from={payments.from} to={payments.to} today={todayISO()} />
-      ) : null}
 
       <Animated.View style={[styles.periodHead, listFlash]}>
         <Text style={styles.periodTitle}>{listTitle}</Text>
@@ -551,6 +565,16 @@ function DashboardScreen() {
         />
       ))}
       {rows.length === 0 ? <Text style={styles.periodSub}>אין מקומות עבודה עם נתונים בתקופה.</Text> : null}
+
+      {payments ? (
+        <PaymentTimeline
+          payments={payments.list}
+          from={payments.from}
+          to={payments.to}
+          today={todayISO()}
+          scope={sel ? `${listTitle} · ${sel.workplace.name}` : listTitle}
+        />
+      ) : null}
 
       <Button label="סיכום וניתוח ←" variant="secondary" onPress={() => goPage(1)} />
         </>

@@ -1,5 +1,6 @@
 /**
- * ציר מועדי התשלום בלוח הבקרה: מחודש אחורה ועד כשלושה חודשים קדימה.
+ * ציר מועדי התשלום בלוח הבקרה, בתחתית רשימת המקומות — מקופל כברירת מחדל (כותרת עם
+ * תקציר: מספר התשלומים וסכום הנטו). מציג רק את התשלומים של התקופה שבתצוגה.
  * לכל תשלום נקודה בתאריך הצפוי, בצבע מקום העבודה — טבעת: צפוי · מלאה: שולם בזמן ·
  * מלאה עם מסגרת אדומה: שולם באיחור · טבעת אדומה: עבר המועד ולא סומן. מתחת — רשימה
  * לפי תאריך; לחיצה פותחת את דוח השכר. תאריכים מוקדמים מימין (RTL).
@@ -9,7 +10,7 @@ import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
-import { EnterChevron } from './Chevrons';
+import { EnterChevron, FoldChevron } from './Chevrons';
 import { isoDate, shortDate } from '../lib/dashboard';
 import type { ReactNode } from 'react';
 import type { ScheduledPayment } from '../lib/forecast';
@@ -23,14 +24,6 @@ import { TEXT_RIGHT } from '../theme/align';
 const MONTHS = ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'];
 const DAY = 86_400_000;
 const t = (iso: string) => new Date(`${iso}T12:00:00`).getTime();
-
-/** חלון הציר: מתחילת החודש הקודם ועד סוף החודש השלישי קדימה. */
-export function timelineWindow(today: Date = new Date()): { from: string; to: string } {
-  return {
-    from: isoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
-    to: isoDate(new Date(today.getFullYear(), today.getMonth() + 4, 0)),
-  };
-}
 
 const DOT = 12;
 /** מרווח אנכי בין נקודות באותו טור */
@@ -46,12 +39,16 @@ export function PaymentTimeline({
   from,
   to,
   today,
+  scope,
 }: {
   payments: readonly ScheduledPayment[];
   from: string;
   to: string;
   today: string;
+  /** התקופה (והמקום) שהתשלומים מסוננים לפיה — מוצג בכותרת */
+  scope?: string;
 }) {
+  const [open, setOpen] = useState(false);
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -78,7 +75,9 @@ export function PaymentTimeline({
   const [all, setAll] = useState(false);
   // ברשימה: קודם מה שדורש תשומת לב ומה שלפניך; מה שכבר התקבל — רק ב"הצגת הכול".
   const pending = payments.filter((p) => p.state === 'overdue' || p.state === 'upcoming');
-  const listed = all ? payments : pending.slice(0, LIST_LIMIT);
+  // תקופה שכבר שולמה כולה — מציגים את מה שהתקבל.
+  const base = pending.length ? pending : payments;
+  const listed = all ? payments : base.slice(0, LIST_LIMIT);
   const hiddenCount = payments.length - listed.length;
 
   const ticks: { iso: string; label: string }[] = [];
@@ -115,7 +114,25 @@ export function PaymentTimeline({
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>מועדי תשלום</Text>
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={styles.head}
+      >
+        <View style={styles.headTexts}>
+          <Text style={styles.title}>מועדי תשלום</Text>
+          <Text style={styles.summary} numberOfLines={2}>
+            {scope ? `${scope} · ` : ''}
+            {payments.length === 0
+              ? 'אין תשלומים בתקופה'
+              : `${payments.length} תשלומים · ${money(payments.reduce((n, p) => n + p.amount, 0))} נטו`}
+          </Text>
+        </View>
+        <FoldChevron open={open} color={colors.textMuted} />
+      </Pressable>
+      {open ? (
+      <>
       {/* מיקום אופקי בשורה (spacer ברוחב האחוז) — כך הכיוון זהה לשאר הממשק (RTL) בכל פלטפורמה. */}
       <View style={[styles.track, { height: trackHeight }]}>
         <View style={styles.axis} />
@@ -124,9 +141,11 @@ export function PaymentTimeline({
             <View style={styles.tick} />
           </At>
         ))}
-        <At x={pos(today)} style={styles.fill}>
-          <View style={styles.todayLine} />
-        </At>
+        {today >= from && today <= to ? (
+          <At x={pos(today)} style={styles.fill}>
+            <View style={styles.todayLine} />
+          </At>
+        ) : null}
         {columns.map((c) => (
           <At key={c.x} x={c.x} style={styles.bottom}>
             <View style={styles.column}>
@@ -155,9 +174,11 @@ export function PaymentTimeline({
         ))}
       </View>
       <View style={styles.labels}>
-        <At x={pos(today)} style={styles.top}>
-          <Text style={styles.todayLabel}>היום {dm(today)}</Text>
-        </At>
+        {today >= from && today <= to ? (
+          <At x={pos(today)} style={styles.top}>
+            <Text style={styles.todayLabel}>היום {dm(today)}</Text>
+          </At>
+        ) : null}
       </View>
 
       <View style={styles.legend}>
@@ -211,6 +232,8 @@ export function PaymentTimeline({
           <Text style={styles.showAll}>{all ? 'הצגת הקרובים בלבד' : `הצגת הכול (${payments.length})`}</Text>
         </Pressable>
       ) : null}
+      </>
+      ) : null}
     </View>
   );
 
@@ -238,6 +261,9 @@ const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
     card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm, ...cardShadow },
     title: { fontSize: 16, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
+    head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 40 },
+    headTexts: { flex: 1, minWidth: 0 },
+    summary: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     track: { position: 'relative', marginHorizontal: DOT, marginTop: spacing.xs },
     axis: { position: 'absolute', start: 0, end: 0, bottom: 0, height: 2, backgroundColor: colors.border },
     at: { position: 'absolute', start: 0, end: 0, flexDirection: 'row' },
