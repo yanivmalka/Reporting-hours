@@ -25,6 +25,8 @@ type Props = {
   planned: number;
   /** צפי: הפוטנציאל בלי המפגשים שבוטלו */
   forecast: number;
+  /** הסכומים נטו; שורת הברוטו והמס שמתחת לסכום (components/netGross.ts) */
+  grossNote?: string;
   /** פירוט המפגשים לפי קורס — במצב מורחב */
   sessions?: ReactNode;
   /** סקאלת הפס המשותפת לכל האריחים (מקסימום בפועל + שליש) */
@@ -45,6 +47,7 @@ export function WorkplaceTile({
   reported,
   planned,
   forecast,
+  grossNote,
   sessions,
   scale,
   expanded,
@@ -77,7 +80,10 @@ export function WorkplaceTile({
         <View style={styles.head}>
           <View style={[styles.dot, { backgroundColor: color }]} />
           <Text style={styles.name}>{name}</Text>
-          <Text style={styles.value}>{money(reported)}</Text>
+          <View style={styles.valueBox}>
+            <Text style={styles.value}>{money(reported)}</Text>
+            {grossNote ? <Text style={styles.valueSub}>נטו</Text> : null}
+          </View>
           <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textMuted} />
         </View>
         <View style={styles.barRow}>
@@ -111,6 +117,7 @@ export function WorkplaceTile({
           </View>
           <Text style={[styles.pct, over && styles.pctOver]}>{pct == null ? '—' : `${pct}%`}</Text>
         </View>
+        {grossNote ? <Text style={styles.gross}>{grossNote}</Text> : null}
         {over ? (
           <Text style={styles.sub}>מעל התכנון · פוטנציאל {money(planned)}</Text>
         ) : planned > 0 ? (
@@ -168,6 +175,9 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
     dot: { width: 12, height: 12, borderRadius: 6 },
     name: { flex: 1, fontSize: 15, fontWeight: '700', color: c.text, textAlign: layout.textStart },
     value: { fontSize: 15, fontWeight: '800', color: c.text },
+    valueBox: { alignItems: 'flex-end' },
+    valueSub: { fontSize: 11, color: c.textMuted },
+    gross: { fontSize: 12, color: c.textMuted, textAlign: layout.textEnd },
     barRow: { flexDirection: layout.rowStart, alignItems: 'center', gap: spacing.sm },
     track: { flex: 1, height: 16, borderRadius: 8, overflow: 'hidden', flexDirection: layout.rowStart },
     fillRow: { height: '100%', borderRadius: 8, overflow: 'hidden', flexDirection: layout.rowStart },

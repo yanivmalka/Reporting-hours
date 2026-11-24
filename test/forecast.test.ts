@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Course } from '../lib/courses';
 import { currentPayPeriod } from '../lib/dashboard';
-import { canceledSessions, expectedFor, forecastMonths, netOfTax, paymentSchedule, periodForecast, plannedFor } from '../lib/forecast';
+import { canceledSessions, courseAmounts, expectedFor, forecastMonths, netOfTax, paymentSchedule, periodForecast, plannedFor } from '../lib/forecast';
 import { loadCancelIndex, setSessionMark } from '../lib/sessions';
 import type { Workplace } from '../lib/workplaces';
 
@@ -148,14 +148,18 @@ describe('צפי תשלומים בניכוי מס', () => {
     const list = paymentSchedule([{ ...wp, taxPercent: 10 }], [oct], [course], paid, 'academic', '2026-11-01', '2026-11-30', day('2026-12-05'));
     expect(list[0].amount).toBe(380);
   });
-  it('forecastMonths: צפי תשלומים (pay) בנטו, חודש עבודה (work) בברוטו', () => {
-    const ref = [{ year: 2026, month0: 11 }];
+  it('forecastMonths: קו אחיד — נטו בסכום הראשי וברוטו ב־gross, בשני המצבים', () => {
     const w = { ...wp, taxPercent: 10 };
-    const pay = forecastMonths(ref, [w], [novR], [course], {}, 'academic', 'pay', day('2026-11-17'));
-    const gross = forecastMonths(ref, [wp], [novR], [course], {}, 'academic', 'pay', day('2026-11-17'));
-    expect(pay[0].forecast).toBeCloseTo(gross[0].forecast * 0.9);
-    const workTaxed = forecastMonths(ref, [w], [novR], [course], {}, 'academic', 'work', day('2026-11-17'));
-    const workPlain = forecastMonths(ref, [wp], [novR], [course], {}, 'academic', 'work', day('2026-11-17'));
-    expect(workTaxed[0].forecast).toBe(workPlain[0].forecast);
+    for (const [mode, m0] of [['pay', 11], ['work', 10]] as const) {
+      const ref = [{ year: 2026, month0: m0 }];
+      const taxedM = forecastMonths(ref, [w], [novR], [course], {}, 'academic', mode, day('2026-11-17'))[0];
+      const plain = forecastMonths(ref, [wp], [novR], [course], {}, 'academic', mode, day('2026-11-17'))[0];
+      expect(taxedM.forecast).toBeCloseTo(plain.forecast * 0.9);
+      expect(taxedM.gross.forecast).toBe(plain.forecast);
+      expect(taxedM.byWorkplace.w1.gross.planned).toBe(plain.byWorkplace.w1.planned);
+    }
+  });
+  it('courseAmounts: נטו וברוטו לקורס', () => {
+    expect(courseAmounts({ ...wp, taxPercent: 25 }, [course], nov, 'academic', false)).toEqual({ gross: 1600, net: 1200, taxPercent: 25 });
   });
 });

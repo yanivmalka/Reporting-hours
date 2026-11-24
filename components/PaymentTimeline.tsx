@@ -193,11 +193,13 @@ export function PaymentTimeline({
               </View>
               <View style={styles.rowAmounts}>
                 <Text style={[styles.rowAmount, p.estimate && styles.estimate]}>{money(p.amount)}</Text>
-                {p.taxPercent > 0 && !p.paidAt ? (
-                  <Text style={styles.rowTax} numberOfLines={1}>
-                    נטו · מס {p.taxPercent}%
-                  </Text>
-                ) : null}
+                <Text style={styles.rowTax} numberOfLines={1}>
+                  {p.paidAt
+                    ? 'התקבל בפועל'
+                    : p.taxPercent > 0
+                      ? `נטו · ברוטו ${money(p.gross)}`
+                      : 'לא הוגדר מס'}
+                </Text>
               </View>
               <EnterChevron size={16} />
             </Pressable>
