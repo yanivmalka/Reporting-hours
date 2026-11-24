@@ -1,13 +1,13 @@
 /**
  * שדה שעה אחד, "HH:MM" כטקסט.
  *
- * - מקלדת מספרית; ספרות בלבד נקלטות, והנקודתיים נוספות לבד ("930" → 09:30).
- *   ספרת שעה ראשונה 3–9 משלימה "0" (‎"9" → 09), וכך גם ספרת דקות ראשונה 6–9.
- *   שעה מעל 23 נקבעת ל־23.
- * - השעה הושלמה (4 ספרות) → `onComplete` (מעבר לשדה הבא); ספרות עודפות
- *   (הקלדה מהירה) → `onOverflow`, להזנה בשדה הבא.
- * - כניסה לשדה מלא מנקה אותו; הערך הקודם מוצג כרמז אפור ומוחזר אם יוצאים
- *   בלי להקליד.
+ * - עריכה חופשית (פענוח ב־`lib/timeText.ts`): בכניסה לשדה כל הטקסט מסומן — הקלדה
+ *   מחליפה אותו, ונגיעה במקום מסוים מאפשרת למחוק ולתקן ספרה. מפריד ":" "." או ",".
+ *   ביציאה השעה משלימה ומסתדרת ("9" → 09:00, "930" → 09:30); טקסט שלא ניתן לפענח
+ *   מסומן כשגוי. הערך נשלח כבר בזמן העריכה, כשהשעה שלמה.
+ * - הקלדה רציפה של ספרות: הנקודתיים נוספות לבד ("930" → 09:30); ספרת שעה ראשונה
+ *   3–9 משלימה "0", וכך גם ספרת דקות ראשונה 6–9; שעה מעל 23 נקבעת ל־23.
+ *   השעה הושלמה → `onComplete` (מעבר לשדה הבא); ספרות עודפות → `onOverflow`.
  * - גלגלת: גרירה אנכית על התיבה (וגלגלת עכבר ב־web). בחצי השמאלי — שעות
  *   (צעד של שעה), בחצי הימני — דקות (צעד של דקה; מעבר 59 / 00 מעדכן את השעה). בקצה היממה הגלגלת נעצרת (23:59 / 00:00),
  *   בלי לקפוץ לצד השני. בעזיבה השכבה נשארת רגע ונעלמת בדהייה.
@@ -21,6 +21,7 @@ import { StyleSheet, View } from 'react-native';
 import { TextInput } from './Text';
 import type { TextInput as RNTextInput } from 'react-native';
 import { useWheel } from './useWheel';
+import { complete, finish, onlyDigits, typed, typedText } from '../lib/timeText';
 import { Icon } from './Icon';
 import { hideWheelOverlay, showWheelOverlay } from './WheelOverlay';
 import { useTheme } from '../theme/ThemeContext';
@@ -54,36 +55,16 @@ type TimeInputProps = {
 const HOUR_STEP_PX = 40;
 const MINUTE_STEP_PX = 18;
 
-const onlyDigits = (text: string) => text.replace(/\D/g, '');
 const pad2 = (n: number) => String(n).padStart(2, '0');
-
-/** לוקח חלק (שעות/דקות) מתחילת רצף ספרות; מחזיר [חלק, שארית]. */
-function take(d: string, maxFirst: number): [string, string] {
-  if (d === '') return ['', ''];
-  if (Number(d[0]) > maxFirst) return [`0${d[0]}`, d.slice(1)];
-  return [d.slice(0, 2), d.slice(2)];
-}
-
-/** ספרות גולמיות → [שעות, דקות, שארית] מנורמלים. */
-function parse(d: string): [string, string, string] {
-  let [h, rest] = take(d, 2);
-  if (h.length === 2 && Number(h) > 23) h = '23';
-  if (h.length < 2) return [h, '', ''];
-  const [m, extra] = take(rest, 5);
-  return [h, m, extra];
-}
-
-/** תצוגה: "9" · "09:" · "09:3" · "09:30" */
-function display(h: string, m: string): string {
-  if (h.length < 2) return h;
-  return `${h}:${m}`;
-}
 
 /** "HH:MM" → דקות מתחילת היום; אחרת null */
 function toMinutes(v: string): number | null {
   const r = /^(\d{2}):(\d{2})$/.exec(v);
   return r ? Number(r[1]) * 60 + Number(r[2]) : null;
 }
+
+/** ערך "HH:MM" (או ריק) → הטקסט בתיבה */
+const fromText = (value: string) => (/^\d{1,2}:\d{2}$/.test(value) ? value.padStart(5, '0') : '');
 
 function fromValue(value: string): [string, string] {
   const r = /^(\d{1,2}):(\d{2})$/.exec(value);
@@ -97,18 +78,18 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const inputRef = useRef<RNTextInput>(null);
-  const [[hh, mm], setParts] = useState<[string, string]>(() => fromValue(value));
-  // הערכים העדכניים, מתעדכנים מיד (לא מחכים לרינדור) — להקלדה מהירה ולגלגלת.
-  const partsRef = useRef<[string, string]>([hh, mm]);
-  // ערך קודם של שדה שנוקה בכניסה אליו — מוצג כרמז, ומוחזר אם יצאו בלי להקליד.
-  const [saved, setSavedState] = useState('');
-  const savedRef = useRef('');
-  // מיקוד שהקוד יזם (וכבר ניקה) — אירוע ה־focus שאחריו לא ינקה שוב.
-  const programmatic = useRef(false);
+  /** הטקסט בתיבה כפי שהוא — אפשר לערוך בו כל ספרה */
+  const [text, setTextState] = useState(() => fromText(value));
+  // העדכני מיד (לא מחכים לרינדור) — להקלדה מהירה ולגלגלת.
+  const textRef = useRef(text);
+  /** כניסה לשדה: כל הטקסט מסומן (הקלדה מחליפה אותו); אחרי השינוי הראשון — חופשי */
+  const [selection, setSelection] = useState<{ start: number; end: number } | undefined>(undefined);
+  /** טקסט שלא ניתן לפענח ביציאה מהשדה — מסומן כשגוי */
+  const [bad, setBad] = useState(false);
 
-  function setSaved(v: string) {
-    savedRef.current = v;
-    setSavedState(v);
+  function setText(t: string) {
+    textRef.current = t;
+    setTextState(t);
   }
 
   // סנכרון רק כשהערך הוחלף מבחוץ (ולא כהד של מה שהשדה עצמו שלח).
@@ -116,70 +97,69 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
   useEffect(() => {
     if (value !== lastEmitted.current) {
       lastEmitted.current = value;
-      partsRef.current = fromValue(value);
-      setParts(partsRef.current);
+      setText(fromText(value));
+      setBad(false);
     }
   }, [value]);
 
-  function emit(h: string, m: string) {
-    partsRef.current = [h, m];
-    setParts([h, m]);
-    const next = h.length === 2 && m.length === 2 ? `${h}:${m}` : '';
+  function send(next: string) {
+    if (next === lastEmitted.current) return;
     lastEmitted.current = next;
     onChange(next);
   }
 
-  /** ניקוי שדה מלא לפני הקלדה חדשה (בלי בחירת טקסט — באנדרואיד היא מתחדשת). */
-  function clearForTyping() {
-    const [h, m] = partsRef.current;
-    if (h.length !== 2 || m.length !== 2) return;
-    setSaved(`${h}:${m}`);
-    emit('', '');
+  /** הטקסט השתנה — שומרים אותו כמו שהוא, ושולחים שעה כשהיא שלמה. */
+  function update(t: string) {
+    setText(t);
+    setBad(false);
+    send(complete(t) ?? '');
   }
 
-  function restoreIfEmpty() {
-    programmatic.current = false;
-    const prev = savedRef.current;
-    const [h, m] = partsRef.current;
-    if (prev && h === '' && m === '') {
-      const [ph, pm] = fromValue(prev);
-      emit(ph, pm);
-    }
-    setSaved('');
-  }
-
-  /** מזין ספרות (מצטרפות למה שכבר הוקלד). */
+  /** ספרות שנוספו בסוף (הקלדה רציפה / גלישה מהשדה הקודם): נקודתיים לבד, ומעבר לשדה הבא. */
   function feed(d: string) {
-    const [h0, m0] = partsRef.current;
-    const wasComplete = h0.length === 2 && m0.length === 2;
-    const [h, m, extra] = parse(h0 + m0 + d);
-    emit(h, m);
+    const before = onlyDigits(textRef.current);
+    const wasComplete = complete(textRef.current) != null;
+    const [h, m, extra] = typed(before + d);
+    update(typedText(h, m));
     if (h.length === 2 && m.length === 2) {
-      setSaved('');
       if (extra && onOverflow) onOverflow(extra);
       else if (!wasComplete) onComplete?.();
     }
   }
 
-  function onText(text: string) {
-    const [h0, m0] = partsRef.current;
-    const prevDigits = h0 + m0;
-    let d = onlyDigits(text);
-    // נמחקו הנקודתיים בלבד — מוחקים את הספרה שלפניהן.
-    if (text.length < display(h0, m0).length && d === prevDigits) d = d.slice(0, -1);
-    if (d.length <= prevDigits.length || !d.startsWith(prevDigits)) {
-      // מחיקה או החלפה — מחשבים מחדש מהספרות.
-      const [h, m] = parse(d);
-      emit(h, m);
+  const typedParts = (d: string) => typed(d).slice(0, 2) as [string, string];
+
+  function onText(next: string) {
+    setSelection(undefined);
+    const prev = textRef.current;
+    const prevDigits = onlyDigits(prev);
+    // ספרות שנוספו בסוף של הקלדה רציפה ("", "9", "09:", "09:3", "09:30") — נקודתיים לבד.
+    const added = next.startsWith(prev) ? next.slice(prev.length) : null;
+    if (added && /^\d+$/.test(added) && prev === typedText(...typedParts(prevDigits))) {
+      feed(added);
       return;
     }
-    feed(d.slice(prevDigits.length));
+    // עריכה חופשית: ספרות ומפריד אחד בלבד.
+    update(next.replace(/[^\d:.,]/g, '').slice(0, 5));
+  }
+
+  /** יציאה מהשדה: משלימים ("9" → 09:00) ומסדרים ל־"HH:MM"; לא ניתן לפענח — שגוי. */
+  function onBlur() {
+    setSelection(undefined);
+    const done = finish(textRef.current);
+    if (done == null) {
+      setBad(true);
+      send('');
+      return;
+    }
+    setText(done);
+    send(done);
   }
 
   const minMinutes = toMinutes(min ?? '');
   const minRef = useRef(minMinutes);
   minRef.current = minMinutes;
-  const current = toMinutes(display(hh, mm));
+  const current = toMinutes(complete(text) ?? '');
   /** שעה מלאה שאינה אחרי `min` */
   const beforeMin = minMinutes != null && current != null && current <= minMinutes;
 
@@ -190,9 +170,7 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
 
   /** צעד גלגלת: delta דקות מהשעה הנוכחית (ריק = הערך הקודם או 00:00), בטווח היממה. */
   function step(delta: number) {
-    const base = partsRef.current[0].length === 2 && partsRef.current[1].length === 2
-      ? partsRef.current
-      : fromValue(savedRef.current);
+    const base = fromValue(complete(textRef.current) ?? lastEmitted.current);
     const lo = minRef.current;
     // שדה ריק עם `min` — הגלגלת מתחילה משעת ההתחלה.
     const from = base[0] === '' && lo != null ? lo : Number(base[0] || 0) * 60 + Number(base[1] || 0);
@@ -203,8 +181,7 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     const hi = partRef.current === 0 ? 23 * 60 + m : 1439;
     const floor = lo != null ? lo + 1 : partRef.current === 0 ? m : 0;
     const total = Math.min(hi, Math.max(floor, raw));
-    setSaved('');
-    emit(pad2(Math.floor(total / 60)), pad2(total % 60));
+    update(`${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`);
   }
   const wheel = useWheel((d) => step(partRef.current === 0 ? d * 60 : d), {
     onStart: ({ x, width, top }) => {
@@ -223,7 +200,8 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
 
   useEffect(() => {
     if (!drag) return;
-    const [h, m] = hh.length === 2 && mm.length === 2 ? [Number(hh), Number(mm)] : [0, 0];
+    const [hh, mm] = fromValue(complete(text) ?? '');
+    const [h, m] = hh ? [Number(hh), Number(mm)] : [0, 0];
     showWheelOverlay({
       title: label,
       bottom: drag.top,
@@ -233,19 +211,15 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
         { values: [pad2((m + 59) % 60), pad2(m), pad2((m + 1) % 60)], active: drag.part === 1 },
       ],
     });
-  }, [drag, hh, mm, label]);
+  }, [drag, text, label]);
 
   useImperativeHandle(
     ref,
     () => ({
-      focus: () => {
-        clearForTyping();
-        programmatic.current = true;
-        inputRef.current?.focus();
-      },
+      focus: () => inputRef.current?.focus(),
+      // ספרות שגלשו מהשדה הקודם מחליפות את מה שהיה כאן.
       feed: (d: string) => {
-        clearForTyping();
-        programmatic.current = true;
+        setText('');
         inputRef.current?.focus();
         feed(d);
       },
@@ -258,26 +232,29 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
     <View ref={wheel.ref} {...wheel.panHandlers}>
       <TextInput
         ref={inputRef}
-        value={display(hh, mm)}
+        value={text}
         onChangeText={onText}
+        selection={selection}
         onFocus={() => {
           hideWheelOverlay();
           onFocus?.();
-          if (programmatic.current) {
-            programmatic.current = false;
-            return;
-          }
-          clearForTyping();
+          // כל הטקסט מסומן: הקלדה מחליפה אותו, ונגיעה במקום מסוים מאפשרת לתקן ספרה.
+          setSelection({ start: 0, end: textRef.current.length });
         }}
-        onBlur={restoreIfEmpty}
-        placeholder={saved || placeholder}
+        onSelectionChange={(e) => {
+          // המשתמש הזיז את הסמן / הסימון — משחררים את הסימון הכפוי.
+          const sel = e.nativeEvent.selection;
+          if (selection && (sel.start !== selection.start || sel.end !== selection.end)) setSelection(undefined);
+        }}
+        onBlur={onBlur}
+        placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         accessibilityLabel={label}
         keyboardType="number-pad"
         inputMode="numeric"
         returnKeyType="next"
         onSubmitEditing={() => onComplete?.()}
-        style={[styles.input, drag && styles.dragging, (invalid || beforeMin) && styles.invalid]}
+        style={[styles.input, drag && styles.dragging, (invalid || beforeMin || bad) && styles.invalid]}
       />
       {/* סימן גלגלת בשני הצדדים: גרירה למעלה / למטה משנה שעות (שמאל) ודקות (ימין) */}
       <View pointerEvents="none" style={[styles.wheelMark, styles.wheelMarkLeft]}>
