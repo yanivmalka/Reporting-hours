@@ -31,6 +31,7 @@ export function GroupedSummary({ w }: { w: Journal }) {
       <GroupLevelPicker />
       {groups.map((g) => {
         const minutes = g.items.reduce((n, r) => n + (netMinutes(r) ?? 0), 0);
+        const carried = g.items.reduce((n, r) => n + (r.carriedMinutes ?? 0), 0);
         const pays = g.items.map(payOf);
         const pay = pays.reduce<number>((n, p) => n + (typeof p === 'number' ? p : 0), 0);
         const hasPay = pays.some((p) => typeof p === 'number');
@@ -50,6 +51,7 @@ export function GroupedSummary({ w }: { w: Journal }) {
             )}
             <Text style={[styles.meta, { color: colors.textMuted }]}>
               {g.items.length} דיווחים · {Math.round((minutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳ אקד׳
+              {carried > 0 ? ` · ${carried} דק׳ למונה` : ''}
               {hasPay ? ` · ${formatShekels(Math.round(pay))}` : ''}
             </Text>
           </View>

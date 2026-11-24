@@ -242,6 +242,7 @@ export function PlanList({
                   return {
                     workplaceId: r.workplace.id,
                     netMinutes: rep ? netMinutes(rep) ?? 0 : rangeNetMinutes(t.start, t.end, t.breakMinutes),
+                    carriedMinutes: rep?.carriedMinutes ?? 0,
                   };
                 }),
               );

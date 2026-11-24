@@ -32,6 +32,7 @@
 | סיבות ביטול (רשימה גלובלית) | `lib/cancelReasons.ts` | `reporting-hours/cancel-reasons/v1` |
 | לוח החופשות | `lib/vacations.ts` (נשמר דרך `saveVacations` ב־`lib/sessions.ts`) | `reporting-hours/vacations/v1` |
 | סטטוס דוחות שכר (נשלח / שולם) | `lib/payroll.ts` | `reporting-hours/payroll/v1` |
+| תבניות פירוט לדוח השכר ותבנית לכל מקום | `lib/payrollTemplate.ts` | `reporting-hours/payroll-templates/v1` |
 | מונה דקות מצטברות | `lib/accumulated.ts` | `reporting-hours/accumulated/v2` |
 | אופן פדיון דקות | `lib/redeem.ts` | `reporting-hours/redeem-mode/v1` |
 | בסיס חישוב שכר (ברירת מחדל ישנה; לכל מקום — `Workplace.payBasis`) | `lib/payBasis.tsx` | `reporting-hours/pay-basis/v1` |

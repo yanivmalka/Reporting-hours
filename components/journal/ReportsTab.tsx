@@ -31,6 +31,7 @@ export function ReportsTab({ w }: { w: Journal }) {
       <Text style={styles.summaryLine}>
         {Math.round((totals.netMinutes / ACADEMIC_HOUR_MINUTES) * 10) / 10} שע׳ אקדמיות · שכר{' '}
         {formatShekels(Math.round(totals.pay))}
+        {totals.carriedMinutes > 0 ? ` · ${totals.carriedMinutes} דק׳ הועברו למונה` : ''}
         {totals.travel > 0 ? ` · נסיעות ${formatShekels(totals.travel)}` : ''}
       </Text>
       {isFiltered ? (
@@ -126,7 +127,11 @@ export function ReportsTab({ w }: { w: Journal }) {
             }
             if (dayReports.length < 2) return null;
             const totals = dayTotalsByWorkplace(
-              dayReports.reverse().map((r) => ({ workplaceId: r.workplaceId, netMinutes: netMinutes(r) ?? 0 })),
+              dayReports.reverse().map((r) => ({
+                workplaceId: r.workplaceId,
+                netMinutes: netMinutes(r) ?? 0,
+                carriedMinutes: r.carriedMinutes ?? 0,
+              })),
             );
             return (
               <View style={styles.daySummary}>

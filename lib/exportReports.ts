@@ -40,12 +40,14 @@ export type ExportRow = {
   netMinutes: number;
   /** שעות לתשלום (אקדמיות או רגילות, לפי המקום) */
   payHours: number;
+  /** דקות שהועברו למונה המצטבר (במקום אקדמי — אינן בשעות לתשלום) */
+  carriedMinutes: number;
   basis: PayBasis;
   /** null — מקום בשכר חודשי, או בלי סכומים */
   pay: number | null;
 };
 
-export type ExportTotals = { reports: number; netMinutes: number; pay: number; workdays: number };
+export type ExportTotals = { reports: number; netMinutes: number; carriedMinutes: number; pay: number; workdays: number };
 
 /** קבוצה בייצוא — כותרת, השורות שלה וסיכום ביניים. */
 export type ExportGroup = { label: string; rows: ExportRow[]; totals: ExportTotals };
@@ -120,6 +122,7 @@ export function buildExport(
       breakMinutes: totalBreakMinutes(r.breaks ?? []),
       netMinutes: netMinutes(r) ?? 0,
       payHours: payableHours(r, b),
+      carriedMinutes: b === 'academic' ? Math.max(0, r.carriedMinutes ?? 0) : 0,
       basis: b,
       pay,
     };
@@ -150,6 +153,7 @@ function totalsOf(rows: readonly ExportRow[]): ExportTotals {
   return {
     reports: rows.length,
     netMinutes: rows.reduce((s, r) => s + r.netMinutes, 0),
+    carriedMinutes: rows.reduce((s, r) => s + r.carriedMinutes, 0),
     pay: rows.reduce((s, r) => s + (r.pay ?? 0), 0),
     workdays: new Set(rows.map((r) => `${r.workplaceId}@${r.date}`)).size,
   };
@@ -170,8 +174,11 @@ export function hoursText(minutes: number): string {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const basisLabel = (b: PayBasis) => (b === 'academic' ? 'אקדמיות' : 'רגילות');
 
+/** מיקום עמודת השכר (האחרונה) */
+const PAY_COLUMN = 11;
+
 function headers(withPay: boolean): string[] {
-  const h = ['תאריך', 'יום', 'מקום עבודה', 'קורס / הערה', 'התחלה', 'סיום', 'הפסקות (דק׳)', 'נטו (שעות)', 'שעות לתשלום', 'סוג שעות'];
+  const h = ['תאריך', 'יום', 'מקום עבודה', 'קורס / הערה', 'התחלה', 'סיום', 'הפסקות (דק׳)', 'נטו (שעות)', 'שעות לתשלום', 'סוג שעות', 'למונה המצטבר (דק׳)'];
   return withPay ? [...h, 'שכר (₪)'] : h;
 }
 
@@ -187,6 +194,7 @@ function cells(r: ExportRow, withPay: boolean): (string | number)[] {
     hoursText(r.netMinutes),
     round2(r.payHours),
     basisLabel(r.basis),
+    r.carriedMinutes || '',
   ];
   return withPay ? [...c, r.pay == null ? '' : round2(r.pay)] : c;
 }
@@ -203,7 +211,7 @@ function csvCell(v: string | number): string {
 export function toCsv(data: ExportData, withPay: boolean, employee?: EmployeeInfo | null): string {
   const info = employeeLines(employee);
   const totalLine = (label: string, t: ExportTotals): (string | number)[] => {
-    const l: (string | number)[] = [label, '', '', `${t.reports} דיווחים`, '', '', '', hoursText(t.netMinutes), '', ''];
+    const l: (string | number)[] = [label, '', '', `${t.reports} דיווחים`, '', '', '', hoursText(t.netMinutes), '', '', t.carriedMinutes || ''];
     if (withPay) l.push(round2(t.pay));
     return l;
   };
@@ -239,7 +247,7 @@ export function toHtml(
   const head = headers(withPay).map((h) => `<th>${esc(h)}</th>`).join('');
   const cols = headers(withPay).length;
   const rowHtml = (r: ExportRow) => {
-    const c = cells(r, withPay).map((v, i) => (withPay && i === 10 && v !== '' ? formatShekels(Number(v)) : v));
+    const c = cells(r, withPay).map((v, i) => (withPay && i === PAY_COLUMN && v !== '' ? formatShekels(Number(v)) : v));
     return `<tr>${c.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`;
   };
   const subtotal = (label: string, t: ExportTotals) =>
@@ -249,6 +257,7 @@ export function toHtml(
         `${t.reports} דיווחים`,
         `${t.workdays} ימי עבודה`,
         `${hoursText(t.netMinutes)} שעות נטו`,
+        t.carriedMinutes > 0 ? `${t.carriedMinutes} דק׳ למונה` : '',
         withPay ? `שכר ${formatShekels(t.pay)}` : '',
       ]
         .filter(Boolean)
@@ -266,6 +275,7 @@ export function toHtml(
     `${data.totals.reports} דיווחים`,
     `${data.totals.workdays} ימי עבודה`,
     `${hoursText(data.totals.netMinutes)} שעות נטו`,
+    data.totals.carriedMinutes > 0 ? `${data.totals.carriedMinutes} דק׳ הועברו למונה המצטבר` : '',
     withPay ? `שכר לפי דיווחים: ${formatShekels(data.totals.pay)}` : '',
   ]
     .filter(Boolean)

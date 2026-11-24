@@ -30,6 +30,9 @@ import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { TEXT_RIGHT } from '../theme/align';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { AccumulatedSourcesList } from '../components/AccumulatedSources';
+import { reportCourseName } from '../lib/courseGrouping';
+import type { Course } from '../lib/courses';
 
 
 export default function SettingsScreen() {
@@ -44,6 +47,7 @@ export default function SettingsScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [statuses, setStatuses] = useState<StatusMap>({});
+  const [courseList, setCourseList] = useState<Course[]>([]);
   const [mode, setMode] = useRedeemMode();
   const [leftover, setLeftover] = useLeftoverMode();
   /** ?focus=settings (מאשף הדיווח) — קבוצת "הגדרות" נפתחת */
@@ -55,6 +59,7 @@ export default function SettingsScreen() {
     [],
     ([next, list, reps, st, courses]) => {
       setWithActive(workplacesWithActiveCourse(courses, todayISO()));
+      setCourseList(courses);
       setState(next);
       setWorkplaces(list);
       setReports(reps);
@@ -243,6 +248,12 @@ export default function SettingsScreen() {
                 {status}
                 {` · נפדו ${formatHours(Math.round(redeemedH * 100) / 100)} שע׳${value}`}
               </Text>
+              <AccumulatedSourcesList
+                reports={reports}
+                workplaceId={id}
+                entry={entry}
+                courseOf={(r) => reportCourseName(r, courseList)}
+              />
               {p && p.plan.minutes > 0 ? (
                 <Button
                   label={`פדיון ${minutesLabel(p.plan.minutes)} אקד׳`}

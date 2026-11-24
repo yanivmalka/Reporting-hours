@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Share, StyleSheet, View } from 'react-native';
 import { DateText } from '../components/DateText';
@@ -33,6 +33,27 @@ import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { FinanceGate } from '../components/AppLock';
+import { useAccess } from '../components/Access';
+import { SelectField } from '../components/SelectField';
+import { DetailEditor } from '../components/payrollTemplate/DetailEditor';
+import { MailPreview } from '../components/payrollTemplate/MailPreview';
+import { groupLevelTitle } from '../lib/courseGrouping';
+import type { Course } from '../lib/courses';
+import type { WorkReport } from '../lib/reports';
+import type { Workplace } from '../lib/workplaces';
+import {
+  allTemplates,
+  assignTemplate,
+  loadPayrollTemplates,
+  newTemplateId,
+  removeTemplate,
+  sameDetail,
+  savePayrollTemplates,
+  templateFor,
+  upsertTemplate,
+  type PayrollDetail,
+  type PayrollTemplateStore,
+} from '../lib/payrollTemplate';
 
 const academic = (m: number) => Math.round((m / ACADEMIC_HOUR_MINUTES) * 100) / 100;
 const hm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
@@ -58,8 +79,15 @@ function PayrollReportScreen() {
   const { colors } = useTheme();
   const { showToast } = useToast();
   const params = useLocalSearchParams<{ wp: string; start: string }>();
-  const [report, setReport] = useState<PayrollReport | null>(null);
+  const [data, setData] = useState<{ w: Workplace; reports: WorkReport[]; courses: Course[] } | null>(null);
   const [status, setStatus] = useState<PayrollStatus>({});
+  const access = useAccess();
+  /** תבניות הפירוט, התבנית שנבחרה למקום, והפירוט שחל על השליחה (אולי שונה ולא נשמר) */
+  const [store, setStore] = useState<PayrollTemplateStore>({ templates: [], byWorkplace: {} });
+  const [templateId, setTemplateId] = useState<string>('full');
+  const [detail, setDetail] = useState<PayrollDetail | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [missing, setMissing] = useState(false);
   const { basis } = usePayBasis();
   const level = useGroupLevel();
@@ -76,9 +104,10 @@ function PayrollReportScreen() {
         loadCourses(),
         loadPayrollStatus(),
         loadProfile(),
+        loadPayrollTemplates(),
       ]),
-    [params.wp, params.start, basis, level],
-    ([workplaces, reports, courses, st, prof]) => {
+    [params.wp, params.start],
+    ([workplaces, reports, courses, st, prof, tpl]) => {
       // שם השולח: השם המלא מהפרטים האישיים (בחשבון ששותף — של הבעלים).
       setProfile({ ...prof, fullName: senderName(prof) });
       const w = workplaces.find((x) => x.id === params.wp);
@@ -87,11 +116,26 @@ function PayrollReportScreen() {
         return;
       }
       const period = periodStartingAt(w, params.start);
-      const own = st[statusKey(w.id, period.start)] ?? {};
-      setReport(buildPayrollReport(w, period, reports, courses, basis, own.redeemedMinutes ?? 0, undefined, level));
-      setStatus(own);
+      setData({ w, reports, courses });
+      setStatus(st[statusKey(w.id, period.start)] ?? {});
+      setStore(tpl);
+      const t = templateFor(tpl, w.id);
+      setTemplateId(t.id);
+      setDetail((cur) => cur ?? t.detail);
     },
   );
+
+  const templates = allTemplates(store);
+  const template = templates.find((t) => t.id === templateId) ?? templates[0];
+  const current = detail ?? template.detail;
+  /** הקיבוץ בדוח — של התבנית, או כפי שנבחר במסך */
+  const effLevel = current.level ?? level;
+  const report: PayrollReport | null = useMemo(() => {
+    if (!data || !params.start) return null;
+    const period = periodStartingAt(data.w, params.start);
+    return buildPayrollReport(data.w, period, data.reports, data.courses, basis, status.redeemedMinutes ?? 0, undefined, effLevel);
+  }, [data, params.start, basis, status.redeemedMinutes, effLevel]);
+  const modified = !sameDetail(current, template.detail);
 
   if (missing) {
     return (
@@ -145,7 +189,7 @@ function PayrollReportScreen() {
   }
 
   async function createEmail() {
-    const url = payrollMailto(report as PayrollReport, profile);
+    const url = payrollMailto(report as PayrollReport, profile, current);
     try {
       await Linking.openURL(url);
       const map = await updatePayrollStatus(workplace.id, period.start, { generatedAt: Date.now() });
@@ -159,13 +203,26 @@ function PayrollReportScreen() {
     try {
       await Share.share({
         title: payrollSubject(report as PayrollReport),
-        message: `${payrollSubject(report as PayrollReport)}\n\n${payrollBody(report as PayrollReport, profile)}`,
+        message: `${payrollSubject(report as PayrollReport)}\n\n${payrollBody(report as PayrollReport, profile, current)}`,
       });
       const map = await updatePayrollStatus(workplace.id, period.start, { generatedAt: Date.now() });
       setStatus(map[statusKey(workplace.id, period.start)] ?? {});
     } catch {
       // המשתמש ביטל
     }
+  }
+
+  async function persist(next: PayrollTemplateStore) {
+    setStore(await savePayrollTemplates(next));
+  }
+
+  function chooseTemplate(id: string) {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    setTemplateId(id);
+    setDetail(t.detail);
+    // הבחירה נזכרת למקום העבודה — רק למי שרשאי לשמור (בעלים / מורשה מלא)
+    if (access.canEdit) void persist(assignTemplate(store, workplace.id, id));
   }
 
   const empty = report.groups.length === 0;
@@ -231,9 +288,32 @@ function PayrollReportScreen() {
       </View>
 
       {!empty ? (
-        <View style={styles.levelBox}>
-          <Text style={styles.label}>קיבוץ המפגשים (גם במייל ובשיתוף)</Text>
-          <GroupLevelPicker />
+        <View style={styles.card}>
+          <Text style={styles.label}>פירוט הדוח במייל ובשיתוף</Text>
+          <SelectField
+            label="תבנית:"
+            title="תבנית פירוט"
+            value={templateId}
+            onChange={chooseTemplate}
+            options={templates.map((t) => ({ value: t.id, label: t.name, sub: t.builtIn ? 'מובנית' : undefined }))}
+          />
+          {modified ? <Text style={styles.cc}>הפירוט שונה לשליחה הזו (לא נשמר בתבנית)</Text> : null}
+          {current.level ? (
+            <Text style={styles.cc}>קיבוץ לפי התבנית: {groupLevelTitle(current.level)}</Text>
+          ) : (
+            <View style={styles.levelBox}>
+              <Text style={styles.cc}>קיבוץ המפגשים</Text>
+              <GroupLevelPicker />
+            </View>
+          )}
+          <View style={styles.btnRow}>
+            <View style={{ flex: 1 }}>
+              <Button label="התאמת הפירוט" variant="secondary" onPress={() => setEditorOpen(true)} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button label="תצוגה מקדימה" variant="secondary" onPress={() => setPreviewOpen(true)} />
+            </View>
+          </View>
         </View>
       ) : null}
 
@@ -248,6 +328,7 @@ function PayrollReportScreen() {
             </View>
             <Text style={styles.cc}>
               {g.sessions.length} מפגשים{g.days ? ` · ${g.days.length} ימים` : ''} · {hm(g.netMinutes)} שעות נטו
+              {g.carriedMinutes > 0 ? ` · ${g.carriedMinutes} דק׳ הועברו למונה` : ''}
             </Text>
             {g.days
               ? // לפי מקום עבודה — שורה לכל תאריך: כל טווחי השעות של היום (כל אחד מוביל לדיווח שלו) וסה״כ.
@@ -270,6 +351,7 @@ function PayrollReportScreen() {
                           <Text style={styles.dayTime}>
                             {`⁦${s.start}–${s.end}⁩`}
                             {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
+                            {s.carriedMinutes > 0 ? ` · ${s.carriedMinutes} דק׳ למונה` : ''}
                           </Text>
                         </Pressable>
                       ))}
@@ -293,6 +375,7 @@ function PayrollReportScreen() {
                     <Text style={styles.sessionTime}>
                       {`⁦${s.start}–${s.end}⁩`}
                       {s.breakMinutes > 0 ? ` · הפסקה ${s.breakMinutes}` : ''}
+                      {s.carriedMinutes > 0 ? ` · ${s.carriedMinutes} דק׳ למונה` : ''}
                     </Text>
                     <Text style={styles.sessionHours}>{academic(s.netMinutes)}</Text>
                   </Pressable>
@@ -343,6 +426,19 @@ function PayrollReportScreen() {
             {academic(report.netMinutes)} אקד׳ · {hm(report.netMinutes)} נטו
           </Text>
         </View>
+        {report.carriedMinutes > 0 ? (
+          <Pressable
+            onPress={() => router.push('/settings')}
+            accessibilityRole="link"
+            style={({ pressed }) => [styles.totalRow, pressed && { opacity: 0.6 }]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <Text style={styles.totalLabel}>הועברו למונה המצטבר</Text>
+              <EnterChevron size={14} color={colors.brandDark} />
+            </View>
+            <Text style={styles.totalValue}>{report.carriedMinutes} דק׳ (לא בשעות)</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>ימי עבודה</Text>
           <Text style={styles.totalValue}>{report.days}</Text>
@@ -411,6 +507,80 @@ function PayrollReportScreen() {
         <Button label="סימון כנשלח" variant="secondary" onPress={() => setSent(true)} disabled={empty} />
       )}
 
+      <DetailEditor
+        visible={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        initial={current}
+        template={template}
+        screenLevel={level}
+        canSave={access.canEdit}
+        preview={(d) => {
+          const r = d.level === current.level
+            ? report
+            : buildPayrollReport(workplace, period, data?.reports ?? [], data?.courses ?? [], basis, status.redeemedMinutes ?? 0, undefined, d.level ?? level);
+          return { subject: payrollSubject(r), body: payrollBody(r, profile, d) };
+        }}
+        onApply={(d) => {
+          setDetail(d);
+          setEditorOpen(false);
+        }}
+        onSaveNew={async (name, d) => {
+          const id = newTemplateId();
+          await persist(assignTemplate(upsertTemplate(store, { id, name, detail: d }), workplace.id, id));
+          setTemplateId(id);
+          setDetail(d);
+          setEditorOpen(false);
+          showToast(`התבנית "${name}" נשמרה ונבחרה ל${workplace.name}`);
+        }}
+        onUpdate={async (d) => {
+          await persist(upsertTemplate(store, { ...template, detail: d }));
+          setDetail(d);
+          setEditorOpen(false);
+          showToast(`התבנית "${template.name}" עודכנה`);
+        }}
+        onDelete={async () => {
+          await persist(removeTemplate(store, template.id));
+          setTemplateId('full');
+          setDetail(templates[0].detail);
+          setEditorOpen(false);
+          showToast(`התבנית "${template.name}" נמחקה`);
+        }}
+      />
+
+      <Dialog
+        visible={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title="תצוגה מקדימה"
+        maxWidth={560}
+        actions={[
+          <Button
+            key="mail"
+            label="יצירת מייל לשליחה"
+            onPress={() => {
+              setPreviewOpen(false);
+              void createEmail();
+            }}
+          />,
+          <Button
+            key="share"
+            label="שיתוף / העתקה"
+            variant="secondary"
+            onPress={() => {
+              setPreviewOpen(false);
+              void share();
+            }}
+          />,
+          <Button key="close" label="סגירה" variant="secondary" onPress={() => setPreviewOpen(false)} />,
+        ]}
+      >
+        <MailPreview
+          to={workplace.payrollEmail}
+          cc={workplace.ccEmails}
+          subject={payrollSubject(report)}
+          body={payrollBody(report, profile, current)}
+        />
+      </Dialog>
+
       <PaymentDialog
         visible={payOpen}
         title={`תשלום — ${periodTitle(period)}`}
@@ -467,6 +637,7 @@ const makeStyles = (colors: AppColors) =>
     cc: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
     warn: { fontSize: 14, fontWeight: '700', color: colors.danger, textAlign: TEXT_RIGHT },
     levelBox: { gap: spacing.xs },
+    btnRow: { flexDirection: 'row', gap: spacing.sm },
     groupHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     groupName: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.text, textAlign: TEXT_RIGHT },
     groupHours: { fontSize: 15, fontWeight: '800', color: colors.brandDark },

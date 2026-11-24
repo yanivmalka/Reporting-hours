@@ -31,6 +31,7 @@ const REGISTRY = {
   cancelReasons: def('reporting-hours/cancel-reasons/v1', 'synced'),
   vacations: def('reporting-hours/vacations/v1', 'synced'),
   payroll: def('reporting-hours/payroll/v1', 'synced'),
+  payrollTemplates: def('reporting-hours/payroll-templates/v1', 'synced'),
   accumulated: def('reporting-hours/accumulated/v2', 'synced'),
   redeemMode: def('reporting-hours/redeem-mode/v1', 'synced'),
   payBasis: def('reporting-hours/pay-basis/v1', 'synced'),
