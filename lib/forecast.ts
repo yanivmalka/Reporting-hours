@@ -13,6 +13,9 @@
  *     כשיש לפחות מפגש אחד. ונסיעות לכל יום מפגש.
  *   - צפי (expected): הפוטנציאל בלי המפגשים שסומנו "בוטל".
  *   מפגשים שהוסרו מהפוטנציאל, הועברו לתאריך אחר או חלים בחג — לא בשניהם.
+ * מס: לכל מקום אחוז מס (ניכוי במקור, `taxPercent`, לפי התנאים שחלו בסוף התקופה).
+ * המס יורד מהשכר בלבד — לא מהחזר הנסיעות (`netOfTax`). במצב 'pay' (צפי תשלומים)
+ * הסכומים בחודש הם נטו — מה שצפוי להיכנס לחשבון; במצב 'work' — ברוטו.
  * המודול טהור — בלי אחסון ובלי React.
  */
 import { canceledSessionPay } from './cancelReasons';
@@ -24,7 +27,7 @@ import { basisFor, type PayBasis } from './payBasis';
 import { expectedPayment, reportLate, statusKey, type StatusMap } from './payroll';
 import type { WorkReport } from './reports';
 import { travelCostForDay } from './travel';
-import { LAST_DAY, paymentTermsOf, reportDeadlineDay, workplaceAt, type Workplace } from './workplaces';
+import { LAST_DAY, paymentTermsOf, reportDeadlineDay, taxPercentOf, workplaceAt, type Workplace } from './workplaces';
 
 export type ForecastMode = 'work' | 'pay';
 
@@ -45,6 +48,12 @@ export type PeriodForecast = {
   planned: number;
   /** צפי: הפוטנציאל בלי המפגשים שבוטלו */
   forecast: number;
+  /** אחוז המס שחל בתקופה (לפי התנאים בסוף התקופה; 0 — בלי ניכוי) */
+  taxPercent: number;
+  /** נטו אחרי מס — דווח · פוטנציאל · צפי (המס על השכר בלבד, לא על הנסיעות) */
+  reportedNet: number;
+  plannedNet: number;
+  forecastNet: number;
   /** המפגשים שבוטלו בתקופה (נשארים בפוטנציאל, יורדים מהצפי) */
   canceled: { courseId: string; date: string }[];
   status: PeriodStatus;
@@ -80,15 +89,15 @@ function periodInMonth(w: Workplace, year: number, month0: number): PayPeriod {
   return currentPayPeriod(w.payday, new Date(year, month0, day));
 }
 
-/** סכום לתקופה ממפגשי הקורסים של המקום: פוטנציאל, או צפי (`withoutCanceled`). */
-function amountFor(
+/** סכום לתקופה ממפגשי הקורסים של המקום: פוטנציאל, או צפי (`withoutCanceled`) — שכר ונסיעות בנפרד. */
+function amountParts(
   w: Workplace,
   courses: readonly Course[],
   period: Pick<PayPeriod, 'start' | 'end'>,
   basis: PayBasis,
   withoutCanceled: boolean,
   plan: PlanIndex,
-): number {
+): { pay: number; travel: number } {
   basis = basisFor(w, basis);
   const dates = new Set<string>();
   let pay = 0;
@@ -108,13 +117,24 @@ function amountFor(
       }
     }
   }
-  if (dates.size === 0) return 0;
+  if (dates.size === 0) return { pay: 0, travel: 0 };
   const last = [...dates].sort().pop() as string;
   const atEnd = workplaceAt(w, last);
   if (atEnd.paymentType === 'monthly') pay = Math.max(0, atEnd.rate);
   let travel = 0;
   for (const d of dates) travel += travelCostForDay(w, d);
-  return pay + travel;
+  return { pay, travel };
+}
+
+function amountFor(...args: Parameters<typeof amountParts>): number {
+  const a = amountParts(...args);
+  return a.pay + a.travel;
+}
+
+/** נטו אחרי ניכוי מס: המס יורד מהשכר בלבד, החזר הנסיעות נשאר מלא. */
+export function netOfTax(pay: number, travel: number, taxPercent: number): number {
+  const t = Math.min(100, Math.max(0, taxPercent));
+  return pay * (1 - t / 100) + travel;
 }
 
 /** פוטנציאל לתקופה — ממפגשי הקורסים של המקום, כולל מפגשים שבוטלו. */
@@ -185,6 +205,9 @@ export function periodForecast(
         : period.end >= todayIso
           ? 'open'
           : 'closed';
+  const tax = taxPercentOf(atEnd);
+  const planned = amountParts(w, courses, period, basis, false, plan);
+  const expected = amountParts(w, courses, period, basis, true, plan);
   return {
     workplace: w,
     period,
@@ -193,8 +216,12 @@ export function periodForecast(
     reported: t.pay + redeemedPay + t.travel,
     reportedPay: t.pay + redeemedPay,
     reportCount: mine.length,
-    planned: plannedFor(w, courses, period, basis, plan),
-    forecast: expectedFor(w, courses, period, basis, plan),
+    planned: planned.pay + planned.travel,
+    forecast: expected.pay + expected.travel,
+    taxPercent: tax,
+    reportedNet: netOfTax(t.pay + redeemedPay, t.travel, tax),
+    plannedNet: netOfTax(planned.pay, planned.travel, tax),
+    forecastNet: netOfTax(expected.pay, expected.travel, tax),
     canceled: canceledSessions(w, courses, period, plan),
     status,
     paidAt: st.paidAt,
@@ -235,14 +262,19 @@ export function forecastYear(
       const key = mode === 'work' ? periodMonthKey(period) : monthKey(f.expected);
       const i = index.get(key);
       if (i == null) continue;
+      // צפי תשלומים — נטו אחרי מס (מה שצפוי להיכנס); חודש עבודה — ברוטו.
+      const net = mode === 'pay';
+      const reported = net ? f.reportedNet : f.reported;
+      const planned = net ? f.plannedNet : f.planned;
+      const forecast = net ? f.forecastNet : f.forecast;
       const cell = months[i].byWorkplace[w.id];
-      cell.reported += f.reported;
-      cell.planned += f.planned;
-      cell.forecast += f.forecast;
+      cell.reported += reported;
+      cell.planned += planned;
+      cell.forecast += forecast;
       cell.periods.push(f);
-      months[i].reported += f.reported;
-      months[i].planned += f.planned;
-      months[i].forecast += f.forecast;
+      months[i].reported += reported;
+      months[i].planned += planned;
+      months[i].forecast += forecast;
     }
   }
   return months;
@@ -352,8 +384,15 @@ export type ScheduledPayment = {
   expected: string;
   /** תאריך הקבלה בפועל, אם סומן */
   paidAt?: string;
-  /** הסכום: שהתקבל (שולם), שדווח (תקופה שהסתיימה) או הצפי (תקופה נוכחית / עתידית) */
+  /**
+   * הסכום נטו אחרי מס: שהתקבל בפועל (שולם), שדווח (תקופה שהסתיימה) או הצפי
+   * (תקופה נוכחית / עתידית) — בניכוי אחוז המס של המקום.
+   */
   amount: number;
+  /** אותו סכום ברוטו (לפני מס); בתשלום שהתקבל — הברוטו שדווח */
+  gross: number;
+  /** אחוז המס שנוכה בחישוב (0 — בלי ניכוי) */
+  taxPercent: number;
   /** הסכום הוא צפי ולא דיווח בפועל */
   estimate: boolean;
   state: PaymentState;
@@ -397,8 +436,12 @@ export function paymentSchedule(
       const st = statuses[statusKey(w.id, period.start)] ?? {};
       const ended = f.status !== 'planned' && f.status !== 'open';
       const estimate = !st.paidAt && !ended;
-      const amount = st.paidAt ? st.paidAmount ?? f.reported : estimate ? Math.max(f.reported, f.forecast) : f.reported;
-      if (!st.paidAt && amount <= 0) continue;
+      const useForecast = estimate && f.forecast > f.reported;
+      const gross = useForecast ? f.forecast : f.reported;
+      const net = useForecast ? f.forecastNet : f.reportedNet;
+      // תשלום שהתקבל — הסכום שסומן (שהתקבל בפועל, כבר נטו); אחרת — הנטו המחושב.
+      const amount = st.paidAt ? st.paidAmount ?? net : net;
+      if (!st.paidAt && gross <= 0) continue;
       const late = st.paidAt ? daysBetween(f.expected, st.paidAt) : daysBetween(f.expected, todayIso);
       const state: PaymentState = st.paidAt
         ? late > 0
@@ -407,7 +450,7 @@ export function paymentSchedule(
         : f.expected < todayIso
           ? 'overdue'
           : 'upcoming';
-      out.push({ workplace: w, period, expected: f.expected, paidAt: st.paidAt, amount, estimate, state, daysLate: Math.max(0, late) });
+      out.push({ workplace: w, period, expected: f.expected, paidAt: st.paidAt, amount, gross, taxPercent: f.taxPercent, estimate, state, daysLate: Math.max(0, late) });
     }
   }
   return out.sort((a, b) => a.expected.localeCompare(b.expected) || a.workplace.name.localeCompare(b.workplace.name));

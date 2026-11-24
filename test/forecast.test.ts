@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Course } from '../lib/courses';
 import { currentPayPeriod } from '../lib/dashboard';
-import { canceledSessions, expectedFor, paymentSchedule, periodForecast, plannedFor } from '../lib/forecast';
+import { canceledSessions, expectedFor, forecastMonths, netOfTax, paymentSchedule, periodForecast, plannedFor } from '../lib/forecast';
 import { loadCancelIndex, setSessionMark } from '../lib/sessions';
 import type { Workplace } from '../lib/workplaces';
 
@@ -116,5 +116,46 @@ describe('מועדי תשלום', () => {
     });
     const current = paymentSchedule([wp], [novR], [course], {}, 'academic', '2026-12-01', '2026-12-31', day('2026-11-17'));
     expect(current[0]).toMatchObject({ state: 'upcoming', estimate: true, amount: 1600 });
+  });
+});
+
+describe('צפי תשלומים בניכוי מס', () => {
+  const taxed = { ...wp, taxPercent: 10, travelCostPerDirection: 10, tripsPerDay: 2, arrivalMode: 'public_transport' as const };
+  const novR = { id: 'r1', workplaceId: 'w1', date: '2026-11-03', start: '09:00', end: '12:00', breaks: [], carriedMinutes: 0, createdAt: 1 };
+  it('netOfTax: המס יורד מהשכר בלבד, לא מהנסיעות', () => {
+    expect(netOfTax(1000, 40, 10)).toBe(940);
+    expect(netOfTax(1000, 40, 0)).toBe(1040);
+  });
+  it('periodForecast מחזיר נטו לפי אחוז המס של המקום', () => {
+    const f = periodForecast(taxed, nov, [novR], [course], {}, 'academic', day('2026-11-17'));
+    expect(f.taxPercent).toBe(10);
+    expect(f.reportedNet).toBeCloseTo(f.reportedPay * 0.9 + (f.reported - f.reportedPay));
+    expect(f.forecastNet).toBeLessThan(f.forecast);
+    expect(f.plannedNet).toBeLessThan(f.planned);
+  });
+  it('מקום בלי מס — נטו שווה לברוטו', () => {
+    const f = periodForecast(wp, nov, [novR], [course], {}, 'academic', day('2026-11-17'));
+    expect(f.taxPercent).toBe(0);
+    expect(f.forecastNet).toBe(f.forecast);
+  });
+  it('מועדי תשלום — הסכום נטו, והברוטו לצדו', () => {
+    const list = paymentSchedule([{ ...wp, taxPercent: 10 }], [novR], [course], {}, 'academic', '2026-12-01', '2026-12-31', day('2026-11-17'));
+    expect(list[0]).toMatchObject({ gross: 1600, amount: 1440, taxPercent: 10 });
+  });
+  it('תשלום שהתקבל — הסכום שסומן, בלי ניכוי נוסף', () => {
+    const oct = { id: 'r0', workplaceId: 'w1', date: '2026-10-06', start: '09:00', end: '12:00', breaks: [], carriedMinutes: 0, createdAt: 1 };
+    const paid = { 'w1|2026-10-01': { sentAt: day('2026-10-30').getTime(), paidAt: '2026-12-02', paidAmount: 380 } };
+    const list = paymentSchedule([{ ...wp, taxPercent: 10 }], [oct], [course], paid, 'academic', '2026-11-01', '2026-11-30', day('2026-12-05'));
+    expect(list[0].amount).toBe(380);
+  });
+  it('forecastMonths: צפי תשלומים (pay) בנטו, חודש עבודה (work) בברוטו', () => {
+    const ref = [{ year: 2026, month0: 11 }];
+    const w = { ...wp, taxPercent: 10 };
+    const pay = forecastMonths(ref, [w], [novR], [course], {}, 'academic', 'pay', day('2026-11-17'));
+    const gross = forecastMonths(ref, [wp], [novR], [course], {}, 'academic', 'pay', day('2026-11-17'));
+    expect(pay[0].forecast).toBeCloseTo(gross[0].forecast * 0.9);
+    const workTaxed = forecastMonths(ref, [w], [novR], [course], {}, 'academic', 'work', day('2026-11-17'));
+    const workPlain = forecastMonths(ref, [wp], [novR], [course], {}, 'academic', 'work', day('2026-11-17'));
+    expect(workTaxed[0].forecast).toBe(workPlain[0].forecast);
   });
 });
