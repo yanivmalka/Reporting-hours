@@ -26,7 +26,7 @@ import { usePayBasis } from '../lib/payBasis';
 import { todayISO } from '../lib/time';
 import { loadReports, type WorkReport } from '../lib/reports';
 import { formatShekels, money } from '../lib/travel';
-import { loadWorkplaces, paymentTermsLabel, type Workplace } from '../lib/workplaces';
+import { loadWorkplaces, paymentTermsLabel, taxPercentOf, type Workplace } from '../lib/workplaces';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
@@ -382,9 +382,25 @@ function DashboardScreen() {
       out.push({ text: `סיכום ${listTitle} · לחיצה על חודש בגרף מציגה צפי תשלום` });
     }
     if (row.workplace.paymentType === 'monthly') out.push({ text: 'משכורת חודשית קבועה' });
+    // גובה המס של המקום (לפי התנאים בתקופה האחרונה שבתצוגה), והסכומים בצד השני — נטו / ברוטו.
+    const lastP = row.periods[row.periods.length - 1];
+    const tax = lastP ? lastP.taxPercent : taxPercentOf(row.workplace);
+    if (tax > 0) {
+      const sum = (k: 'reported' | 'forecast' | 'reportedNet' | 'forecastNet') =>
+        row.periods.reduce((a, p) => a + p[k], 0);
+      const other =
+        mode === 'pay'
+          ? `הסכומים נטו · ברוטו: דווח ${money(sum('reported'))} · צפי ${money(sum('forecast'))}`
+          : `נטו: דווח ${money(sum('reportedNet'))} · צפי ${money(sum('forecastNet'))}`;
+      out.push({ text: `ניכוי מס ${tax}% · ${other}` });
+    } else {
+      out.push({ text: 'ניכוי מס: לא הוגדר (0%)', tone: 'muted' });
+    }
     return out;
   };
   const filtered = selWp != null || selMonth != null;
+  // יש מקום (בתצוגה) עם אחוז מס — כדי לציין נטו / ברוטו בכותרת.
+  const taxed = rowsAll.some((r) => (!selWp || r.workplace.id === selWp) && r.periods.some((p) => p.taxPercent > 0));
   const maxWeekday = Math.max(...view.weekdays.map((w) => w.avgAcademicHours), 1);
   const r = view.rounding;
   const roundingTotal = r.exact + r.withLeftover || 1;
@@ -463,7 +479,9 @@ function DashboardScreen() {
       <Animated.View style={[styles.periodHead, listFlash]}>
         <Text style={styles.periodTitle}>{listTitle}</Text>
         <Text style={styles.periodSub}>
-          {mode === 'pay' ? 'לפי מועד התשלום הצפוי' : 'לפי חודש העבודה'}
+          {mode === 'pay'
+            ? `לפי מועד התשלום הצפוי${taxed ? ' · נטו אחרי מס' : ''}`
+            : `לפי חודש העבודה${taxed ? ' · ברוטו' : ''}`}
           {sel ? ` · מסונן: ${sel.workplace.name}` : ''}
         </Text>
       </Animated.View>

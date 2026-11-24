@@ -191,7 +191,14 @@ export function PaymentTimeline({
                   {s.text}
                 </Text>
               </View>
-              <Text style={[styles.rowAmount, p.estimate && styles.estimate]}>{money(p.amount)}</Text>
+              <View style={styles.rowAmounts}>
+                <Text style={[styles.rowAmount, p.estimate && styles.estimate]}>{money(p.amount)}</Text>
+                {p.taxPercent > 0 && !p.paidAt ? (
+                  <Text style={styles.rowTax} numberOfLines={1}>
+                    נטו · מס {p.taxPercent}%
+                  </Text>
+                ) : null}
+              </View>
               <EnterChevron size={16} />
             </Pressable>
           );
@@ -267,5 +274,7 @@ const makeStyles = (colors: AppColors) =>
     warn: { color: colors.dangerText },
     rowAmount: { fontSize: 14, fontWeight: '800', color: colors.brandDark },
     estimate: { color: colors.textMuted, fontWeight: '600' },
+    rowAmounts: { alignItems: 'flex-end' },
+    rowTax: { fontSize: 11, color: colors.textMuted },
     showAll: { fontSize: 13, fontWeight: '700', color: colors.brand, textAlign: TEXT_RIGHT },
   });

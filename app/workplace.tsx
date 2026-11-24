@@ -95,7 +95,6 @@ export default function WorkplaceDetailScreen() {
   const current = forecasts[0];
   const tax = taxPercentOf(w);
   const taxYear = String(new Date().getFullYear());
-  const netOf = (f: PeriodForecast) => f.reportedPay * (1 - tax / 100) + (f.reported - f.reportedPay);
 
   // התשלום הבא: הדוח הישן ביותר שנסגר ועוד לא שולם; אחרת — התקופה הנוכחית.
   const unpaid = forecasts
@@ -266,7 +265,11 @@ export default function WorkplaceDetailScreen() {
         <Text style={styles.heroLabel}>{next === current ? 'התקופה הנוכחית' : 'התשלום הבא'}</Text>
         <View style={styles.heroAmountRow}>
           <Text style={styles.heroAmount}>{money(next.reported)}</Text>
-          {tax > 0 ? <Text style={styles.heroSub}>ברוטו · {money(netOf(next))} נטו</Text> : null}
+          {next.taxPercent > 0 ? (
+            <Text style={styles.heroSub}>
+              ברוטו · {money(next.reportedNet)} נטו (מס {next.taxPercent}%)
+            </Text>
+          ) : null}
         </View>
         <Text style={styles.heroLine}>
           עבור {monthName(periodMonthKey(next.period))} · צפי {shortDate(next.expected)} ({paymentTermsLabel(w)})
@@ -279,13 +282,16 @@ export default function WorkplaceDetailScreen() {
           <View style={styles.heroTile}>
             <Text style={styles.heroTileLabel}>החודש — לפי תכנון</Text>
             <Text style={styles.heroTileValue}>{money(current.planned)}</Text>
+            {current.taxPercent > 0 ? (
+              <Text style={styles.heroTileLabel}>צפי נטו {money(current.forecastNet)}</Text>
+            ) : null}
           </View>
         </View>
       </View>
 
       <FoldSection
         title="תנאי שכר"
-        summary={`${w.paymentType === 'monthly' ? `${money(w.rate)} לחודש` : `${money(w.rate)} לשעה ${basisFor(w, basis) === 'academic' ? 'אקדמית' : 'רגילה'}`} · ${paymentTermsLabel(w)}`}
+        summary={`${w.paymentType === 'monthly' ? `${money(w.rate)} לחודש` : `${money(w.rate)} לשעה ${basisFor(w, basis) === 'academic' ? 'אקדמית' : 'רגילה'}`} · ${paymentTermsLabel(w)} · ${tax > 0 ? `מס ${tax}%` : 'בלי ניכוי מס'}`}
       >
         <View style={styles.card}>
           <InfoRow
@@ -297,7 +303,7 @@ export default function WorkplaceDetailScreen() {
             }
           />
           <InfoRow label="סוג תשלום" value={w.paymentType === 'monthly' ? 'חודשי' : 'שעתי'} />
-          <InfoRow label="אחוז מס" value={`${tax}%`} />
+          <InfoRow label="אחוז מס (ניכוי במקור)" value={tax > 0 ? `${tax}% — הצפי והתשלומים מחושבים נטו` : 'לא הוגדר (0%)'} />
           <Pressable
             onPress={() => router.push({ pathname: '/tax', params: { wp: w.id } })}
             accessibilityRole="button"
