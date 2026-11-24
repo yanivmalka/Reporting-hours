@@ -14,7 +14,7 @@ describe('themed icons', () => {
   it('has generated brand assets for every palette', async () => {
     const fs = await import('node:fs');
     for (const p of PALETTES) {
-      for (const f of ['icon.png', 'icon-fg.png', 'icon-bg.png', 'icon-legacy.png', 'splash.png', 'locked.png']) {
+      for (const f of ['icon.png', 'icon-fg.png', 'icon-bg.png', 'icon-legacy.png', 'splash.png', 'locked.png', 'unlocked.png']) {
         expect(fs.existsSync(`assets/brand/${p.id}/${f}`), `${p.id}/${f}`).toBe(true);
       }
     }

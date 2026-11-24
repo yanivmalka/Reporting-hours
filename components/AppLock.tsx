@@ -1,18 +1,19 @@
 /**
  * נעילת המידע הכספי (lib/appLock.ts):
  *  - `FinanceGate` — מסך כספי שלם (לוח בקרה, דוחות שכר, תשלומים, תיאום מס): כשנעול, במקום התוכן
- *    מוצגת בקשת זיהוי (וחלון הזיהוי נפתח מיד).
+ *    מוצגת בקשת זיהוי (וחלון הזיהוי נפתח מיד). אחרי פתיחה המנעול הסגור מתחלף בפתוח, ורק אחרי
+ *    השהייה קצרה (כ־0.9 שנ׳) מוצגים הנתונים.
  *  - `FinanceSection` — קבוצה בתוך מסך (תנאי שכר בעריכת מקום עבודה): כשנעולה — שורה "מידע כספי נעול · פתיחה".
  *  - `AppLockSetting` — תיבת הסימון בדף "הגדרות" (app/preferences.tsx).
  *  - `FinanceLockToggle` — מתג קטן בדף הבית: מנעול סגור (הצגה) / פתוח (נעילה).
  */
-import { useEffect, useState, type ReactNode } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
-import { Text } from './Text';
-import { Button } from './Button';
-import { Icon } from './Icon';
-import { Pressable } from './Pressable';
-import { Checkbox } from './Checkbox';
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Animated, Easing, StyleSheet, View } from "react-native";
+import { Text } from "./Text";
+import { Button } from "./Button";
+import { Icon } from "./Icon";
+import { Pressable } from "./Pressable";
+import { Checkbox } from "./Checkbox";
 import {
   appLockPlatform,
   lockAvailable,
@@ -22,36 +23,98 @@ import {
   unlockFinance,
   useAppLockEnabled,
   useFinanceLocked,
-} from '../lib/appLock';
-import { brandImages } from '../theme/brandAssets';
-import { useTheme } from '../theme/ThemeContext';
-import { radius, spacing } from '../theme/colors';
-import { TEXT_RIGHT } from '../theme/align';
+} from "../lib/appLock";
+import { brandImages } from "../theme/brandAssets";
+import { useTheme } from "../theme/ThemeContext";
+import { radius, spacing } from "../theme/colors";
+import { TEXT_RIGHT } from "../theme/align";
+
+/** אחרי פתיחה: המנעול הסגור מתחלף בפתוח, ורק אחרי השהייה קצרה מוצגים הנתונים. */
+const UNLOCK_SWAP_MS = 280;
+const UNLOCK_HOLD_MS = 650;
 
 export function FinanceGate({ children }: { children: ReactNode }) {
   const locked = useFinanceLocked();
   const { colors, paletteId } = useTheme();
   const [failed, setFailed] = useState(false);
+  // הנעילה הוצגה במסך הזה — רק אז יש מעבר (מסך שנפתח כשהמידע כבר פתוח מוצג מיד).
+  const shownLocked = useRef(locked);
+  const [revealing, setRevealing] = useState(false);
+  const swap = useRef(new Animated.Value(0)).current;
+  const images = brandImages(paletteId);
   async function open() {
     setFailed(!(await unlockFinance()));
   }
   useEffect(() => {
-    if (locked) void open();
-  }, [locked]);
-  if (!locked) return <>{children}</>;
+    if (locked) {
+      shownLocked.current = true;
+      swap.setValue(0);
+      void open();
+      return;
+    }
+    if (!shownLocked.current) return;
+    shownLocked.current = false;
+    setRevealing(true);
+    Animated.timing(swap, {
+      toValue: 1,
+      duration: UNLOCK_SWAP_MS,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+    const timer = setTimeout(
+      () => setRevealing(false),
+      UNLOCK_SWAP_MS + UNLOCK_HOLD_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [locked, swap]);
+  if (!locked && !revealing) return <>{children}</>;
+  const pop = swap.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.06, 1],
+  });
   return (
     <View style={[styles.gate, { backgroundColor: colors.background }]}>
-      <Image
-        source={brandImages(paletteId).locked}
-        style={styles.gateIcon}
-        accessibilityIgnoresInvertColors
-        accessibilityLabel="שעון החול של שיעור עם מנעול במקום המטבעות"
-      />
-      <Text style={[styles.title, { color: colors.text }]}>מידע כספי נעול</Text>
-      <Text style={[styles.body, { color: colors.textMuted }]}>
-        {failed ? 'הזיהוי לא הושלם. אפשר לנסות שוב.' : 'פתיחה בטביעת אצבע או בקוד המכשיר.'}
+      <Animated.View style={[styles.gateIcon, { transform: [{ scale: pop }] }]}>
+        <Animated.Image
+          source={images.locked}
+          style={[
+            StyleSheet.absoluteFill,
+            styles.gateImage,
+            {
+              opacity: swap.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 0],
+              }),
+            },
+          ]}
+          accessibilityIgnoresInvertColors
+          accessibilityLabel={
+            revealing ? undefined : "שעון החול של שיעור עם מנעול במקום המטבעות"
+          }
+        />
+        <Animated.Image
+          source={images.unlocked}
+          style={[StyleSheet.absoluteFill, styles.gateImage, { opacity: swap }]}
+          accessibilityIgnoresInvertColors
+          accessibilityLabel={
+            revealing ? "שעון החול של שיעור עם המטבעות ומנעול פתוח" : undefined
+          }
+        />
+      </Animated.View>
+      <Text style={[styles.title, { color: colors.text }]}>
+        {revealing ? "המידע הכספי נפתח" : "מידע כספי נעול"}
       </Text>
-      <View style={styles.button}>
+      <Text style={[styles.body, { color: colors.textMuted }]}>
+        {revealing
+          ? " "
+          : failed
+            ? "הזיהוי לא הושלם. אפשר לנסות שוב."
+            : "פתיחה בטביעת אצבע או בקוד המכשיר."}
+      </Text>
+      <View
+        style={[styles.button, revealing && styles.hidden]}
+        pointerEvents={revealing ? "none" : "auto"}
+      >
         <Button label="פתיחה" onPress={() => void open()} />
       </View>
     </View>
@@ -74,8 +137,14 @@ export function FinanceSection({ children }: { children: ReactNode }) {
           hitSlop={8}
           style={styles.openRow}
         >
-          <Icon name="lock-open-variant-outline" size={16} color={colors.textMuted} />
-          <Text style={[styles.openText, { color: colors.textMuted }]}>מידע כספי פתוח · נעילה</Text>
+          <Icon
+            name="lock-open-variant-outline"
+            size={16}
+            color={colors.textMuted}
+          />
+          <Text style={[styles.openText, { color: colors.textMuted }]}>
+            מידע כספי פתוח · נעילה
+          </Text>
         </Pressable>
         {children}
       </View>
@@ -86,10 +155,15 @@ export function FinanceSection({ children }: { children: ReactNode }) {
       onPress={() => void unlockFinance()}
       accessibilityRole="button"
       accessibilityLabel="מידע כספי נעול — פתיחה"
-      style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      style={[
+        styles.section,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
     >
       <Icon name="lock-outline" size={24} color={colors.brand} />
-      <Text style={[styles.sectionText, { color: colors.textMuted }]}>מידע כספי נעול</Text>
+      <Text style={[styles.sectionText, { color: colors.textMuted }]}>
+        מידע כספי נעול
+      </Text>
       <Text style={[styles.sectionLink, { color: colors.brand }]}>פתיחה</Text>
     </Pressable>
   );
@@ -108,12 +182,20 @@ export function FinanceLockToggle() {
     <Pressable
       onPress={() => (locked ? void unlockFinance() : lockFinance())}
       accessibilityRole="button"
-      accessibilityLabel={locked ? 'מידע כספי נעול — הצגה' : 'מידע כספי מוצג — נעילה'}
+      accessibilityLabel={
+        locked ? "מידע כספי נעול — הצגה" : "מידע כספי מוצג — נעילה"
+      }
       hitSlop={10}
       style={styles.toggle}
     >
-      <Icon name={locked ? 'lock-outline' : 'lock-open-variant-outline'} size={18} color={colors.textMuted} />
-      <Text style={[styles.toggleText, { color: colors.textMuted }]}>{locked ? 'הצגת סכומים' : 'נעילה'}</Text>
+      <Icon
+        name={locked ? "lock-outline" : "lock-open-variant-outline"}
+        size={18}
+        color={colors.textMuted}
+      />
+      <Text style={[styles.toggleText, { color: colors.textMuted }]}>
+        {locked ? "הצגת סכומים" : "נעילה"}
+      </Text>
     </Pressable>
   );
 }
@@ -147,25 +229,43 @@ export function AppLockSetting() {
 }
 
 const styles = StyleSheet.create({
-  gateIcon: { width: 120, height: 120, borderRadius: 28 },
-  gate: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl },
-  title: { fontSize: 22, fontWeight: '700' },
-  body: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  button: { alignSelf: 'stretch', maxWidth: 320, width: '100%', marginTop: spacing.sm },
+  gateIcon: { width: 120, height: 120 },
+  gateImage: { width: 120, height: 120, borderRadius: 28 },
+  hidden: { opacity: 0 },
+  gate: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    padding: spacing.xl,
+  },
+  title: { fontSize: 22, fontWeight: "700" },
+  body: { fontSize: 15, textAlign: "center", lineHeight: 22 },
+  button: {
+    alignSelf: "stretch",
+    maxWidth: 320,
+    width: "100%",
+    marginTop: spacing.sm,
+  },
   section: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
   },
   sectionText: { flex: 1, fontSize: 15, textAlign: TEXT_RIGHT },
-  sectionLink: { fontSize: 15, fontWeight: '700' },
+  sectionLink: { fontSize: 15, fontWeight: "700" },
   openWrap: { gap: spacing.xs },
-  openRow: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  openRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+  },
   openText: { fontSize: 12 },
-  toggle: { flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.8 },
+  toggle: { flexDirection: "row", alignItems: "center", gap: 4, opacity: 0.8 },
   toggleText: { fontSize: 12 },
   hint: { fontSize: 13, lineHeight: 19, textAlign: TEXT_RIGHT },
 });
