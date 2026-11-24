@@ -24,12 +24,13 @@ import { EnterChevron } from '../components/Chevrons';
 import { FoldSection } from '../components/FoldSection';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { useShowHebrewDates } from '../lib/hebrewDatePref';
-import { expectedFor, plannedFor, recentForecasts, STATUS_LABEL, type PeriodForecast } from '../lib/forecast';
+import { courseAmounts, recentForecasts, STATUS_LABEL, type PeriodForecast } from '../lib/forecast';
 import { reportPay } from '../lib/pay';
 import { basisFor, usePayBasis } from '../lib/payBasis';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { parseTime } from '../lib/time';
-import { ARRIVAL_MODE_LABELS, deadlineLabel, isArchived, loadWorkplaces, setWorkplaceArchived, paymentTermsLabel, taxPercentOf, taxStatus, type Workplace } from '../lib/workplaces';
+import { ARRIVAL_MODE_LABELS, deadlineLabel, isArchived, loadWorkplaces, setWorkplaceArchived, paymentTermsLabel, taxPercentOf, taxStatus, workplaceAt, type Workplace } from '../lib/workplaces';
+import { grossNote } from '../components/netGross';
 import { useTheme } from '../theme/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { cardShadow, radius, spacing, type AppColors } from '../theme/colors';
@@ -166,8 +167,8 @@ export default function WorkplaceDetailScreen() {
                 </Text>
                 <Text style={styles.payrollAmount}>
                   {f.status === 'open' && f.planned > 0
-                    ? `${money(f.reported)} מתוך ${money(f.planned)}`
-                    : money(f.reported)}
+                    ? `${money(f.reportedNet)} מתוך ${money(f.plannedNet)} נטו`
+                    : `${money(f.reportedNet)} נטו`}
                 </Text>
                 <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
               </View>
@@ -229,7 +230,7 @@ export default function WorkplaceDetailScreen() {
                           {timeRange(r.start, r.end)}
                           {ac ? ` · ${Math.round(ac.decimalHours * 10) / 10} שע׳ אקד׳` : ''}
                           {r.carriedMinutes > 0 ? ` · ${r.carriedMinutes} דק׳ למצטברות` : ''}
-                          {pay != null ? ` · ${money(pay)}` : ''}
+                          {pay != null ? ` · ${money(pay * (1 - taxPercentOf(workplaceAt(w, r.date)) / 100))} נטו` : ''}
                         </Text>
                       </View>
                       <Chip
@@ -264,27 +265,23 @@ export default function WorkplaceDetailScreen() {
       <View style={[styles.hero, { borderStartWidth: 8, borderStartColor: workplaceColor(colors, w) }]}>
         <Text style={styles.heroLabel}>{next === current ? 'התקופה הנוכחית' : 'התשלום הבא'}</Text>
         <View style={styles.heroAmountRow}>
-          <Text style={styles.heroAmount}>{money(next.reported)}</Text>
-          {next.taxPercent > 0 ? (
-            <Text style={styles.heroSub}>
-              ברוטו · {money(next.reportedNet)} נטו (מס {next.taxPercent}%)
-            </Text>
-          ) : null}
+          <Text style={styles.heroAmount}>{money(next.reportedNet)}</Text>
+          <Text style={styles.heroSub}>נטו</Text>
         </View>
+        <Text style={styles.heroSub}>{grossNote(next.reported, next.taxPercent)}</Text>
         <Text style={styles.heroLine}>
           עבור {monthName(periodMonthKey(next.period))} · צפי {shortDate(next.expected)} ({paymentTermsLabel(w)})
         </Text>
         <View style={styles.heroTiles}>
           <View style={styles.heroTile}>
             <Text style={styles.heroTileLabel}>החודש — דווח</Text>
-            <Text style={styles.heroTileValue}>{money(current.reported)}</Text>
+            <Text style={styles.heroTileValue}>{money(current.reportedNet)}</Text>
+            <Text style={styles.heroTileLabel}>ברוטו {money(current.reported)}</Text>
           </View>
           <View style={styles.heroTile}>
-            <Text style={styles.heroTileLabel}>החודש — לפי תכנון</Text>
-            <Text style={styles.heroTileValue}>{money(current.planned)}</Text>
-            {current.taxPercent > 0 ? (
-              <Text style={styles.heroTileLabel}>צפי נטו {money(current.forecastNet)}</Text>
-            ) : null}
+            <Text style={styles.heroTileLabel}>החודש — צפי</Text>
+            <Text style={styles.heroTileValue}>{money(current.forecastNet)}</Text>
+            <Text style={styles.heroTileLabel}>ברוטו {money(current.forecast)}</Text>
           </View>
         </View>
       </View>
@@ -303,7 +300,7 @@ export default function WorkplaceDetailScreen() {
             }
           />
           <InfoRow label="סוג תשלום" value={w.paymentType === 'monthly' ? 'חודשי' : 'שעתי'} />
-          <InfoRow label="אחוז מס (ניכוי במקור)" value={tax > 0 ? `${tax}% — הצפי והתשלומים מחושבים נטו` : 'לא הוגדר (0%)'} />
+          <InfoRow label="אחוז מס (ניכוי במקור)" value={tax > 0 ? `${tax}% — כל הסכומים מוצגים נטו, והברוטו לצדם` : 'לא הוגדר (0%) — נטו = ברוטו'} />
           <Pressable
             onPress={() => router.push({ pathname: '/tax', params: { wp: w.id } })}
             accessibilityRole="button"
@@ -348,19 +345,23 @@ export default function WorkplaceDetailScreen() {
       ) : (
         groups[tab].map((c) => {
           let line: string;
+          // קו אחיד: נטו אחרי מס, והברוטו בסוגריים כשיש מס.
+          const amt = (a: { net: number; gross: number; taxPercent: number }) =>
+            a.taxPercent > 0 ? `${money(a.net)} נטו (${money(a.gross)} ברוטו)` : money(a.net);
           if (tab === 'active') {
             const count = occurrences(c, current.period.start, current.period.end).length;
-            line = `החודש: ${count} מפגשים · ${money(plannedFor(w, [c], current.period, basis))} לפי תכנון`;
+            line = `החודש: ${count} מפגשים · ${amt(courseAmounts(w, [c], current.period, basis, false))} לפי תכנון`;
           } else {
             const whole = { start: c.from, end: lastSessionDate(c) };
             const count = occurrences(c, whole.start, whole.end).length;
-            const expected = expectedFor(w, [c], whole, basis);
+            const expected = courseAmounts(w, [c], whole, basis, true);
             if (tab === 'planned') {
-              line = `צפי: ${count} מפגשים · ${money(expected)}`;
+              line = `צפי: ${count} מפגשים · ${amt(expected)}`;
             } else {
               const mine = reportsOfCourse(c, reports);
               const actual = mine.reduce((n, r) => n + (reportPay(r, w, basis) ?? 0), 0);
-              line = `צפי ${money(expected)} (${count} מפגשים) · בפועל ${money(actual)} (${mine.length} דיווחים)`;
+              const actualNet = actual * (1 - expected.taxPercent / 100);
+              line = `צפי ${amt(expected)} (${count} מפגשים) · בפועל ${amt({ net: actualNet, gross: actual, taxPercent: expected.taxPercent })} (${mine.length} דיווחים)`;
             }
           }
           const [fy, fm, fd] = c.from.split('-');

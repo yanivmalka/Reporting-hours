@@ -7,6 +7,7 @@ import { Button } from '../components/Button';
 import { Panel, ShareRow, StatTile, TileGrid } from '../components/Charts';
 import { ForecastChart, HEADROOM, realization } from '../components/ForecastChart';
 import { PaymentTimeline, timelineWindow } from '../components/PaymentTimeline';
+import { grossNote } from '../components/netGross';
 import { useFlash } from '../components/useFlash';
 import { WorkplaceTile } from '../components/WorkplaceTile';
 import { SessionDotsByMonth, SessionDotsLegend, sessionDots } from '../components/SessionDots';
@@ -293,22 +294,34 @@ function DashboardScreen() {
     let reported = 0;
     let planned = 0;
     let forecastSum = 0;
+    const gross = { reported: 0, planned: 0, forecast: 0 };
     const periods = inView.flatMap((m) => {
       const c = m.byWorkplace[w.id];
       reported += c?.reported ?? 0;
       planned += c?.planned ?? 0;
       forecastSum += c?.forecast ?? 0;
+      gross.reported += c?.gross.reported ?? 0;
+      gross.planned += c?.gross.planned ?? 0;
+      gross.forecast += c?.gross.forecast ?? 0;
       return c?.periods ?? [];
     });
     const last = single ? periods[periods.length - 1] : undefined;
     const active = last && (last.reported > 0 || last.planned > 0) ? last : undefined;
-    return { workplace: w, color: series[i].color, reported, planned, forecast: forecastSum, periods, last: active };
+    // אחוז המס בתצוגה — של התקופה האחרונה, או התנאים הנוכחיים כשאין תקופה.
+    const tax = periods.length ? periods[periods.length - 1].taxPercent : taxPercentOf(w);
+    return { workplace: w, color: series[i].color, reported, planned, forecast: forecastSum, gross, tax, periods, last: active };
   });
-  const totalAll = {
-    reported: rowsAll.reduce((a, r) => a + r.reported, 0),
-    planned: rowsAll.reduce((a, r) => a + r.planned, 0),
-    forecast: rowsAll.reduce((a, r) => a + r.forecast, 0),
-  };
+  const sumOf = (list: typeof rowsAll) => ({
+    reported: list.reduce((a, r) => a + r.reported, 0),
+    planned: list.reduce((a, r) => a + r.planned, 0),
+    forecast: list.reduce((a, r) => a + r.forecast, 0),
+    gross: {
+      reported: list.reduce((a, r) => a + r.gross.reported, 0),
+      planned: list.reduce((a, r) => a + r.gross.planned, 0),
+      forecast: list.reduce((a, r) => a + r.gross.forecast, 0),
+    },
+  });
+  const totalAll = sumOf(rowsAll);
   /** פירוט המפגשים לפי קורס בתקופות שבתצוגה — עיגולים; לחיצה מנווטת למפגש. */
   const sessionsOf = (row: (typeof rowsAll)[number]) => {
     if (row.periods.length === 0) return null;
@@ -382,25 +395,9 @@ function DashboardScreen() {
       out.push({ text: `סיכום ${listTitle} · לחיצה על חודש בגרף מציגה צפי תשלום` });
     }
     if (row.workplace.paymentType === 'monthly') out.push({ text: 'משכורת חודשית קבועה' });
-    // גובה המס של המקום (לפי התנאים בתקופה האחרונה שבתצוגה), והסכומים בצד השני — נטו / ברוטו.
-    const lastP = row.periods[row.periods.length - 1];
-    const tax = lastP ? lastP.taxPercent : taxPercentOf(row.workplace);
-    if (tax > 0) {
-      const sum = (k: 'reported' | 'forecast' | 'reportedNet' | 'forecastNet') =>
-        row.periods.reduce((a, p) => a + p[k], 0);
-      const other =
-        mode === 'pay'
-          ? `הסכומים נטו · ברוטו: דווח ${money(sum('reported'))} · צפי ${money(sum('forecast'))}`
-          : `נטו: דווח ${money(sum('reportedNet'))} · צפי ${money(sum('forecastNet'))}`;
-      out.push({ text: `ניכוי מס ${tax}% · ${other}` });
-    } else {
-      out.push({ text: 'ניכוי מס: לא הוגדר (0%)', tone: 'muted' });
-    }
     return out;
   };
   const filtered = selWp != null || selMonth != null;
-  // יש מקום (בתצוגה) עם אחוז מס — כדי לציין נטו / ברוטו בכותרת.
-  const taxed = rowsAll.some((r) => (!selWp || r.workplace.id === selWp) && r.periods.some((p) => p.taxPercent > 0));
   const maxWeekday = Math.max(...view.weekdays.map((w) => w.avgAcademicHours), 1);
   const r = view.rounding;
   const roundingTotal = r.exact + r.withLeftover || 1;
@@ -479,39 +476,51 @@ function DashboardScreen() {
       <Animated.View style={[styles.periodHead, listFlash]}>
         <Text style={styles.periodTitle}>{listTitle}</Text>
         <Text style={styles.periodSub}>
-          {mode === 'pay'
-            ? `לפי מועד התשלום הצפוי${taxed ? ' · נטו אחרי מס' : ''}`
-            : `לפי חודש העבודה${taxed ? ' · ברוטו' : ''}`}
+          {mode === 'pay' ? 'לפי מועד התשלום הצפוי' : 'לפי חודש העבודה'} · סכומים נטו אחרי מס, הברוטו לצדם
           {sel ? ` · מסונן: ${sel.workplace.name}` : ''}
         </Text>
       </Animated.View>
 
       <View style={styles.totalsBox}>
-        <View style={styles.totalsRow}>
-          <View>
-            <Text style={styles.totalLabel}>{sel ? 'דווח במקום הנבחר' : 'דווח'}</Text>
-            <Text style={styles.totalValue}>{money(sel ? sel.reported : totalAll.reported)}</Text>
-            {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.reported)} בכל המקומות</Text> : null}
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.totalLabel}>פוטנציאל</Text>
-            <Text style={[styles.totalValue, styles.totalPlanned]}>{money(sel ? sel.planned : totalAll.planned)}</Text>
-            {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.planned)}</Text> : null}
-          </View>
-        </View>
-        {/* מימוש מימין, ומשמאל — הצפי, רק כשהוא שונה מהפוטנציאל */}
-        <View style={styles.pctRow}>
-          <Text style={styles.totalPct}>
-            {pctTotal == null
-              ? 'אין תכנון קורסים לתקופה'
-              : pctTotal > 100
-                ? `${pctTotal}% — הדיווח עולה על התכנון`
-                : `מימוש ${pctTotal}% מהפוטנציאל`}
-          </Text>
-          {Math.round(sel ? sel.forecast : totalAll.forecast) !== Math.round(sel ? sel.planned : totalAll.planned) ? (
-            <Text style={styles.totalForecast}>צפי {money(sel ? sel.forecast : totalAll.forecast)}</Text>
-          ) : null}
-        </View>
+        {(() => {
+          const t = sel ?? totalAll;
+          // מס של כל המקומות בתצוגה: אחיד — מציינים אותו; משתנה — רק הברוטו.
+          const taxes = [...new Set((sel ? [sel] : rows).map((r) => r.tax))];
+          const taxText = taxes.length === 1 ? (taxes[0] > 0 ? ` · מס ${taxes[0]}%` : ' · לא הוגדר מס') : '';
+          return (
+            <>
+              <View style={styles.totalsRow}>
+                <View>
+                  <Text style={styles.totalLabel}>{sel ? 'דווח במקום הנבחר · נטו' : 'דווח · נטו'}</Text>
+                  <Text style={styles.totalValue}>{money(t.reported)}</Text>
+                  <Text style={styles.totalOf}>ברוטו {money(t.gross.reported)}{taxText}</Text>
+                  {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.reported)} נטו בכל המקומות</Text> : null}
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.totalLabel}>פוטנציאל · נטו</Text>
+                  <Text style={[styles.totalValue, styles.totalPlanned]}>{money(t.planned)}</Text>
+                  <Text style={styles.totalOf}>ברוטו {money(t.gross.planned)}</Text>
+                </View>
+              </View>
+              {/* מימוש מימין, ומשמאל — הצפי, רק כשהוא שונה מהפוטנציאל */}
+              <View style={styles.pctRow}>
+                <Text style={styles.totalPct}>
+                  {pctTotal == null
+                    ? 'אין תכנון קורסים לתקופה'
+                    : pctTotal > 100
+                      ? `${pctTotal}% — הדיווח עולה על התכנון`
+                      : `מימוש ${pctTotal}% מהפוטנציאל`}
+                </Text>
+                {Math.round(t.forecast) !== Math.round(t.planned) ? (
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.totalForecast}>צפי נטו {money(t.forecast)}</Text>
+                    <Text style={styles.totalOf}>ברוטו {money(t.gross.forecast)}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </>
+          );
+        })()}
       </View>
 
       {rows.map((row) => (
@@ -522,6 +531,7 @@ function DashboardScreen() {
           reported={row.reported}
           planned={row.planned}
           forecast={row.forecast}
+          grossNote={grossNote(row.gross.reported, row.tax)}
           sessions={open.has(row.workplace.id) ? sessionsOf(row) : null}
           scale={scaleRows}
           expanded={open.has(row.workplace.id)}

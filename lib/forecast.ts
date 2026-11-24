@@ -14,8 +14,9 @@
  *   - צפי (expected): הפוטנציאל בלי המפגשים שסומנו "בוטל".
  *   מפגשים שהוסרו מהפוטנציאל, הועברו לתאריך אחר או חלים בחג — לא בשניהם.
  * מס: לכל מקום אחוז מס (ניכוי במקור, `taxPercent`, לפי התנאים שחלו בסוף התקופה).
- * המס יורד מהשכר בלבד — לא מהחזר הנסיעות (`netOfTax`). במצב 'pay' (צפי תשלומים)
- * הסכומים בחודש הם נטו — מה שצפוי להיכנס לחשבון; במצב 'work' — ברוטו.
+ * המס יורד מהשכר בלבד — לא מהחזר הנסיעות (`netOfTax`). קו אחיד בשני המצבים:
+ * הסכומים הראשיים בחודש (דווח · פוטנציאל · צפי) הם נטו — מה שצפוי להיכנס —
+ * והברוטו לצדם ב־`gross`.
  * המודול טהור — בלי אחסון ובלי React.
  */
 import { canceledSessionPay } from './cancelReasons';
@@ -65,7 +66,17 @@ export type PeriodForecast = {
   sentAt?: number;
 };
 
-export type ForecastCell = { reported: number; planned: number; forecast: number; periods: PeriodForecast[] };
+/** סכומי ברוטו (לפני מס) — לצד הנטו */
+export type GrossAmounts = { reported: number; planned: number; forecast: number };
+
+/** סכומי החודש למקום: נטו אחרי מס, והברוטו ב־`gross`. */
+export type ForecastCell = {
+  reported: number;
+  planned: number;
+  forecast: number;
+  gross: GrossAmounts;
+  periods: PeriodForecast[];
+};
 
 export type ForecastMonth = {
   /** "YYYY-MM" */
@@ -73,9 +84,11 @@ export type ForecastMonth = {
   year: number;
   month0: number;
   byWorkplace: Record<string, ForecastCell>;
+  /** נטו אחרי מס */
   reported: number;
   planned: number;
   forecast: number;
+  gross: GrossAmounts;
 };
 
 const monthKey = (iso: string) => iso.slice(0, 7);
@@ -157,6 +170,23 @@ export function expectedFor(
   plan: PlanIndex = currentPlan(),
 ): number {
   return amountFor(w, courses, period, basis, true, plan);
+}
+
+/**
+ * סכום לתקופה ממפגשי הקורסים — נטו אחרי מס וברוטו (פוטנציאל, או צפי עם `withoutCanceled`).
+ * אחוז המס — לפי התנאים בסוף התקופה.
+ */
+export function courseAmounts(
+  w: Workplace,
+  courses: readonly Course[],
+  period: Pick<PayPeriod, 'start' | 'end'>,
+  basis: PayBasis,
+  withoutCanceled: boolean,
+  plan: PlanIndex = currentPlan(),
+): { net: number; gross: number; taxPercent: number } {
+  const a = amountParts(w, courses, period, basis, withoutCanceled, plan);
+  const taxPercent = taxPercentOf(workplaceAt(w, period.end));
+  return { net: netOfTax(a.pay, a.travel, taxPercent), gross: a.pay + a.travel, taxPercent };
 }
 
 /** המפגשים שבוטלו (ונשארו בפוטנציאל) של מקום עבודה בתקופה. */
@@ -246,11 +276,15 @@ export function forecastYear(
     year,
     month0: m,
     byWorkplace: Object.fromEntries(
-      workplaces.map((w) => [w.id, { reported: 0, planned: 0, forecast: 0, periods: [] as PeriodForecast[] }]),
+      workplaces.map((w) => [
+        w.id,
+        { reported: 0, planned: 0, forecast: 0, gross: { reported: 0, planned: 0, forecast: 0 }, periods: [] as PeriodForecast[] },
+      ]),
     ),
     reported: 0,
     planned: 0,
     forecast: 0,
+    gross: { reported: 0, planned: 0, forecast: 0 },
   }));
   const index = new Map(months.map((m, i) => [m.key, i]));
   // במצב "מועד תשלום" תקופות מהשנה הקודמת עשויות להשתלם השנה.
@@ -262,19 +296,17 @@ export function forecastYear(
       const key = mode === 'work' ? periodMonthKey(period) : monthKey(f.expected);
       const i = index.get(key);
       if (i == null) continue;
-      // צפי תשלומים — נטו אחרי מס (מה שצפוי להיכנס); חודש עבודה — ברוטו.
-      const net = mode === 'pay';
-      const reported = net ? f.reportedNet : f.reported;
-      const planned = net ? f.plannedNet : f.planned;
-      const forecast = net ? f.forecastNet : f.forecast;
+      // קו אחיד: הסכום הראשי נטו (מה שצפוי להיכנס), והברוטו לצדו.
       const cell = months[i].byWorkplace[w.id];
-      cell.reported += reported;
-      cell.planned += planned;
-      cell.forecast += forecast;
+      for (const t of [cell, months[i]]) {
+        t.reported += f.reportedNet;
+        t.planned += f.plannedNet;
+        t.forecast += f.forecastNet;
+        t.gross.reported += f.reported;
+        t.gross.planned += f.planned;
+        t.gross.forecast += f.forecast;
+      }
       cell.periods.push(f);
-      months[i].reported += reported;
-      months[i].planned += planned;
-      months[i].forecast += forecast;
     }
   }
   return months;
