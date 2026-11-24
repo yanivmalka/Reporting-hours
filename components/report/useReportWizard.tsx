@@ -182,7 +182,10 @@ export function useReportWizard() {
       // נקבע, חזרה למסך, סנכרון) לא נוגעת בטופס — אחרת היא נופלת למסלול של דיווח
       // חדש וממלאת מחדש את שעות הקורס על השעות שנשמרו.
       if (editId) {
-        if (editing) return;
+        // אותו דיווח כבר בטופס — לא נוגעים. דיווח אחר (המסך נפתח מחדש עם מזהה אחר בזמן
+        // שהמופע הקודם עוד חי) — טוענים את החדש, ולא נשארים על הדיווח הקודם.
+        if (editing && editing.id === editId) return;
+        userChanged.current = { date: false, workplace: false };
         const r = reports.find((x) => x.id === editId);
         setEditMissing(!r);
         if (r) {
@@ -356,6 +359,17 @@ export function useReportWizard() {
       return;
     }
     // ── עדכון דיווח קיים: בקרה ואישור ──
+    // 0. הטופס חייב להחזיק את הדיווח שנפתח לעריכה (?id=…), ולא דיווח קודם.
+    if (editId && editing.id !== editId) {
+      confirm({
+        title: 'הדיווח לא נשמר',
+        message: 'הטופס מציג דיווח אחר מזה שנפתח לעריכה. הטופס ייטען מחדש.',
+        confirmLabel: 'טעינה מחדש',
+        destructive: false,
+        onConfirm: () => setEditing(null),
+      });
+      return;
+    }
     // 1. הטופס חייב להיות של הדיווח הזה: תאריך / מקום עבודה שהשתנו בלי שהמשתמש בחר — חסימה.
     const integrity = editIntegrityError(editing, draftReport, {
       dateChanged: userChanged.current.date,
@@ -384,7 +398,8 @@ export function useReportWizard() {
     const critical = changes.some((c) => c.critical);
     confirm({
       title: critical ? 'להעביר את הדיווח?' : 'לעדכן את הדיווח?',
-      message: changesMessage(changes),
+      // תמיד: איזה דיווח מתעדכן — יום ותאריך, קורס ומקום — גם כשהתאריך לא משתנה.
+      message: `${longDate(editing.date)}\n${[editing.note, workplaces?.find((w) => w.id === editing.workplaceId)?.name].filter(Boolean).join(' · ')}\n\n${changesMessage(changes)}`,
       confirmLabel: 'עדכון הדיווח',
       destructive: critical,
       onConfirm: () => commitSave(draftReport, carried),

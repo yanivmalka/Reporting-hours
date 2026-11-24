@@ -21,7 +21,7 @@ import { StyleSheet, View } from 'react-native';
 import { TextInput } from './Text';
 import type { TextInput as RNTextInput } from 'react-native';
 import { useWheel } from './useWheel';
-import { complete, finish, onlyDigits, typed, typedText } from '../lib/timeText';
+import { cleanTyped, complete, finish, onlyDigits, typed, typedText } from '../lib/timeText';
 import { Icon } from './Icon';
 import { hideWheelOverlay, showWheelOverlay } from './WheelOverlay';
 import { useTheme } from '../theme/ThemeContext';
@@ -140,7 +140,7 @@ export const TimeInput = forwardRef<TimeInputHandle, TimeInputProps>(function Ti
       return;
     }
     // עריכה חופשית: ספרות ומפריד אחד בלבד.
-    update(next.replace(/[^\d:.,]/g, '').slice(0, 5));
+    update(cleanTyped(next));
   }
 
   /** יציאה מהשדה: משלימים ("9" → 09:00) ומסדרים ל־"HH:MM"; לא ניתן לפענח — שגוי. */
