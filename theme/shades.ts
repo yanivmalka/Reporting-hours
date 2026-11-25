@@ -56,21 +56,92 @@ function fromHsl(h: number, s: number, l: number): string {
   return '#' + [f(0), f(8), f(4)].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
 }
 
+// ───────────────────────── גלגל צבעים (OKLCH) ─────────────────────────
+//
+// OKLCH הוא מרחב צבע "שווה לעין": אותה בהירות (L) ואותה עוצמה (C) נראות
+// באמת זהות בכל גוון, כך שהמרחק בין שני צבעים תלוי רק בהפרש הגוון.
+
+function srgbToLinear(v: number): number {
+  const x = v / 255;
+  return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+}
+
+function linearToSrgb(v: number): number {
+  return v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055;
+}
+
+/** hex ← גוון OKLCH (במעלות). */
+export function oklchHue(hex: string): number {
+  const [r, g, b] = rgb(hex).map(srgbToLinear);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+  const bb = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+  return ((Math.atan2(bb, a) * 180) / Math.PI + 360) % 360;
+}
+
+/** OKLCH ← sRGB לינארי, או null כשהצבע מחוץ לטווח המסך. */
+function oklchToLinear(L: number, C: number, h: number): [number, number, number] | null {
+  const hr = (h * Math.PI) / 180;
+  const a = C * Math.cos(hr);
+  const b = C * Math.sin(hr);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const out: [number, number, number] = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+  return out.every((v) => v >= -0.0005 && v <= 1.0005) ? out : null;
+}
+
+/** צבע OKLCH כ־hex; אם הוא חורג מטווח המסך — מורידים עוצמה עד שנכנס. */
+export function oklch(L: number, C: number, h: number): string {
+  let c = C;
+  let lin = oklchToLinear(L, c, h);
+  while (!lin && c > 0) {
+    c = Math.max(0, c - 0.005);
+    lin = oklchToLinear(L, c, h);
+  }
+  return (
+    '#' +
+    (lin ?? [L, L, L])
+      .map((v) => Math.round(Math.min(1, Math.max(0, linearToSrgb(v))) * 255))
+      .map((v) => v.toString(16).padStart(2, '0'))
+      .join('')
+  );
+}
+
 /**
- * n צבעים מאותה "משפחה" של צבע המותג, אבל מפוזרים לא־לינארית: הגוון נע
- * בטווח ±55° סביב צבע המותג בצעדי "יחס הזהב", והבהירות מתחלפת בין כמה
- * רמות — כך ששני צבעים סמוכים (ברשימה או בערימה) נבדלים בבירור גם בגוון
- * וגם בבהירות. בערכה כהה הבהירות מוזזת למעלה.
+ * סדר הגוונים בגלגל (מעלות מעל גוון המותג). כל משבצת חדשה נופלת באמצע
+ * הפער הגדול ביותר שנשאר: 0° ← 180° (הצד השני) ← 90°/270° ← האלכסונים.
+ * כך גם 2, 3 או 4 מקומות עבודה רחוקים זה מזה ככל האפשר.
  */
-export function distinctShades(c: ColorScheme, n: number): string[] {
+export const WHEEL_OFFSETS = [0, 180, 90, 270, 45, 225, 135, 315] as const;
+
+/**
+ * n צבעים מפוזרים על כל גלגל הצבעים — הנוסחה:
+ *
+ *   גוון(i)   = גוון המותג + WHEEL_OFFSETS[i]
+ *   בהירות(i) = בסיס לפי מצב יום/לילה; ארבע המשבצות האלכסוניות (4–7) מוזזות
+ *               מעט, כך שגם שכנים בגלגל (45°) נבדלים בבהירות
+ *   עוצמה    = קבועה ומעומעמת (בסגנון הערכות), פחות אם חורגת מהמסך
+ *
+ * הנוסחה זהה בכל ערכה: משבצת i היא תמיד "אותו מקום בגלגל ביחס למותג",
+ * ולכן החלפת ערכה ומעבר בחזרה מחזירים בדיוק את אותם צבעים.
+ */
+export function wheelColors(c: ColorScheme, n: number): string[] {
   if (n <= 0) return [];
-  const [h0, s0] = toHsl(rgb(c.brand));
+  const h0 = oklchHue(c.brand);
   const dark = toHsl(rgb(c.background))[2] < 0.4;
-  const levels = dark ? [0.62, 0.45, 0.74, 0.53, 0.68] : [0.36, 0.55, 0.28, 0.47, 0.64];
-  const sat = Math.max(0.45, Math.min(0.8, s0));
+  const baseL = dark ? 0.74 : 0.52;
+  const shiftL = dark ? -0.08 : 0.09;
+  const chroma = dark ? 0.1 : 0.11;
   return Array.from({ length: n }, (_, i) => {
-    const t = (i * 0.618034) % 1; // 0, .62, .24, .85, .47 …
-    const h = (h0 + (t - 0.5) * 110 + 360) % 360;
-    return fromHsl(h, sat, levels[i % levels.length]);
+    const off = WHEEL_OFFSETS[i % WHEEL_OFFSETS.length];
+    const L = i % WHEEL_OFFSETS.length >= 4 ? baseL + shiftL : baseL;
+    return oklch(L, chroma, (h0 + off) % 360);
   });
 }
