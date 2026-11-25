@@ -27,6 +27,7 @@ import { useShowHebrewDates } from '../lib/hebrewDatePref';
 import { courseAmounts, recentForecasts, STATUS_LABEL, type PeriodForecast } from '../lib/forecast';
 import { reportPay } from '../lib/pay';
 import { basisFor, usePayBasis } from '../lib/payBasis';
+import { loadOpenings } from '../lib/openingBalance';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { parseTime } from '../lib/time';
 import { ARRIVAL_MODE_LABELS, deadlineLabel, isArchived, loadWorkplaces, setWorkplaceArchived, paymentTermsLabel, taxPercentOf, taxStatus, workplaceAt, type Workplace } from '../lib/workplaces';
@@ -63,7 +64,7 @@ export default function WorkplaceDetailScreen() {
   const showHeb = useShowHebrewDates();
 
   const { reload } = useScreenData(
-    () => Promise.all([loadWorkplaces(), loadReports(), loadCourses(), loadPayrollStatus()]),
+    () => Promise.all([loadWorkplaces(), loadReports(), loadCourses(), loadPayrollStatus(), loadOpenings()]),
     [id],
     ([list, reports, courses, statuses]) => {
       const workplace = list.find((w) => w.id === id);
@@ -177,7 +178,7 @@ export default function WorkplaceDetailScreen() {
               <View style={styles.steps}>
                 <Step
                   label="דיווח"
-                  detail={`${f.reportCount} דיווחים${missing.length ? ` · ${missing.length} חסרים` : ''}`}
+                  detail={`${f.reportCount} דיווחים${f.opening ? ' + נקודת פתיחה (הוזן ידנית)' : ''}${missing.length ? ` · ${missing.length} חסרים` : ''}`}
                   state={reportStep}
                 />
                 <Step

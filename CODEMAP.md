@@ -37,6 +37,7 @@
 | אופן פדיון דקות | `lib/redeem.ts` | `reporting-hours/redeem-mode/v1` |
 | בסיס חישוב שכר (ברירת מחדל ישנה; לכל מקום — `Workplace.payBasis`) | `lib/payBasis.tsx` | `reporting-hours/pay-basis/v1` |
 | תאריך התחלת עבודה עם המערכת | `lib/trackingStart.ts` | `reporting-hours/tracking-start/v1` |
+| נקודת פתיחה מדו"ח שכר קודם (ימים, שעות, קורס — נספרת בצפי כדיווח, "הוזן ידנית") | `lib/openingBalance.ts` | `reporting-hours/opening-balance/v1` |
 | רמת הקיבוץ המשותפת של דיווחים (`workplace` / `course` / `courseDay`; ערכים ישנים `merged`/`split` מומרים) — לוח הבקרה, יומן, דוח שכר ומייל, ייצוא | `lib/courseGrouping.ts` | `reporting-hours/course-grouping/v1` |
 | מצב צפייה בלבד (במכשיר) | `lib/viewOnly.ts` | `reporting-hours/view-only/v1` |
 | יומן פעולות — כל שינוי בדיווחים עם הגרסאות לפני / אחרי (מסונכרן, 90 יום) | `lib/activityLog.ts`, `lib/activityUndo.ts`, `app/activity.tsx` | `reporting-hours/activity-log/v1` |
@@ -108,7 +109,8 @@
 | `payments.tsx`, `tax.tsx`, `profile.tsx` | תשלומים, מס, פרטים אישיים |
 | `archive.tsx`, `trash.tsx` | ארכיון ואשפה |
 | `settings.tsx`, `data.tsx` | דקות מצטברות (מונה ובסיס חישוב שכר); ניהול נתונים וגיבוי |
-| `preferences.tsx` | "הגדרות": חשבון, כללי (תחילת עבודה, שפה), תצוגה, נעילה, קישורים למסכי ההגדרה, אודות ועדכונים |
+| `opening.tsx` | "נקודת פתיחה": הזנת ימים ושעות מדו"ח שכר קודם לכל מקום / קורס (נפתח מ"הגדרות" › כללי) |
+| `preferences.tsx` | "הגדרות": חשבון, כללי (תחילת עבודה, נקודת פתיחה, שפה), תצוגה, נעילה, קישורים למסכי ההגדרה, אודות ועדכונים |
 | `sharing.tsx` | שיתוף והרשאות: הוספת מורשה (מייל + רמה), שינוי רמה, הסרה, שליחת הודעה (בעלים בלבד) |
 | `holidays.tsx` | חגים וחופשות: מתגי הביטול האוטומטי, לוח החופשות (`VacationBoard`) וסיבות הביטול |
 

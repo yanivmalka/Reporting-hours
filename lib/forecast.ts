@@ -26,6 +26,7 @@ import { currentPlan, type PlanIndex } from './sessions';
 import { currentPayPeriod, expectedPaymentDate, isoDate, periodMonthKey, totalsFor, type PayPeriod } from './dashboard';
 import { basisFor, type PayBasis } from './payBasis';
 import { expectedPayment, reportLate, statusKey, type StatusMap } from './payroll';
+import { openingFor, type OpeningInPeriod } from './openingBalance';
 import type { WorkReport } from './reports';
 import { travelCostForDay } from './travel';
 import { LAST_DAY, paymentTermsOf, reportDeadlineDay, taxPercentOf, workplaceAt, type Workplace } from './workplaces';
@@ -46,6 +47,11 @@ export type PeriodForecast = {
   reportedPay: number;
   /** מספר הדיווחים בתקופה */
   reportCount: number;
+  /**
+   * נקודת פתיחה מדו"ח שכר קודם שהוזנה ידנית (lib/openingBalance.ts) — כבר כלולה
+   * ב־`reported` כדיווח רגיל. חסר — אין בתקופה.
+   */
+  opening?: OpeningInPeriod;
   planned: number;
   /** צפי: הפוטנציאל בלי המפגשים שבוטלו */
   forecast: number;
@@ -219,6 +225,17 @@ export function periodForecast(
   const todayIso = isoDate(today);
   const mine = reports.filter((r) => r.workplaceId === w.id && r.date >= period.start && r.date <= period.end);
   const t = totalsFor([w], mine, basis);
+  // נקודת פתיחה שהוזנה ידנית — נספרת כדיווח רגיל: שכר ונסיעות. במקום חודשי — הסכום
+  // הקבוע כשאין דיווח אחר בתקופה (כמו דיווח אחד לפחות).
+  const op = openingFor(w, period, basis);
+  if (op.count > 0) {
+    if (mine.length === 0 && workplaceAt(w, op.entries[op.entries.length - 1].date).paymentType === 'monthly') {
+      t.pay += Math.max(0, workplaceAt(w, op.entries[op.entries.length - 1].date).rate);
+    } else {
+      t.pay += op.pay;
+    }
+    t.travel += op.travel;
+  }
   const st = statuses[statusKey(w.id, period.start)] ?? {};
   // דקות שנפדו מהמונה לתוך הדוח — בתעריף שחל בסוף התקופה (כמו בדוח השכר).
   const atEnd = workplaceAt(w, period.end);
@@ -246,6 +263,7 @@ export function periodForecast(
     reported: t.pay + redeemedPay + t.travel,
     reportedPay: t.pay + redeemedPay,
     reportCount: mine.length,
+    opening: op.count > 0 ? op : undefined,
     planned: planned.pay + planned.travel,
     forecast: expected.pay + expected.travel,
     taxPercent: tax,
