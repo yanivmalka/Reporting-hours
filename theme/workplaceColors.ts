@@ -3,11 +3,13 @@
  * (לו״ז, דיווחים, לוח בקרה, דוחות שכר).
  *
  * הצבע נשמר כמספר משבצת (`Workplace.colorIndex`) בפלטה קבועה, ולא כקוד צבע:
- * הפלטה נגזרת מצבע המערכת (`distinctShades`), כך שהחלפת ערכת הצבעים או
- * מצב יום/לילה מחליפה בהתאמה גם את צבעי מקומות העבודה.
+ * הפלטה מפוזרת על כל גלגל הצבעים ומתחילה מגוון המערכת (`wheelColors`):
+ * משבצת i היא תמיד אותה זווית בגלגל ביחס לצבע המותג. כך החלפת ערכה או
+ * מצב יום/לילה מחליפה את הגוונים לפי אותה נוסחה, וחזרה לערכה הקודמת
+ * מחזירה בדיוק את מה שהיה (נשמר רק מספר המשבצת).
  */
 import { useCallback } from 'react';
-import { distinctShades } from './shades';
+import { wheelColors } from './shades';
 import { useTheme } from './ThemeContext';
 import type { ColorScheme } from './palettes';
 
@@ -16,7 +18,7 @@ export const WORKPLACE_COLOR_COUNT = 8;
 
 /** הפלטה לבחירה, בצבעי הערכה הפעילה. */
 export function workplacePalette(c: ColorScheme): string[] {
-  return distinctShades(c, WORKPLACE_COLOR_COUNT);
+  return wheelColors(c, WORKPLACE_COLOR_COUNT);
 }
 
 /** הצבע של מקום עבודה (משבצת 0 כשעוד לא נקבע). */
