@@ -13,7 +13,7 @@ import { AMOUNT_MODE_LABEL, forecastForMode, useAmountMode } from '../lib/amount
 import { useFlash } from '../components/useFlash';
 import { WorkplaceTile } from '../components/WorkplaceTile';
 import { SessionDotsByMonth, SessionDotsLegend, sessionDots } from '../components/SessionDots';
-import { Icon } from '../components/Icon';
+import { EnterChevron } from '../components/Chevrons';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { ACADEMIC_HOUR_MINUTES } from '../lib/academic';
@@ -92,8 +92,6 @@ function DashboardScreen() {
     const d = new Date();
     return { year: d.getFullYear(), month0: d.getMonth() };
   });
-  /** מקום העבודה המסונן; null = כולם */
-  const [selWp, setSelWp] = useState<string | null>(null);
   /** חודש מסונן ("YYYY-MM") בתצוגת סמסטר / שנה; null = כל התצוגה */
   const [selMonth, setSelMonth] = useState<string | null>(null);
   const [mode, setMode] = useState<ForecastMode>('work');
@@ -106,7 +104,7 @@ function DashboardScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const [pageDir, setPageDir] = useState<1 | -1>(1);
   const pageFlash = useFlash(page, pageDir);
-  const listFlash = useFlash(`${res}|${anchor.year}-${anchor.month0}|${selMonth}|${selWp}`, navDir);
+  const listFlash = useFlash(`${res}|${anchor.year}-${anchor.month0}|${selMonth}`, navDir);
 
   /** דפדוף — אינו סינון: מאפס רק את החודש המסונן (שכבר לא בתצוגה). */
   const shift = (d: 1 | -1) => {
@@ -114,10 +112,7 @@ function DashboardScreen() {
     setSelMonth(null);
     setAnchor((a) => shiftAnchor(res, a, d));
   };
-  const clearFilter = () => {
-    setSelWp(null);
-    setSelMonth(null);
-  };
+  const clearFilter = () => setSelMonth(null);
   const goToday = () => {
     const d = new Date();
     setNavDir(-1);
@@ -217,14 +212,13 @@ function DashboardScreen() {
     // לפי חודש עבודה התשלום מגיע אחרי סוף התקופה ("שוטף +") — מחפשים עד 4 חודשים קדימה.
     const searchTo = mode === 'pay' ? viewTo : isoDate(new Date(last.year, last.month0 + 5, 0));
     const list = paymentSchedule(data.workplaces, data.reports, data.courses, data.statuses, basis, viewFrom, searchTo)
-      .filter((p) => !selWp || p.workplace.id === selWp)
       .filter((p) => keys.has(mode === 'pay' ? p.expected.slice(0, 7) : periodMonthKey(p.period)));
     // הציר — מתחילת התקופה ועד סוף החודש של התשלום האחרון.
     const maxExpected = list.reduce((m, p) => (p.expected > m ? p.expected : m), viewTo);
     const [my, mm] = maxExpected.split('-').map(Number);
     const to = maxExpected > viewTo ? isoDate(new Date(my, mm, 0)) : viewTo;
     return { from: viewFrom, to, list };
-  }, [data, basis, selWp, selMonth, res, anchor, mode]);
+  }, [data, basis, selMonth, res, anchor, mode]);
 
   if (!data || !view) {
     return <LoadingScreen />;
@@ -256,8 +250,8 @@ function DashboardScreen() {
   const nowRef: MonthRef = { year: now.getFullYear(), month0: now.getMonth() };
   const atNow = anchor.year === nowRef.year && anchor.month0 === nowRef.month0;
   // בלי נתונים בתצוגה: תקופה שלפני הדיווח הראשון — קישור קדימה לחודש הדיווח הראשון;
-  // אחרת (אחרי הדיווח האחרון) — קישור אחורה לחודש הדיווח האחרון. לפי המקום המסונן, אם יש.
-  const myDates = data.reports.filter((r) => !selWp || r.workplaceId === selWp).map((r) => r.date);
+  // אחרת (אחרי הדיווח האחרון) — קישור אחורה לחודש הדיווח האחרון.
+  const myDates = data.reports.map((r) => r.date);
   const toRef = (d: string): MonthRef => ({ year: Number(d.slice(0, 4)), month0: Number(d.slice(5, 7)) - 1 });
   const firstDate = myDates.reduce<string | null>((m, d) => (m == null || d < m ? d : m), null);
   const lastDate = myDates.reduce<string | null>((m, d) => (m == null || d > m ? d : m), null);
@@ -298,8 +292,8 @@ function DashboardScreen() {
               ? `${MONTHS_LONG[cells[0].month0]} ${cells[0].year} – ${MONTHS_LONG[cells[cells.length - 1].month0]} ${cells[cells.length - 1].year}`
               : '',
           };
-  // ── סינון: מקום עבודה (מסתיר את השאר) וחודש (בסמסטר / שנה) ──
-  const shown = series.filter((s) => !selWp || s.id === selWp);
+  // ── סינון: חודש (בסמסטר / שנה) ──
+  const shown = series;
   const inView = selMonth ? cells.filter((m) => m.key === selMonth) : cells;
   const single = res === 'month' || selMonth != null;
   const listTitle = selMonth
@@ -366,7 +360,17 @@ function DashboardScreen() {
         {canToggle ? <GroupLevelPicker /> : null}
         {groups.map((g) => (
           <View key={g.key} style={styles.sessionGroup}>
-            {g.label ? <Text style={styles.sessionCourse}>{g.label}</Text> : null}
+            {g.label ? (
+              // שם הקורס — קישור לקורס, בדפוס הקבוע של קישור לרשומה קשורה (‹)
+              <Pressable
+                onPress={() => router.push({ pathname: '/course-form', params: { id: g.courses[0].id, view: '1' } })}
+                accessibilityRole="link"
+                style={({ pressed }) => [styles.courseLink, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={styles.sessionCourse}>{g.label}</Text>
+                <EnterChevron size={18} color={colors.brand} />
+              </Pressable>
+            ) : null}
             <SessionDotsByMonth
               dots={g.dots}
               mergeDays={merged}
@@ -384,17 +388,17 @@ function DashboardScreen() {
             />
           </View>
         ))}
-        <SessionDotsLegend days={merged} />
+        {/* מקרא — רק הסוגים שמופיעים בקבוצות המוצגות */}
+        <SessionDotsLegend days={merged} groups={groups.map((g) => g.dots)} />
       </View>
     );
   };
   // לפי מועד התשלום הצפוי ואז א״ב — לא לפי הסכום, כדי שהחלפת נטו / ברוטו לא תזיז שורות.
   const rows = paymentOrder(
-    rowsAll.filter((r) => (!selWp || r.workplace.id === selWp) && (r.reported > 0 || r.planned > 0 || r.workplace.id === selWp)),
+    rowsAll.filter((r) => r.reported > 0 || r.planned > 0),
   );
-  const sel = selWp ? rowsAll.find((r) => r.workplace.id === selWp) : undefined;
   const scaleRows = Math.max(0, ...rows.map((r) => r.reported)) * HEADROOM || Math.max(1, ...rows.map((r) => r.planned));
-  const pctTotal = realization(sel ? sel.reported : totalAll.reported, sel ? sel.planned : totalAll.planned);
+  const pctTotal = realization(totalAll.reported, totalAll.planned);
   const chipTone = (st: PeriodStatus) =>
     st === 'paid'
       ? { bg: colors.brandLight, fg: colors.brandDark }
@@ -403,26 +407,53 @@ function DashboardScreen() {
         : st === 'closed' || st === 'open'
           ? { bg: colors.background, fg: colors.warning }
           : { bg: colors.background, fg: colors.textMuted };
+  /** תגית מצב הדוח ומועד התשלום — גם באריח הסגור. */
+  const statusOf = (row: (typeof rowsAll)[number]) => {
+    if (!row.last) return null;
+    const p = row.last;
+    const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+    const payment =
+      p.status === 'paid' ? (p.paidAt ? `התקבל ${ddmm(p.paidAt)}` : undefined) : `צפי תשלום ${ddmm(p.expected)}`;
+    return { label: STATUS_LABEL[p.status], ...chipTone(p.status), payment };
+  };
+  /** שורות הפירוט — כל שורה מחלקים, ושבירת שורה רק בין החלקים (components/InfoLine.tsx). */
   const detailsOf = (row: (typeof rowsAll)[number]) => {
-    const out: { text: string; tone?: 'warn' | 'muted' }[] = [];
+    const out: { parts: string[]; tone?: 'warn' | 'muted' }[] = [];
     if (row.last) {
-      if (mode === 'pay') out.push({ text: `עבור ${monthName(periodMonthKey(row.last.period))}` });
+      if (mode === 'pay') out.push({ parts: [`עבור ${monthName(periodMonthKey(row.last.period))}`] });
       out.push({
-        text: `יום אחרון לדיווח שכר ${shortDate(row.last.period.end)} · צפי תשלום ${shortDate(row.last.expected)} · ${paymentTermsLabel(row.workplace)}`,
+        parts: [
+          `יום אחרון לדיווח שכר ${shortDate(row.last.period.end)}`,
+          `צפי תשלום ${shortDate(row.last.expected)} · ${paymentTermsLabel(row.workplace)}`,
+        ],
       });
       if (row.last.late)
-        out.push({ text: 'הדוח לא נשלח עד היום האחרון — התשלום נדחה בחודש', tone: 'warn' });
+        out.push({ parts: ['הדוח לא נשלח עד היום האחרון — התשלום נדחה בחודש'], tone: 'warn' });
     } else if (!single) {
-      out.push({ text: `סיכום ${listTitle} · לחיצה על חודש בגרף מציגה צפי תשלום` });
+      out.push({ parts: [`סיכום ${listTitle}`, 'לחיצה על חודש בגרף מציגה צפי תשלום'] });
     }
-    if (row.workplace.paymentType === 'monthly') out.push({ text: 'משכורת חודשית קבועה' });
+    if (row.workplace.paymentType === 'monthly') out.push({ parts: ['משכורת חודשית קבועה'] });
+    // הסכומים באריח — נטו או ברוטו (לפי הבחירה בכותרת הרשימה), ואחוז המס של המקום.
+    // המס יורד מהשכר בלבד, לא מהנסיעות.
+    if (row.tax > 0) {
+      // האחוז בבידוד משמאל לימין — אחרת ליד סוגריים / סוף שורה הוא מוצג "%25"
+      const pct = `\u2066${row.tax}%\u2069`;
+      out.push({
+        parts:
+          amountMode === 'net'
+            ? [`הסכומים נטו — אחרי מס ${pct} מהשכר`, `ברוטו ${money(row.gross.reported)}`]
+            : [`הסכומים ברוטו — לפני מס ${pct} מהשכר`],
+      });
+    } else {
+      out.push({ parts: ['ללא ניכוי מס במקור', 'נטו וברוטו זהים'] });
+    }
     // נקודת פתיחה מדו"ח שכר קודם — כלולה ב"דווח" כדיווח רגיל, ומסומנת שהוזנה ידנית.
     for (const p of row.periods) {
-      if (p.opening) out.push({ text: openingLabel(p.opening, basisFor(row.workplace, basis)), tone: 'muted' });
+      if (p.opening) out.push({ parts: [openingLabel(p.opening, basisFor(row.workplace, basis))], tone: 'muted' });
     }
     return out;
   };
-  const filtered = selWp != null || selMonth != null;
+  const filtered = selMonth != null;
   const maxWeekday = Math.max(...view.weekdays.map((w) => w.avgAcademicHours), 1);
   const r = view.rounding;
   const roundingTotal = r.exact + r.withLeftover || 1;
@@ -500,7 +531,6 @@ function DashboardScreen() {
           <Text style={styles.periodTitle}>{listTitle}</Text>
           <Text style={styles.periodSub}>
             {mode === 'pay' ? 'לפי מועד התשלום הצפוי' : 'לפי חודש העבודה'} · {amountMode === 'net' ? 'נטו אחרי מס' : 'ברוטו לפני מס'}
-            {sel ? ` · מסונן: ${sel.workplace.name}` : ''}
           </Text>
         </View>
         <AmountModeToggle />
@@ -508,15 +538,14 @@ function DashboardScreen() {
 
       <View style={styles.totalsBox}>
         {(() => {
-          const t = sel ?? totalAll;
+          const t = totalAll;
           const L = AMOUNT_MODE_LABEL[amountMode];
           return (
             <>
               <View style={styles.totalsRow}>
                 <View>
-                  <Text style={styles.totalLabel}>{sel ? `דווח במקום הנבחר · ${L}` : `דווח · ${L}`}</Text>
+                  <Text style={styles.totalLabel}>דווח · {L}</Text>
                   <Text style={styles.totalValue}>{money(t.reported)}</Text>
-                  {sel ? <Text style={styles.totalOf}>מתוך {money(totalAll.reported)} {L} בכל המקומות</Text> : null}
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.totalLabel}>פוטנציאל · {L}</Text>
@@ -562,10 +591,8 @@ function DashboardScreen() {
               return next;
             })
           }
-          status={row.last ? { label: STATUS_LABEL[row.last.status], ...chipTone(row.last.status) } : null}
+          status={statusOf(row)}
           details={detailsOf(row)}
-          filtered={selWp === row.workplace.id}
-          onFilter={() => setSelWp((cur) => (cur === row.workplace.id ? null : row.workplace.id))}
           onOpen={() => router.push({ pathname: '/workplace', params: { id: row.workplace.id } })}
         />
       ))}
@@ -577,7 +604,7 @@ function DashboardScreen() {
           from={payments.from}
           to={payments.to}
           today={todayISO()}
-          scope={sel ? `${listTitle} · ${sel.workplace.name}` : listTitle}
+          scope={listTitle}
         />
       ) : null}
 
@@ -734,7 +761,6 @@ const makeStyles = (colors: AppColors) =>
       flexDirection: 'row',
       justifyContent: 'space-between',
     },
-    totalOf: { fontSize: 12, color: colors.border, textAlign: TEXT_RIGHT },
     totalPct: { fontSize: 13, fontWeight: '700', color: colors.surface, textAlign: TEXT_RIGHT },
     totalLabel: { fontSize: 13, color: colors.border, textAlign: TEXT_RIGHT },
     totalValue: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.8, color: colors.surface, textAlign: TEXT_RIGHT },
@@ -743,7 +769,8 @@ const makeStyles = (colors: AppColors) =>
     totalForecast: { fontSize: 13, fontWeight: '700', color: colors.surface },
     sessions: { gap: spacing.sm, paddingBottom: 4 },
     sessionGroup: { gap: 4 },
-    sessionCourse: { fontSize: 13, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
+    sessionCourse: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.brand, textAlign: TEXT_RIGHT },
+    courseLink: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2, minHeight: 32 },
     wpCard: {
       flexDirection: 'row',
       alignItems: 'center',

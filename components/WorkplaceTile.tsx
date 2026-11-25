@@ -4,17 +4,21 @@
  *     צפי) ואחוז מימוש. מתחת: "פוטנציאל", ומשמאלו "צפי" — רק כשהצפי שונה.
  *     כשהדיווח עולה על התכנון — הפס מלא, והחלק שמעבר לתכנון מסומן בגוון
  *     כהה יותר אחרי קו הפרדה.
- *   - מצב מורחב (לחיצה על האריח או על החץ): סטטוס, צפי תשלום, איחור בדיווח,
- *     פירוט המפגשים לפי קורס (עיגולים צבעוניים), סינון למקום הזה ומעבר לפירוט המלא.
+ *     ושורת סטטוס: תגית מצב הדוח וצפי התשלום (או מתי התקבל).
+ *   - מצב מורחב (לחיצה על האריח או על החץ): פירוט המפגשים לפי קורס (עיגולים צבעוניים; שם
+ *     הקורס — קישור לקורס), מועדים, איחור בדיווח, נטו / ברוטו ואחוז המס, ובסוף — שורת קישור
+ *     למקום העבודה ("מקום העבודה  <שם> ‹"), בדפוס הקבוע של קישור לרשומה קשורה.
  */
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
+import { EnterChevron } from './Chevrons';
+import { InfoLine } from './InfoLine';
 import { money, realization } from './ForecastChart';
 import { useTheme } from '../theme/ThemeContext';
-import { cardShadow, radius, spacing } from '../theme/colors';
+import { cardShadow, spacing } from '../theme/colors';
 import { mix } from '../theme/shades';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
@@ -31,11 +35,10 @@ type Props = {
   scale: number;
   expanded: boolean;
   onToggle: () => void;
-  /** שורות מידע נוסף למצב מורחב */
-  details: { text: string; tone?: 'warn' | 'muted' }[];
-  status?: { label: string; bg: string; fg: string } | null;
-  filtered: boolean;
-  onFilter: () => void;
+  /** שורות מידע נוסף למצב מורחב — כל שורה מחלקים, ושבירת שורה רק בין החלקים */
+  details: { parts: string[]; tone?: 'warn' | 'muted' }[];
+  /** מצב הדוח ומועד התשלום — גם במצב המצומצם */
+  status?: { label: string; bg: string; fg: string; payment?: string } | null;
   onOpen: () => void;
 };
 
@@ -51,8 +54,6 @@ export function WorkplaceTile({
   onToggle,
   details,
   status,
-  filtered,
-  onFilter,
   onOpen,
 }: Props) {
   const styles = useStyles(makeStyles);
@@ -66,7 +67,7 @@ export function WorkplaceTile({
   const showForecast = planned > 0 && Math.round(forecast) !== Math.round(planned);
 
   return (
-    <View style={[styles.card, filtered && { borderColor: color, borderWidth: 2 }]}>
+    <View style={styles.card}>
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
@@ -123,33 +124,34 @@ export function WorkplaceTile({
         ) : (
           <Text style={styles.sub}>ללא תכנון קורסים</Text>
         )}
+        {status ? (
+          <View style={styles.statusRow}>
+            <View style={[styles.chip, { backgroundColor: status.bg }]}>
+              <Text style={[styles.chipText, { color: status.fg }]}>{status.label}</Text>
+            </View>
+            {status.payment ? <Text style={styles.payment}>{status.payment}</Text> : null}
+          </View>
+        ) : null}
       </Pressable>
 
       {expanded ? (
         <View style={styles.more}>
-          {status ? (
-            <View style={[styles.chip, { backgroundColor: status.bg }]}>
-              <Text style={[styles.chipText, { color: status.fg }]}>{status.label}</Text>
-            </View>
-          ) : null}
           {sessions}
           {details.map((d) => (
-            <Text key={d.text} style={[styles.detail, d.tone === 'warn' && styles.warn]}>
-              {d.text}
-            </Text>
+            <InfoLine key={d.parts.join('|')} parts={d.parts} style={[styles.detail, d.tone === 'warn' && styles.warn]} />
           ))}
-          <View style={styles.actions}>
-            <Pressable onPress={onFilter} accessibilityRole="button" style={[styles.action, filtered && styles.actionOn]}>
-              <Icon name={filtered ? 'filter-remove-outline' : 'filter-outline'} size={18} color={filtered ? colors.textOnBrand : colors.brand} />
-              <Text style={[styles.actionText, filtered && styles.actionTextOn]}>
-                {filtered ? 'נקה סינון' : 'הצג רק מקום זה'}
-              </Text>
-            </Pressable>
-            <Pressable onPress={onOpen} accessibilityRole="button" style={styles.action}>
-              <Text style={styles.actionText}>פירוט מקום העבודה</Text>
-              <Icon name="chevron-left" size={18} color={colors.brand} />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={onOpen}
+            accessibilityRole="link"
+            accessibilityLabel={`מקום העבודה ${name}`}
+            style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={styles.linkLabel}>מקום העבודה</Text>
+            <Text style={styles.linkValue} numberOfLines={1}>
+              {name}
+            </Text>
+            <EnterChevron color={colors.brand} />
+          </Pressable>
         </View>
       ) : null}
     </View>
@@ -191,22 +193,22 @@ const makeStyles = (c: ColorScheme, layout: StyleLayout) =>
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: c.border,
     },
+    statusRow: { flexDirection: layout.rowStart, flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, paddingTop: 2 },
+    payment: { fontSize: 12, fontWeight: '700', color: c.text, textAlign: layout.textStart },
     chip: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10 },
     chipText: { fontSize: 12, fontWeight: '700' },
     detail: { fontSize: 13, color: c.textMuted, textAlign: layout.textStart },
     warn: { color: c.warning, fontWeight: '700' },
-    actions: { flexDirection: layout.rowStart, flexWrap: 'wrap', gap: spacing.sm, paddingTop: 4 },
-    action: {
+    linkRow: {
       flexDirection: layout.rowStart,
       alignItems: 'center',
-      gap: 4,
-      minHeight: 40,
-      paddingHorizontal: 12,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: c.brand,
+      gap: spacing.sm,
+      minHeight: 44,
+      marginTop: 4,
+      paddingTop: 6,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
     },
-    actionOn: { backgroundColor: c.brand },
-    actionText: { fontSize: 13, fontWeight: '700', color: c.brand },
-    actionTextOn: { color: c.textOnBrand },
+    linkLabel: { fontSize: 13, color: c.textMuted, textAlign: layout.textStart },
+    linkValue: { flex: 1, fontSize: 14, fontWeight: '700', color: c.brand, textAlign: layout.textEnd },
   });

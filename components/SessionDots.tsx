@@ -274,24 +274,47 @@ export function SessionDotsByMonth<D extends SessionDot>({
 /**
  * מקרא לעיגולים: עיגולים קטנים בעיצוב האמיתי + תווית. כל פריט יחידה שלא
  * נשברת. "נמחק מהתכנון" לא מופיע — מפגש כזה מוסתר מהלו״ז.
+ * `groups` — העיגולים שמוצגים (קבוצה לכל שורת קורס, לפי הקיבוץ והסינון הנוכחיים): מוצגים רק
+ * הסוגים שמופיעים בהם. בלי `groups` — כל הסוגים.
  */
-export function SessionDotsLegend({ days = false }: { days?: boolean } = {}) {
+export function SessionDotsLegend({
+  days = false,
+  groups,
+}: { days?: boolean; groups?: readonly (readonly SessionDot[])[] } = {}) {
   const styles = useStyles(makeStyles);
-  const items: { state: ToneState; label: string; text: string; extra?: boolean; badge?: string }[] = [
-    { state: 'reported', label: '✓', text: 'דווח' },
-    { state: 'open', label: '', text: 'מתוכנן' },
-    { state: 'canceled', label: '', text: 'בוטל' },
-    { state: 'auto', label: '', text: 'חג' },
-    { state: 'vacation', label: '', text: 'חופשה' },
-    { state: 'moved', label: '←', text: 'הועבר' },
-    { state: 'open', label: '', text: 'מפגש נוסף', extra: true },
+  const all = groups?.flat();
+  const has = (pred: (d: SessionDot) => boolean) => !all || all.some(pred);
+  const merged = days && groups ? groups.flatMap((g) => mergeDotsByDay(g)) : null;
+  type Item = { state: ToneState; label: string; text: string; extra?: boolean; badge?: string; show: boolean };
+  const candidates: Item[] = [
+    { state: 'reported', label: '✓', text: 'דווח', show: has((d) => d.state === 'reported') },
+    { state: 'open', label: '', text: 'מתוכנן', show: has((d) => d.state === 'open' && d.kind !== 'extra') },
+    { state: 'canceled', label: '', text: 'בוטל', show: has((d) => d.state === 'canceled') },
+    { state: 'auto', label: '', text: 'חג', show: has((d) => d.state === 'auto') },
+    { state: 'vacation', label: '', text: 'חופשה', show: has((d) => d.state === 'vacation') },
+    { state: 'moved', label: '←', text: 'הועבר', show: has((d) => d.state === 'moved') },
+    { state: 'open', label: '', text: 'מפגש נוסף', extra: true, show: has((d) => d.kind === 'extra') },
     ...(days
       ? [
-          { state: 'reported' as const, label: '✓', text: 'כמה מפגשים ביום', badge: '2' },
-          { state: 'partial' as const, label: '', text: 'דווח חלקית', badge: '½' },
+          {
+            state: 'reported' as const,
+            label: '✓',
+            text: 'כמה מפגשים ביום',
+            badge: '2',
+            show: !merged || merged.some((m) => m.parts.length > 1),
+          },
+          {
+            state: 'partial' as const,
+            label: '',
+            text: 'דווח חלקית',
+            badge: '½',
+            show: !merged || merged.some((m) => m.parts.length > 1 && m.state === 'partial'),
+          },
         ]
       : []),
   ];
+  const items = candidates.filter((i) => i.show);
+  if (items.length === 0) return null;
   return (
     <View style={styles.legend}>
       {items.map((i) => (

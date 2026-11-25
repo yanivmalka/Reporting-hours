@@ -6,6 +6,7 @@
  *  - `FinanceSection` — קבוצה בתוך מסך (תנאי שכר בעריכת מקום עבודה): כשנעולה — שורה "מידע כספי נעול · פתיחה".
  *  - `AppLockSetting` — תיבת הסימון בדף "הגדרות" (app/preferences.tsx).
  *  - `FinanceLockToggle` — מתג קטן בדף הבית: מנעול סגור (הצגה) / פתוח (נעילה).
+ *  - `HeaderFinanceLock` — מנעול בשורת הכותרת של כל מסך שמוצג בו מידע כספי (lib/financeScreens.ts).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
@@ -24,6 +25,8 @@ import {
   useAppLockEnabled,
   useFinanceLocked,
 } from '../lib/appLock';
+import { useScreenHasFinance } from '../lib/financeScreens';
+import { useMarkFinanceScreen } from './useMarkFinanceScreen';
 import { brandImages } from '../theme/brandAssets';
 import { useTheme } from '../theme/ThemeContext';
 import { radius, spacing } from '../theme/colors';
@@ -41,6 +44,7 @@ type GatePhase = 'locked' | 'revealing' | 'open';
 
 export function FinanceGate({ children }: { children: ReactNode }) {
   const locked = useFinanceLocked();
+  useMarkFinanceScreen(true);
   const { colors, paletteId } = useTheme();
   const [failed, setFailed] = useState(false);
   // השלב נגזר בזמן הרינדור — כך אין רינדור ביניים שבו הנתונים מוצגים לפני המעבר.
@@ -120,6 +124,7 @@ export function FinanceGate({ children }: { children: ReactNode }) {
 
 export function FinanceSection({ children }: { children: ReactNode }) {
   const locked = useFinanceLocked();
+  useMarkFinanceScreen(true);
   const unlocked = useFinanceUnlocked();
   const { colors } = useTheme();
   if (!locked) {
@@ -174,6 +179,29 @@ export function FinanceLockToggle() {
     >
       <Icon name={locked ? 'lock-outline' : 'lock-open-variant-outline'} size={18} color={colors.textMuted} />
       <Text style={[styles.toggleText, { color: colors.textMuted }]}>{locked ? 'הצגת סכומים' : 'נעילה'}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * מנעול בשורת הכותרת — בכל מסך שמוצג בו מידע כספי (סכום, מסך / קבוצה כספיים), כשההגדרה מופעלת:
+ * סגור — לחיצה פותחת בזיהוי; פתוח — לחיצה נועלת.
+ */
+export function HeaderFinanceLock({ routeKey }: { routeKey?: string }) {
+  const enabled = useAppLockEnabled();
+  const locked = useFinanceLocked();
+  const has = useScreenHasFinance(routeKey);
+  const { colors } = useTheme();
+  if (!appLockPlatform || !enabled || !has) return null;
+  return (
+    <Pressable
+      onPress={() => (locked ? void unlockFinance() : lockFinance())}
+      accessibilityRole="button"
+      accessibilityLabel={locked ? 'מידע כספי נעול — הצגה' : 'מידע כספי מוצג — נעילה'}
+      hitSlop={8}
+      style={styles.headerLock}
+    >
+      <Icon name={locked ? 'lock-outline' : 'lock-open-variant-outline'} size={22} color={colors.brand} />
     </Pressable>
   );
 }
@@ -244,6 +272,7 @@ const styles = StyleSheet.create({
   },
   openText: { fontSize: 12 },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.8 },
+  headerLock: { padding: 2 },
   toggleText: { fontSize: 12 },
   hint: { fontSize: 13, lineHeight: 19, textAlign: TEXT_RIGHT },
 });

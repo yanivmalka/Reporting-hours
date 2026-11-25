@@ -20,6 +20,7 @@ import {
 import { FONT_FAMILY, normalizeWeight } from '../theme/fonts';
 import { hasMoney, maskMoney, unlockFinance, useFinanceLocked } from '../lib/appLock';
 import { useIsRTL } from '../lib/i18n';
+import { useMarkFinanceScreen } from './useMarkFinanceScreen';
 
 const base: TextStyle = FONT_FAMILY ? { fontFamily: FONT_FAMILY } : {};
 
@@ -28,6 +29,15 @@ function withFont(style: StyleProp<TextStyle>): StyleProp<TextStyle> {
   const weight = normalizeWeight(flat?.fontWeight);
   if (!weight || weight === flat?.fontWeight) return [base, style];
   return [base, style, { fontWeight: weight }];
+}
+
+/** האם יש סכום ב־₪ במחרוזות שבתוכן (רק ברמה הזו). */
+function containsMoney(children: ReactNode): boolean {
+  let any = false;
+  Children.forEach(children, (c) => {
+    if (!any && typeof c === 'string' && hasMoney(c)) any = true;
+  });
+  return any;
 }
 
 /** מחליף סכומים במחרוזות שבתוכן (רק ברמה הזו — Text מקונן מטפל בעצמו). */
@@ -45,6 +55,8 @@ function masked(children: ReactNode): { children: ReactNode; any: boolean } {
 
 export const Text = forwardRef<RNText, TextProps>(function Text({ style, children, ...props }, ref) {
   const locked = useFinanceLocked();
+  // מסך שמוצג בו סכום — מנעול בשורת הכותרת (lib/financeScreens.ts)
+  useMarkFinanceScreen(children != null && containsMoney(children));
   if (locked && children != null) {
     const m = masked(children);
     if (m.any) {
