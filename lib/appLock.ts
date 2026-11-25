@@ -14,6 +14,7 @@ import { AppState, Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
+import { authenticateWithRecovery, createAuthSession, STALE_AFTER_RESUME_MS, type AuthDriver } from './authSession';
 
 export const RELOCK_AFTER_MS = 60_000;
 export const appLockPlatform = Platform.OS !== 'web';
@@ -36,6 +37,10 @@ if (appLockPlatform) {
   AppState.addEventListener('change', (st) => {
     if (st === 'background') backgroundAt = Date.now();
     else if (st === 'active') {
+      // חלון זיהוי שהיה פתוח כשהאפליקציה ירדה לרקע (למשל המסך כבה) נסגר לפעמים בלי תוצאה —
+      // אם הבקשה עדיין ממתינה אחרי השהייה קצרה, היא נזנחת, ולחיצה הבאה פותחת חלון חדש.
+      const stale = session.pendingId();
+      if (backgroundAt && stale != null) setTimeout(() => session.abandon(stale), STALE_AFTER_RESUME_MS);
       if (backgroundAt && state.unlocked && Date.now() - backgroundAt > RELOCK_AFTER_MS) set({ unlocked: false });
       backgroundAt = 0;
     }
@@ -68,30 +73,28 @@ export async function lockAvailable(): Promise<boolean> {
   }
 }
 
-/** זיהוי — טביעת אצבע / פנים, ואם אין או נכשל: קוד המכשיר. */
-export async function authenticate(prompt = 'הצגת מידע כספי'): Promise<boolean> {
-  try {
-    const r = await LocalAuthentication.authenticateAsync({
-      promptMessage: prompt,
-      cancelLabel: 'ביטול',
-      disableDeviceFallback: false,
-    });
-    return r.success;
-  } catch {
-    return false;
-  }
+function driver(prompt: string): AuthDriver {
+  return {
+    authenticate: () =>
+      LocalAuthentication.authenticateAsync({
+        promptMessage: prompt,
+        cancelLabel: 'ביטול',
+        disableDeviceFallback: false,
+      }),
+    cancel: () => LocalAuthentication.cancelAuthenticate(),
+  };
 }
 
-let pending: Promise<boolean> | null = null;
+/** זיהוי — טביעת אצבע / פנים, ואם אין או נכשל: קוד המכשיר (עם התאוששות מבקשה תקועה, lib/authSession.ts). */
+export function authenticate(prompt = 'הצגת מידע כספי'): Promise<boolean> {
+  return authenticateWithRecovery(driver(prompt));
+}
+
+const session = createAuthSession(driver('הצגת מידע כספי'));
 /** פתיחת המידע הכספי אחרי זיהוי (קריאות חופפות — חלון זיהוי אחד). */
 export function unlockFinance(): Promise<boolean> {
   if (!lockedNow()) return Promise.resolve(true);
-  pending ??= authenticate().then((ok) => {
-    pending = null;
-    if (ok) set({ unlocked: true });
-    return ok;
-  });
-  return pending;
+  return session.run(() => set({ unlocked: true }));
 }
 
 /** נעילה מיידית של המידע הכספי (בלי לכבות את ההגדרה) — מדף הבית או מקבוצה כספית פתוחה. */
