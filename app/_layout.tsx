@@ -18,6 +18,7 @@ import { SyncProvider, useCloudSync } from '../components/CloudSync';
 import { BlockedWriteNotice } from '../components/Access';
 import { HeaderBadges, HeaderTitle } from '../components/HeaderTitle';
 import { BrandSplash } from '../components/BrandSplash';
+import { noteFinanceTouch } from '../lib/appLock';
 import { I18nProvider, useI18n } from '../lib/i18n';
 import { PayBasisProvider } from '../lib/payBasis';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
@@ -73,7 +74,7 @@ function Chrome() {
       <ExitGuard />
       <BlockedWriteNotice />
       {/* במסך רחב: תפריט קבוע בצד ההתחלה (ימין בעברית) והניווט לצדו */}
-      <View style={{ flex: 1, flexDirection: 'row' }}>
+      <View style={{ flex: 1, flexDirection: 'row' }} onTouchStart={noteFinanceTouch}>
         {wide ? <SideNav /> : null}
         <View style={{ flex: 1 }}>
           <Stack

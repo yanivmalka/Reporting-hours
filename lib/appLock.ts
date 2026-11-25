@@ -6,17 +6,28 @@
  *  - מסכים כספיים (לוח בקרה, דוחות שכר, תשלומים, תיאום מס) וקבוצות שכר בעריכת מקום עבודה
  *    מבקשים זיהוי (`FinanceGate` / `FinanceSection` ב־components/AppLock.tsx);
  *  - כל סכום ב־₪ שמוצג ב־`Text` של האפליקציה מוחלף ב־"••• ₪" (`maskMoney`), ולחיצה עליו פותחת.
- * פתיחה אחת חלה על כל האפליקציה, עד שהיא חוזרת מהרקע אחרי יותר מ־`RELOCK_AFTER_MS`.
+ * פתיחה אחת חלה על כל האפליקציה, עד שהטלפון מונח מהיד (lib/putDown.ts — מד התאוצה, רק כשהמידע
+ * פתוח והאפליקציה פעילה): דומם ~10 שנ׳ כששוכב / ~30 שנ׳ בתנוחה אחרת, בלי נגיעה במסך.
+ * יציאה מהאפליקציה לבדה לא נועלת: נועלים בחזרה רק אם הטלפון כבר היה מונח כשיצאה לרקע
+ * (למשל המסך כבה על השולחן), או אם עברו יותר מ־`RELOCK_AWAY_MS`. אין מד תאוצה — הכלל הישן
+ * (חזרה מהרקע אחרי יותר מ־`RELOCK_AFTER_MS`).
  * ההפעלה רק אחרי זיהוי מוצלח. אנדרואיד בלבד; ב־web אין נעילה.
  */
 import { useSyncExternalStore } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { Accelerometer } from 'expo-sensors';
+import { createPutDownDetector, SAMPLE_INTERVAL_MS } from './putDown';
 import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
 import { authenticateWithRecovery, createAuthSession, STALE_AFTER_RESUME_MS, type AuthDriver } from './authSession';
 
+/** בלי מד תאוצה — נעילה בחזרה מהרקע אחרי דקה (הכלל הקודם). */
 export const RELOCK_AFTER_MS = 60_000;
+/** עם מד תאוצה — רשת ביטחון: חזרה אחרי היעדרות ארוכה נועלת גם אם הטלפון לא זוהה כמונח. */
+export const RELOCK_AWAY_MS = 10 * 60_000;
+/** דומם לפחות כך ברגע היציאה לרקע — הטלפון כבר היה מונח. */
+const DOWN_AT_BACKGROUND_MS = 3_000;
 export const appLockPlatform = Platform.OS !== 'web';
 
 type State = { loaded: boolean; enabled: boolean; unlocked: boolean };
@@ -31,18 +42,65 @@ const subscribe = (l: () => void) => {
   return () => listeners.delete(l);
 };
 
+const detector = createPutDownDetector();
+let sensorOk: boolean | null = null;
+let sensorSub: { remove(): void } | null = null;
+let appActive = AppState.currentState !== 'background';
+
+/** מד התאוצה פועל רק כשיש מה לנעול: ההגדרה מופעלת, המידע פתוח והאפליקציה פעילה. */
+function updateMonitor() {
+  const want = appLockPlatform && sensorOk === true && state.enabled && state.unlocked && appActive;
+  if (want && !sensorSub) {
+    detector.reset();
+    Accelerometer.setUpdateInterval(SAMPLE_INTERVAL_MS);
+    sensorSub = Accelerometer.addListener(({ x, y, z }) => {
+      const t = Date.now();
+      detector.add({ x, y, z, t });
+      if (detector.putDown(t)) set({ unlocked: false });
+    });
+  } else if (!want && sensorSub) {
+    sensorSub.remove();
+    sensorSub = null;
+  }
+}
+
+/** נגיעה במסך (מהשורש, app/_layout.tsx) — הטלפון בשימוש, ולכן לא "מונח". */
+export function noteFinanceTouch(): void {
+  if (sensorSub) detector.touch(Date.now());
+}
+
 if (appLockPlatform) {
   void readJSON<{ enabled?: boolean }>(KEYS.appLock, {}).then((v) => set({ loaded: true, enabled: v?.enabled === true }));
+  void Accelerometer.isAvailableAsync()
+    .catch(() => false)
+    .then((ok) => {
+      sensorOk = ok;
+      updateMonitor();
+    });
+  listeners.add(updateMonitor);
   let backgroundAt = 0;
+  let downAtBackground = false;
   AppState.addEventListener('change', (st) => {
-    if (st === 'background') backgroundAt = Date.now();
-    else if (st === 'active') {
+    if (st === 'background') {
+      const now = Date.now();
+      backgroundAt = now;
+      downAtBackground = sensorSub != null && detector.stillFor(now) >= DOWN_AT_BACKGROUND_MS;
+      appActive = false;
+      updateMonitor();
+    } else if (st === 'active') {
       // חלון זיהוי שהיה פתוח כשהאפליקציה ירדה לרקע (למשל המסך כבה) נסגר לפעמים בלי תוצאה —
       // אם הבקשה עדיין ממתינה אחרי השהייה קצרה, היא נזנחת, ולחיצה הבאה פותחת חלון חדש.
       const stale = session.pendingId();
       if (backgroundAt && stale != null) setTimeout(() => session.abandon(stale), STALE_AFTER_RESUME_MS);
-      if (backgroundAt && state.unlocked && Date.now() - backgroundAt > RELOCK_AFTER_MS) set({ unlocked: false });
+      if (backgroundAt && state.unlocked) {
+        const away = Date.now() - backgroundAt;
+        const relock = sensorOk ? downAtBackground || away > RELOCK_AWAY_MS : away > RELOCK_AFTER_MS;
+        if (relock) set({ unlocked: false });
+      }
       backgroundAt = 0;
+      downAtBackground = false;
+      appActive = true;
+      updateMonitor();
     }
   });
 }
