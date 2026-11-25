@@ -77,7 +77,7 @@ function Chrome() {
         {wide ? <SideNav /> : null}
         <View style={{ flex: 1 }}>
           <Stack
-            screenOptions={{
+            screenOptions={({ route }) => ({
               headerStyle: { backgroundColor: barBg },
               headerTintColor: barFg,
               headerTitleStyle: { fontWeight: '700', fontSize: 20 },
@@ -96,11 +96,11 @@ function Chrome() {
               // סימני מצב (👤 נתונים של משתמש אחר, 👁 צפייה בלבד) בצמוד לשמאל, לפני ה־⋮
               headerRight: (props) => (
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <HeaderBadges />
+                  <HeaderBadges routeKey={route.key} />
                   <HeaderEnd canGoBack={props.canGoBack} tintColor={String(props.tintColor ?? barFg)} />
                 </View>
               ),
-            }}
+            })}
           >
             <Stack.Screen name="index" options={{ title: t('nav.home') }} />
             <Stack.Screen name="dashboard" options={{ title: t('nav.dashboard') }} />

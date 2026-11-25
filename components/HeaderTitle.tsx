@@ -5,10 +5,12 @@
  *   - תמונת המשתמש מחשבון Google (components/Avatar.tsx); בחשבון ששותף (docs/sharing-spec.md) — התמונה
  *     של הבעלים (`Profile.photoUrl`). לחיצה — תפריט החשבון (components/AccountMenu.tsx).
  *   - עין — מצב צפייה בלבד (lib/viewOnly.ts).
+ *   - מנעול — נעילה / פתיחה של המידע הכספי, רק במסך שמוצג בו מידע כספי (`HeaderFinanceLock`).
  *   לחיצה על סימן פותחת דיאלוג עם הפרטים והמעבר חזרה ("לנתונים שלי" / "מעבר לעריכה").
  */
 import { useEffect, useState } from 'react';
 import { Avatar } from './Avatar';
+import { HeaderFinanceLock } from './AppLock';
 import { AccountMenu, signOutMessage } from './AccountMenu';
 import { useConfirm } from './ConfirmDialog';
 import { loadProfile } from '../lib/profile';
@@ -33,7 +35,7 @@ export function HeaderTitle({ title, tintColor }: { title: string; tintColor: st
   );
 }
 
-export function HeaderBadges() {
+export function HeaderBadges({ routeKey }: { routeKey?: string } = {}) {
   const styles = useStyles(makeStyles);
   const { user, access, switchAccount, signOut } = useCloudSync();
   const viewOnly = useViewOnly();
@@ -69,6 +71,8 @@ export function HeaderBadges() {
 
   return (
     <View style={styles.row}>
+      {/* מנעול המידע הכספי — רק במסך שמוצג בו מידע כספי */}
+      <HeaderFinanceLock routeKey={routeKey} />
       {user ? (
         <Pressable
           onPress={() => setOpen('account')}

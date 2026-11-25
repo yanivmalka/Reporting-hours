@@ -397,7 +397,7 @@ function CourseFormScreenInner() {
           </Pressable>
         ) : null}
         <View style={styles.legend}>
-          <SessionDotsLegend />
+          <SessionDotsLegend groups={[dots]} />
         </View>
       </View>
     ) : null;
