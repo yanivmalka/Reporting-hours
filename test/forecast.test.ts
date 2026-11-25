@@ -174,3 +174,28 @@ describe('סדר המקומות בלוח הבקרה', () => {
     expect(paymentOrder(rows).map((r) => r.workplace.name)).toEqual(['בית', 'אלף', 'גימל', 'דלת']);
   });
 });
+
+describe('צפי תשלום — דווח בפועל + המפגשים הבאים', () => {
+  // נובמבר 2026: 3, 10, 17, 24 — 400 ₪ למפגש לפי התכנון.
+  const rep = (id: string, date: string, end: string) => ({ id, workplaceId: 'w1', courseId: 'c1', date, start: '09:00', end, breaks: [], carriedMinutes: 0, createdAt: 1 });
+  it('מפגש שדווח — לפי מה שדווח; מפגש שלא דווח — לפי התכנון', () => {
+    // 3.11 דווח קצר (09:00–11:15 = 3 ש״א = 300 ₪), 10.11 דווח מלא. 17, 24 — עוד לא.
+    const f = periodForecast(wp, nov, [rep('a', '2026-11-03', '11:15'), rep('b', '2026-11-10', '12:00')], [course], {}, 'academic', day('2026-11-12'));
+    expect(f.planned).toBe(1600);
+    expect(f.reported).toBe(700);
+    expect(f.forecast).toBe(700 + 800);
+  });
+  it('מפגש שבוטל יורד מהצפי, חוץ מהחלק שמשולם לפי סיבת הביטול', async () => {
+    await setSessionMark('c1', '2026-11-17', 'canceled', 'מחלה', undefined, 'sick');
+    await setSessionMark('c1', '2026-11-24', 'canceled', 'שביתה');
+    await loadCancelIndex();
+    const f = periodForecast(wp, nov, [rep('a', '2026-11-03', '12:00')], [course], {}, 'academic', day('2026-11-12'));
+    // 3.11 דווח (400), 10.11 עוד לא דווח (400), 17.11 בוטל במחלה (50% = 200), 24.11 בוטל (0)
+    expect(f.forecast).toBe(1000);
+  });
+  it('דוח שנשלח — בלי מפגשים שלא דווחו', () => {
+    const sent = { 'w1|2026-11-01': { sentAt: day('2026-11-30').getTime() } };
+    const f = periodForecast(wp, nov, [rep('a', '2026-11-03', '12:00')], [course], sent, 'academic', day('2026-12-01'));
+    expect(f.forecast).toBe(400);
+  });
+});

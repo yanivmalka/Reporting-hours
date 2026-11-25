@@ -1,7 +1,8 @@
 /**
  * אריח מקום עבודה בלוח הבקרה — מאחד את פס הגרף ואת פירוט המקום:
  *   - מצב מצומצם: שם מלא, סכום שדווח, פס (רקע בהיר = פוטנציאל, גוון ביניים =
- *     צפי) ואחוז מימוש. מתחת: "פוטנציאל", ומשמאלו "צפי" — רק כשהצפי שונה.
+ *     צפי) ואחוז מימוש. מתחת: "פוטנציאל", ומשמאלו "צפי תשלום" — תמיד: מה שדווח,
+ *     בלי מה שבוטל, ובהנחה שהמפגשים הבאים יתקיימו.
  *     כשהדיווח עולה על התכנון — הפס מלא, והחלק שמעבר לתכנון מסומן בגוון
  *     כהה יותר אחרי קו הפרדה.
  *     ושורת סטטוס: תגית מצב הדוח וצפי התשלום (או מתי התקבל).
@@ -27,7 +28,7 @@ type Props = {
   color: string;
   reported: number;
   planned: number;
-  /** צפי: הפוטנציאל בלי המפגשים שבוטלו */
+  /** צפי תשלום: מה שדווח + מפגשים שעוד לא דווחו ולא בוטלו */
   forecast: number;
   /** פירוט המפגשים לפי קורס — במצב מורחב */
   sessions?: ReactNode;
@@ -64,7 +65,7 @@ export function WorkplaceTile({
   const light = mix(color, colors.surface, 0.72);
   const deeper = mix(color, colors.text, 0.35);
   const mid = mix(color, colors.surface, 0.45);
-  const showForecast = planned > 0 && Math.round(forecast) !== Math.round(planned);
+  const showForecast = forecast > 0 || reported > 0;
 
   return (
     <View style={styles.card}>
@@ -72,7 +73,7 @@ export function WorkplaceTile({
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={`${name}: דווח ${money(reported)}${planned > 0 ? `, פוטנציאל ${money(planned)}${showForecast ? `, צפי ${money(forecast)}` : ''}, מימוש ${pct}%` : ''}`}
+        accessibilityLabel={`${name}: דווח ${money(reported)}${planned > 0 ? `, פוטנציאל ${money(planned)}}, מימוש ${pct}%` : ''}${showForecast ? `, צפי תשלום ${money(forecast)}` : ''}`}
         style={styles.main}
       >
         <View style={styles.head}>
@@ -94,8 +95,8 @@ export function WorkplaceTile({
               </View>
             ) : planned > 0 ? (
               <View style={[styles.fillRow, { width: `${frac(planned) * 100}%`, backgroundColor: light }]}>
-                {showForecast && forecast > reported ? (
-                  <View style={[styles.layer, { width: `${(forecast / planned) * 100}%`, backgroundColor: mid }]} />
+                {forecast > reported ? (
+                  <View style={[styles.layer, { width: `${Math.min(100, (forecast / planned) * 100)}%`, backgroundColor: mid }]} />
                 ) : null}
                 {reported > 0 ? (
                   <View style={{ width: `${Math.max(2, (reported / planned) * 100)}%`, backgroundColor: color }} />
@@ -114,16 +115,12 @@ export function WorkplaceTile({
           </View>
           <Text style={[styles.pct, over && styles.pctOver]}>{pct == null ? '—' : `${pct}%`}</Text>
         </View>
-        {over ? (
-          <Text style={styles.sub}>מעל התכנון · פוטנציאל {money(planned)}</Text>
-        ) : planned > 0 ? (
-          <View style={styles.subRow}>
-            <Text style={styles.sub}>פוטנציאל {money(planned)}</Text>
-            {showForecast ? <Text style={styles.subForecast}>צפי {money(forecast)}</Text> : null}
-          </View>
-        ) : (
-          <Text style={styles.sub}>ללא תכנון קורסים</Text>
-        )}
+        <View style={styles.subRow}>
+          <Text style={styles.sub}>
+            {over ? `מעל התכנון · פוטנציאל ${money(planned)}` : planned > 0 ? `פוטנציאל ${money(planned)}` : 'ללא תכנון קורסים'}
+          </Text>
+          {showForecast ? <Text style={styles.subForecast}>צפי תשלום {money(forecast)}</Text> : null}
+        </View>
         {status ? (
           <View style={styles.statusRow}>
             <View style={[styles.chip, { backgroundColor: status.bg }]}>

@@ -413,7 +413,7 @@ function DashboardScreen() {
     const p = row.last;
     const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
     const payment =
-      p.status === 'paid' ? (p.paidAt ? `התקבל ${ddmm(p.paidAt)}` : undefined) : `צפי תשלום ${ddmm(p.expected)}`;
+      p.status === 'paid' ? (p.paidAt ? `התקבל ${ddmm(p.paidAt)}` : undefined) : `מועד תשלום ${ddmm(p.expected)}`;
     return { label: STATUS_LABEL[p.status], ...chipTone(p.status), payment };
   };
   /** שורות הפירוט — כל שורה מחלקים, ושבירת שורה רק בין החלקים (components/InfoLine.tsx). */
@@ -424,13 +424,13 @@ function DashboardScreen() {
       out.push({
         parts: [
           `יום אחרון לדיווח שכר ${shortDate(row.last.period.end)}`,
-          `צפי תשלום ${shortDate(row.last.expected)} · ${paymentTermsLabel(row.workplace)}`,
+          `מועד תשלום ${shortDate(row.last.expected)} · ${paymentTermsLabel(row.workplace)}`,
         ],
       });
       if (row.last.late)
         out.push({ parts: ['הדוח לא נשלח עד היום האחרון — התשלום נדחה בחודש'], tone: 'warn' });
     } else if (!single) {
-      out.push({ parts: [`סיכום ${listTitle}`, 'לחיצה על חודש בגרף מציגה צפי תשלום'] });
+      out.push({ parts: [`סיכום ${listTitle}`, 'לחיצה על חודש בגרף מציגה את מועד התשלום'] });
     }
     if (row.workplace.paymentType === 'monthly') out.push({ parts: ['משכורת חודשית קבועה'] });
     // הסכומים באריח — נטו או ברוטו (לפי הבחירה בכותרת הרשימה), ואחוז המס של המקום.
@@ -552,7 +552,7 @@ function DashboardScreen() {
                   <Text style={[styles.totalValue, styles.totalPlanned]}>{money(t.planned)}</Text>
                 </View>
               </View>
-              {/* מימוש מימין, ומשמאל — הצפי, רק כשהוא שונה מהפוטנציאל */}
+              {/* מימוש מימין, ומשמאל — צפי התשלום (מה שדווח + המפגשים הבאים, בלי מה שבוטל) */}
               <View style={styles.pctRow}>
                 <Text style={styles.totalPct}>
                   {pctTotal == null
@@ -561,9 +561,9 @@ function DashboardScreen() {
                       ? `${pctTotal}% — הדיווח עולה על התכנון`
                       : `מימוש ${pctTotal}% מהפוטנציאל`}
                 </Text>
-                {Math.round(t.forecast) !== Math.round(t.planned) ? (
+                {t.forecast > 0 || t.reported > 0 ? (
                   <Text style={styles.totalForecast}>
-                    צפי {L} {money(t.forecast)}
+                    צפי תשלום {L} {money(t.forecast)}
                   </Text>
                 ) : null}
               </View>
