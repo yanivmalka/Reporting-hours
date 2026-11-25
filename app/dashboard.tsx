@@ -22,7 +22,7 @@ import { currentPeriods, dateRange, monthName, periodMonthKey, monthlyTrend, rou
 import { loadCourses, type Course } from '../lib/courses';
 import { groupCoursesForDisplay, useGroupLevel } from '../lib/courseGrouping';
 import { GroupLevelPicker } from '../components/GroupLevelPicker';
-import { forecastMonths, monthsInView, paymentSchedule, semesterOf, shiftAnchor, STATUS_LABEL, type ChartResolution, type ForecastMode, type MonthRef, type PeriodStatus } from '../lib/forecast';
+import { forecastMonths, monthsInView, paymentOrder, paymentSchedule, semesterOf, shiftAnchor, STATUS_LABEL, type ChartResolution, type ForecastMode, type MonthRef, type PeriodStatus } from '../lib/forecast';
 import { hebrewMonthNames, hebrewYearSpan } from '../lib/hebrewDate';
 import { loadPayrollStatus, type StatusMap } from '../lib/payroll';
 import { basisFor, usePayBasis } from '../lib/payBasis';
@@ -388,9 +388,10 @@ function DashboardScreen() {
       </View>
     );
   };
-  const rows = rowsAll
-    .filter((r) => (!selWp || r.workplace.id === selWp) && (r.reported > 0 || r.planned > 0 || r.workplace.id === selWp))
-    .sort((a, b) => b.reported - a.reported || b.planned - a.planned);
+  // לפי מועד התשלום הצפוי ואז א״ב — לא לפי הסכום, כדי שהחלפת נטו / ברוטו לא תזיז שורות.
+  const rows = paymentOrder(
+    rowsAll.filter((r) => (!selWp || r.workplace.id === selWp) && (r.reported > 0 || r.planned > 0 || r.workplace.id === selWp)),
+  );
   const sel = selWp ? rowsAll.find((r) => r.workplace.id === selWp) : undefined;
   const scaleRows = Math.max(0, ...rows.map((r) => r.reported)) * HEADROOM || Math.max(1, ...rows.map((r) => r.planned));
   const pctTotal = realization(sel ? sel.reported : totalAll.reported, sel ? sel.planned : totalAll.planned);

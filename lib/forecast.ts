@@ -359,6 +359,26 @@ export const STATUS_LABEL: Record<PeriodStatus, string> = {
   paid: 'שולם',
 };
 
+/**
+ * סדר קבוע לרשימת המקומות בלוח הבקרה — לפי מועד התשלום הצפוי הקרוב (המוקדם
+ * מבין התקופות בתצוגה שיש בהן סכום), ובשוויון / בלי תשלום — לפי א״ב. לא תלוי
+ * בסכומים, כדי שהחלפת נטו / ברוטו לא תזיז שורות.
+ */
+export function paymentOrder<R extends { workplace: Pick<Workplace, 'name'>; periods: readonly PeriodForecast[] }>(
+  rows: readonly R[],
+): R[] {
+  const firstPay = (r: R) =>
+    r.periods
+      .filter((p) => p.reported > 0 || p.planned > 0)
+      .reduce<string | null>((m, p) => (m == null || p.expected < m ? p.expected : m), null);
+  return [...rows].sort((a, b) => {
+    const x = firstPay(a);
+    const y = firstPay(b);
+    if (x !== y) return x == null ? 1 : y == null ? -1 : x.localeCompare(y);
+    return a.workplace.name.localeCompare(b.workplace.name, 'he');
+  });
+}
+
 // ───────────────────────── רזולוציות תצוגה ─────────────────────────
 
 /** רזולוציית הגרף: חודש (עמודה לכל מקום עבודה) · סמסטר · שנה (לפי חודשים) */
