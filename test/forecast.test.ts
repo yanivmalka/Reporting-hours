@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Course } from '../lib/courses';
 import { currentPayPeriod } from '../lib/dashboard';
-import { canceledSessions, courseAmounts, expectedFor, forecastMonths, netOfTax, paymentSchedule, periodForecast, plannedFor } from '../lib/forecast';
+import { canceledSessions, courseAmounts, expectedFor, forecastMonths, netOfTax, paymentOrder, paymentSchedule, periodForecast, plannedFor } from '../lib/forecast';
 import { loadCancelIndex, setSessionMark } from '../lib/sessions';
 import type { Workplace } from '../lib/workplaces';
 
@@ -161,5 +161,16 @@ describe('צפי תשלומים בניכוי מס', () => {
   });
   it('courseAmounts: נטו וברוטו לקורס', () => {
     expect(courseAmounts({ ...wp, taxPercent: 25 }, [course], nov, 'academic', false)).toEqual({ gross: 1600, net: 1200, taxPercent: 25 });
+  });
+});
+
+describe('סדר המקומות בלוח הבקרה', () => {
+  const row = (name: string, expected: (string | null)[], amount = 100) => ({
+    workplace: { name },
+    periods: expected.map((e) => ({ expected: e ?? '2099-01-01', reported: e ? amount : 0, planned: 0 })) as never[],
+  });
+  it('לפי מועד התשלום הקרוב, אחר כך א״ב — בלי תלות בסכום', () => {
+    const rows = [row('גימל', ['2026-12-20'], 9000), row('בית', ['2026-12-05'], 10), row('אלף', ['2026-12-20'], 50), row('דלת', [null])];
+    expect(paymentOrder(rows).map((r) => r.workplace.name)).toEqual(['בית', 'אלף', 'גימל', 'דלת']);
   });
 });
