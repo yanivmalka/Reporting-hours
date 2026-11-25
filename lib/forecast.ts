@@ -11,7 +11,9 @@
  *   - פוטנציאל (planned): ממפגשי הקורסים בתקופה, כולל מפגשים שסומנו "בוטל"
  *     (מה שציפית) — שעתי: תעריף × שעות לפי בסיס החישוב; חודשי: הסכום הקבוע
  *     כשיש לפחות מפגש אחד. ונסיעות לכל יום מפגש.
- *   - צפי (expected): הפוטנציאל בלי המפגשים שסומנו "בוטל".
+ *   - צפי תשלום (forecast): מה שדווח בפועל + המפגשים שעוד לא דווחו ולא בוטלו
+ *     (בהנחה שיתקיימו), + החלק שהמוסד משלם על מפגשים שבוטלו. כך מפגש שדווח
+ *     נספר לפי השעות שדווחו בפועל, מפגש שבוטל יורד, ומפגש עתידי — לפי התכנון.
  *   מפגשים שהוסרו מהפוטנציאל, הועברו לתאריך אחר או חלים בחג — לא בשניהם.
  * מס: לכל מקום אחוז מס (ניכוי במקור, `taxPercent`, לפי התנאים שחלו בסוף התקופה).
  * המס יורד מהשכר בלבד — לא מהחזר הנסיעות (`netOfTax`). קו אחיד בשני המצבים:
@@ -21,7 +23,7 @@
  */
 import { canceledSessionPay } from './cancelReasons';
 import { ACADEMIC_HOUR_MINUTES } from './academic';
-import { potentialSessions, sessionMinutes, sessionTimes, type Course } from './courses';
+import { courseReported, potentialSessions, sessionMinutes, sessionTimes, type Course } from './courses';
 import { currentPlan, type PlanIndex } from './sessions';
 import { currentPayPeriod, expectedPaymentDate, isoDate, periodMonthKey, totalsFor, type PayPeriod } from './dashboard';
 import { basisFor, type PayBasis } from './payBasis';
@@ -53,7 +55,7 @@ export type PeriodForecast = {
    */
   opening?: OpeningInPeriod;
   planned: number;
-  /** צפי: הפוטנציאל בלי המפגשים שבוטלו */
+  /** צפי תשלום: מה שדווח + מפגשים שעוד לא דווחו ולא בוטלו + תשלום על ביטולים */
   forecast: number;
   /** אחוז המס שחל בתקופה (לפי התנאים בסוף התקופה; 0 — בלי ניכוי) */
   taxPercent: number;
@@ -142,6 +144,50 @@ function amountParts(
   if (atEnd.paymentType === 'monthly') pay = Math.max(0, atEnd.rate);
   let travel = 0;
   for (const d of dates) travel += travelCostForDay(w, d);
+  return { pay, travel };
+}
+
+/**
+ * היתרה לצפי התשלום: מפגשי הקורסים בתקופה שעוד לא דווחו ולא בוטלו (לפי התכנון),
+ * והחלק שהמוסד משלם על מפגשים שבוטלו. נסיעות — רק ליום שאין בו דיווח (יום שדווח
+ * כבר נספר בדיווח). מקום בשכר חודשי — הסכום הקבוע, רק כשאין עדיין דיווח בתקופה.
+ */
+export function remainingParts(
+  w: Workplace,
+  courses: readonly Course[],
+  period: Pick<PayPeriod, 'start' | 'end'>,
+  basis: PayBasis,
+  reports: readonly WorkReport[],
+  plan: PlanIndex = currentPlan(),
+  hasReported = false,
+  /** הדוח כבר נשלח — נשאר רק התשלום על ביטולים (כמו בדוח השכר) */
+  sent = false,
+): { pay: number; travel: number } {
+  basis = basisFor(w, basis);
+  const mine = reports.filter((r) => r.workplaceId === w.id && r.date >= period.start && r.date <= period.end);
+  const reportedDays = new Set(mine.map((r) => r.date));
+  const dates = new Set<string>();
+  let pay = 0;
+  for (const c of courses) {
+    if (c.workplaceId !== w.id) continue;
+    for (const s of potentialSessions(c, period.start, period.end, plan.cancel, plan.moves)) {
+      if (s.canceled) {
+        pay += canceledSessionPay(w, c, s.date, s.cancel, basis);
+        continue;
+      }
+      if (sent || courseReported(c, s.date, mine)) continue;
+      dates.add(s.date);
+      const at = workplaceAt(w, s.date);
+      if (at.paymentType === 'hourly') {
+        const per = basis === 'academic' ? ACADEMIC_HOUR_MINUTES : 60;
+        pay += (Math.max(0, at.rate) * sessionMinutes(sessionTimes(c, s.date))) / per;
+      }
+    }
+  }
+  const atEnd = workplaceAt(w, period.end);
+  if (atEnd.paymentType === 'monthly') pay = hasReported || mine.length > 0 || dates.size === 0 ? 0 : Math.max(0, atEnd.rate);
+  let travel = 0;
+  for (const d of dates) if (!reportedDays.has(d)) travel += travelCostForDay(w, d);
   return { pay, travel };
 }
 
@@ -254,7 +300,8 @@ export function periodForecast(
           : 'closed';
   const tax = taxPercentOf(atEnd);
   const planned = amountParts(w, courses, period, basis, false, plan);
-  const expected = amountParts(w, courses, period, basis, true, plan);
+  const rest = remainingParts(w, courses, period, basis, reports, plan, op.count > 0, st.sentAt != null || st.paidAt != null);
+  const reportedPay = t.pay + redeemedPay;
   return {
     workplace: w,
     period,
@@ -265,11 +312,11 @@ export function periodForecast(
     reportCount: mine.length,
     opening: op.count > 0 ? op : undefined,
     planned: planned.pay + planned.travel,
-    forecast: expected.pay + expected.travel,
+    forecast: reportedPay + t.travel + rest.pay + rest.travel,
     taxPercent: tax,
     reportedNet: netOfTax(t.pay + redeemedPay, t.travel, tax),
     plannedNet: netOfTax(planned.pay, planned.travel, tax),
-    forecastNet: netOfTax(expected.pay, expected.travel, tax),
+    forecastNet: netOfTax(reportedPay + rest.pay, t.travel + rest.travel, tax),
     canceled: canceledSessions(w, courses, period, plan),
     status,
     paidAt: st.paidAt,
