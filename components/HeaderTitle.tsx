@@ -15,7 +15,7 @@ import { AccountMenu, signOutMessage } from './AccountMenu';
 import { useConfirm } from './ConfirmDialog';
 import { loadProfile } from '../lib/profile';
 import { flush } from '../lib/sync';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 import { Text } from './Text';
 import { Pressable } from './Pressable';
 import { Icon } from './Icon';
@@ -26,10 +26,21 @@ import { setViewOnly, useViewOnly } from '../lib/viewOnly';
 import { spacing } from '../theme/colors';
 import { useStyles, type ColorScheme, type StyleLayout } from '../theme/useStyles';
 
+/** רוחב שמור לכפתורי שורת הכותרת משני צדי הכותרת */
+const HEADER_RESERVED = 210;
+
 export function HeaderTitle({ title, tintColor }: { title: string; tintColor: string }) {
   const styles = useStyles(makeStyles);
+  const { width } = useWindowDimensions();
+  // הכותרת נחתכה לעיתים לאות אחת ("ג…") למרות מקום פנוי בשורה: בשורת הכותרת של אנדרואיד הכותרת
+  // הצטמצמה (flexShrink) לרוחב שנמדד לפני שהשם נטען. עכשיו היא לא מצטמצמת, אלא מוגבלת לרוחב
+  // המסך פחות הכפתורים (חץ / ☰, מנעול, תמונה, ⋮), ו־key={title} מודד מחדש כשהכותרת מתעדכנת.
   return (
-    <Text style={[styles.title, { color: tintColor }]} numberOfLines={1}>
+    <Text
+      key={title}
+      style={[styles.title, { color: tintColor, maxWidth: Math.max(120, width - HEADER_RESERVED) }]}
+      numberOfLines={1}
+    >
       {title}
     </Text>
   );
@@ -129,7 +140,7 @@ export function HeaderBadges({ routeKey }: { routeKey?: string } = {}) {
 function makeStyles(c: ColorScheme, layout: StyleLayout) {
   return {
     row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: spacing.sm, marginHorizontal: spacing.sm },
-    title: { fontSize: 20, fontWeight: '700' as const, flexShrink: 1 },
+    title: { fontSize: 20, fontWeight: '700' as const, flexShrink: 0 },
     badge: { padding: 2 },
     accent: { color: c.brand },
     body: { fontSize: 15, color: c.text, textAlign: layout.textStart },
