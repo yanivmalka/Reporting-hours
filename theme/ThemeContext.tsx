@@ -96,7 +96,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     writeJSON(STORAGE_KEY, { paletteId });
     // מסך הפתיחה בפתיחה הבאה — בצבע הערכה (אנדרואיד 13+).
     setSplashTheme(paletteId);
-    // ואייקון האפליקציה — בצבעי הערכה (משתנה רק כשצריך).
+    // ואייקון האפליקציה — בצבעי הערכה (משתנה רק כשצריך, ורק ביציאה לרקע — אחרת אנדרואיד סוגר את האפליקציה).
     setLauncherIcon(paletteId, PALETTES.map((p) => p.id));
   }, [loaded, paletteId]);
 

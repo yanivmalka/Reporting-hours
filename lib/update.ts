@@ -13,6 +13,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Linking, Platform } from 'react-native';
 import { KEYS } from './keys';
+import { apkUpdater } from '../modules/apk-updater/src';
 
 const REPO = 'yanivmalka/Reporting-hours';
 const LATEST_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -76,6 +77,12 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
 export function openReleasesPage(): Promise<void> {
   return Linking.openURL(RELEASES_PAGE);
 }
+
+/**
+ * האם ההורדה רצה במנהל ההורדות של אנדרואיד (modules/apk-updater) — ממשיכה כשיוצאים מהאפליקציה,
+ * עם התקדמות בהתראה. בגרסה שנבנתה לפני המודול — הורדה בתוך האפליקציה, שמושהית ביציאה.
+ */
+export const backgroundDownloads = !!apkUpdater;
 
 /** FLAG_GRANT_READ_URI_PERMISSION — מאפשר למתקין לקרוא את הקובץ שלנו. */
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
@@ -220,6 +227,80 @@ async function downloadOnce(info: UpdateInfo, target: string, done: string, allo
   }
 }
 
+/** הורדה במנהל ההורדות: מזהה ההורדה נשמר, כך שגם אחרי סגירת האפליקציה ממשיכים לעקוב אחריה. */
+type SystemSaved = { build: number; dmId: number };
+const SYSTEM_PREFIX = 'dm:';
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+async function loadSystem(build: number): Promise<number | null> {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.updateDownload);
+    const s = raw ? (JSON.parse(raw) as Partial<SystemSaved>) : null;
+    return s && s.build === build && typeof s.dmId === 'number' ? s.dmId : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveSystem(s: SystemSaved | null) {
+  try {
+    if (s) await AsyncStorage.setItem(KEYS.updateDownload, JSON.stringify(s));
+    else await AsyncStorage.removeItem(KEYS.updateDownload);
+  } catch {
+    // לא קריטי — במקרה הגרוע ההורדה תתחיל מחדש.
+  }
+}
+
+/** האם יש הורדה פעילה / שהסתיימה במנהל ההורדות לגרסה הזו (מהפעלה קודמת של האפליקציה). */
+export async function pendingDownload(build: number): Promise<boolean> {
+  if (!apkUpdater) return false;
+  const id = await loadSystem(build);
+  if (id == null) return false;
+  const st = apkUpdater.query(id).status;
+  return st !== 'missing' && st !== 'failed';
+}
+
+async function runSystemDownload(info: UpdateInfo): Promise<string> {
+  const dm = apkUpdater!;
+  let id = await loadSystem(info.latestBuild);
+  if (id != null) {
+    const st = dm.query(id).status;
+    if (st === 'missing' || st === 'failed') {
+      if (st === 'failed') dm.remove(id);
+      id = null;
+    }
+  }
+  if (id == null) {
+    id = dm.enqueue(
+      info.apkUrl as string,
+      `shiur-${info.latestBuild}.apk`,
+      `שיעור — עדכון לגרסה ${info.latestVersion}`,
+    );
+    await saveSystem({ build: info.latestBuild, dmId: id });
+  }
+  // מעקב בלבד — ההורדה עצמה רצה במערכת וממשיכה גם כשהאפליקציה ברקע או סגורה.
+  for (;;) {
+    const st = dm.query(id);
+    if (st.status === 'successful') {
+      const size = st.total > 0 ? st.total : st.downloaded;
+      if (info.apkSize != null && size !== info.apkSize) {
+        dm.remove(id);
+        await saveSystem(null);
+        throw new Error('incomplete download');
+      }
+      report(1);
+      return `${SYSTEM_PREFIX}${id}`;
+    }
+    if (st.status === 'failed' || st.status === 'missing') {
+      if (st.status === 'failed') dm.remove(id);
+      await saveSystem(null);
+      throw new Error(`download ${st.status} ${st.reason}`);
+    }
+    if (st.total > 0) report(st.downloaded / st.total);
+    await sleep(800);
+  }
+}
+
 export async function downloadApk(
   info: UpdateInfo,
   onProgress: (fraction: number) => void,
@@ -228,7 +309,7 @@ export async function downloadApk(
   progressListeners.add(onProgress);
   if (!running || running.build !== info.latestBuild) {
     lastPercent = -1;
-    const promise = runDownload(info).finally(() => {
+    const promise = (apkUpdater ? runSystemDownload(info) : runDownload(info)).finally(() => {
       if (running?.promise === promise) running = null;
     });
     running = { build: info.latestBuild, promise };
@@ -250,6 +331,10 @@ export function downloadInProgress(): number | null {
  * אנדרואיד מבקש לאשר "התקנת אפליקציות לא מוכרות" עבור האפליקציה.
  */
 export async function installApk(fileUri: string): Promise<void> {
+  if (fileUri.startsWith(SYSTEM_PREFIX)) {
+    if (!apkUpdater?.install(Number(fileUri.slice(SYSTEM_PREFIX.length)))) throw new Error('install failed');
+    return;
+  }
   const contentUri = await FileSystem.getContentUriAsync(fileUri);
   await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
     data: contentUri,

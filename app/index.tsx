@@ -4,6 +4,7 @@
  * משלשום עד מחרתיים (בחירת יום בשורת ימים או בהחלקה); התראות ותזכורות,
  * עם אפשרות להציג שוב התראות שהוסתרו.
  */
+import { UpdateBanner } from '../components/UpdateChecker';
 import { useEffect, useState } from 'react';
 import { useRouter, type Href } from 'expo-router';
 import { Linking, StyleSheet, View } from 'react-native';
@@ -228,6 +229,9 @@ export default function HomeScreen() {
           </View>
         ) : null}
       </View>
+
+      {/* גרסה חדשה שנדחתה / הורדה ברקע — פס עם התקדמות וכפתור "עדכן" */}
+      <UpdateBanner />
 
       {/* לוח הבקרה — מעבר בלבד, בלי סכומים: מידע כספי לא נחשף במסך הבית (צנעת הפרט) */}
       <View style={styles.topRow}>
