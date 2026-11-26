@@ -446,8 +446,8 @@ const makeStyles = (colors: AppColors) =>
       ...cardShadow,
     },
     dayToday: { borderColor: colors.brandDark },
-    /** היום שמסומן בתאריכון — כמו היום הנבחר בו: מסגרת כהה ורקע בהיר */
-    daySelected: { borderColor: colors.brandDark, backgroundColor: colors.brandLight },
+    /** היום שמסומן בתאריכון — מסגרת כהה בלבד, בלי רקע (בקשת המשתמש 26.11.2026) */
+    daySelected: { borderColor: colors.brandDark },
     dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     dayTitleToday: { color: colors.brandDark },
     nearChip: { backgroundColor: colors.brandLight, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },

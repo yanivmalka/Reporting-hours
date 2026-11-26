@@ -112,8 +112,8 @@ export const makeJournalStyles = (colors: AppColors) =>
   /** מסגרת שקופה קבועה — סימון היום / היום הנבחר לא משנה את גובה הפריט */
   itemFrame: { borderWidth: 2, borderColor: 'transparent', borderRadius: radius.md },
   todayFrame: { borderColor: colors.brandDark },
-  /** היום שמסומן בתאריכון — מסגרת כהה ורקע בהיר */
-  selectedFrame: { borderColor: colors.brandDark, backgroundColor: colors.brandLight },
+  /** היום שמסומן בתאריכון — מסגרת כהה בלבד, בלי רקע (בקשת המשתמש 26.11.2026) */
+  selectedFrame: { borderColor: colors.brandDark },
   todayHead: { flexDirection: 'row' },
   checkRow: {
     flexDirection: 'row',
