@@ -7,6 +7,7 @@ import { Button } from '../components/Button';
 import { Panel, ShareRow, StatTile, TileGrid } from '../components/Charts';
 import { ForecastChart, HEADROOM, realization } from '../components/ForecastChart';
 import { PaymentTimeline } from '../components/PaymentTimeline';
+import { PaymentLedger } from '../components/PaymentLedger';
 import { isoDate } from '../lib/dates';
 import { AmountModeToggle } from '../components/AmountModeToggle';
 import { AMOUNT_MODE_LABEL, forecastForMode, useAmountMode } from '../lib/amountMode';
@@ -607,6 +608,7 @@ function DashboardScreen() {
           scope={listTitle}
         />
       ) : null}
+      {payments ? <PaymentLedger payments={payments.list} today={todayISO()} /> : null}
 
       <Button label="סיכום וניתוח ←" variant="secondary" onPress={() => goPage(1)} />
         </>
