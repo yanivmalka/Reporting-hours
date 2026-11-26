@@ -1,4 +1,3 @@
-import { SelectionGlow } from '../SelectionGlow';
 import { Fragment } from 'react';
 import { View } from 'react-native';
 import { Text } from '../Text';
@@ -72,8 +71,7 @@ export function ReportsTab({ w }: { w: Journal }) {
             ) : null;
           // שלשום עד מחרתיים: תגית לפני הפריט הראשון של היום; היום — גם מסגרת.
           const isToday = date === today;
-          const frame = [styles.itemFrame, isToday && styles.todayFrame];
-          const glow = <SelectionGlow on={date === selectedDay} />;
+          const frame = [styles.itemFrame, isToday && styles.todayFrame, date === selectedDay && styles.selectedFrame];
           const todayHead =
             prevDate !== date && nearDay(date, today) ? (
               <View style={styles.todayHead}>
@@ -91,7 +89,6 @@ export function ReportsTab({ w }: { w: Journal }) {
               onLayout={(e) => onDayLayout(item.row.date, e.nativeEvent.layout.y, e.nativeEvent.layout.height, `s:${item.row.course.id}@${item.row.date}`)}
             >
               <SessionRow row={item.row} showDate onPress={() => session.open(item.row)} />
-              {glow}
             </View>
           ) : (
             <View
@@ -114,7 +111,6 @@ export function ReportsTab({ w }: { w: Journal }) {
                 locked={lockOf(item.report) != null}
                 onPress={() => router.push({ pathname: '/report-view', params: { id: item.report.id } })}
               />
-              {glow}
             </View>
           )}
           {(() => {
