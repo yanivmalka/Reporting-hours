@@ -32,6 +32,7 @@ export default function ReportsScreen() {
     <Screen
       overlay={ctrlPinned || (showCalendar && pinned) ? <PinnedStrip w={w} /> : undefined}
       scrollRef={scrollRef}
+      snapToOffsets={w.snapOffsets}
       onScroll={(e) => {
         const y = e.nativeEvent.contentOffset.y;
         // שורת הבקרה מוצמדת מהרגע שהיא מגיעה לראש המסך.

@@ -17,6 +17,7 @@ import { dayTotalsByWorkplace, plannedEntry, rangeNetMinutes, reportAcademicLine
 import { savedLabel } from '../lib/reports';
 import { useLeftoverMode } from '../lib/leftover';
 import { DaySummary } from './DaySummary';
+import { SelectionGlow } from './SelectionGlow';
 import { expectedFor, plannedFor } from '../lib/forecast';
 import { basisFor, type PayBasis } from '../lib/payBasis';
 import type { WorkReport } from '../lib/reports';
@@ -210,7 +211,7 @@ export function PlanList({
             <MonthDivider month={date.slice(0, 7)} />
           ) : null}
           <View
-            style={[styles.day, date === today && styles.dayToday, date === selectedDay && styles.daySelected]}
+            style={[styles.day, date === today && styles.dayToday]}
             onLayout={
               onDayLayout
                 ? (e) => onDayLayout(date, e.nativeEvent.layout.y, e.nativeEvent.layout.height)
@@ -240,6 +241,7 @@ export function PlanList({
               );
               return <DaySummary totals={totals} workplaceOf={(id) => wpById.get(id)} basis={basis} />;
             })()}
+            <SelectionGlow on={date === selectedDay} />
           </View>
           </Fragment>
         ))}
@@ -446,8 +448,6 @@ const makeStyles = (colors: AppColors) =>
       ...cardShadow,
     },
     dayToday: { borderColor: colors.brandDark },
-    /** היום שמסומן בתאריכון — כמו היום הנבחר בו: מסגרת כהה ורקע בהיר */
-    daySelected: { borderColor: colors.brandDark, backgroundColor: colors.brandLight },
     dayHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     dayTitleToday: { color: colors.brandDark },
     nearChip: { backgroundColor: colors.brandLight, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
