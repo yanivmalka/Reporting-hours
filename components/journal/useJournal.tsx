@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { recallJournal, rememberJournal } from './journalMemory';
-import { ScrollView, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Platform, ScrollView, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { type DateRangeValue } from '../RangeCalendar';
 import { useDayStatus } from '../DayDot';
 import { monthOfWeek, shiftWeek, weekStartOf } from '../WeekStrip';
@@ -25,6 +25,7 @@ import { CalMode, CAL_PIN_KEY, byNewest, monthEnd, shiftMonth } from './shared';
 import { getTrackingStart } from '../../lib/trackingStart';
 import { makeJournalStyles as makeStyles } from './styles';
 import { useScreenData } from '../useScreenData';
+import { SETTLE_MS, sameOffsets, snapPoints, webSnapTarget } from './snap';
 
 /**
  * הלוגיקה של היומן (app/reports.tsx): טעינה, סינון, מצב התאריכון (מלא / פס שבוע /
@@ -143,6 +144,23 @@ export function useJournal() {
   /** השבוע שמוצג בפס המכווץ (יום ראשון שלו) */
   const [weekStart, setWeekStart] = useState(() => weekStartOf(todayISO()));
 
+  /**
+   * גלילה והדגשה — שני אירועים נפרדים: בזמן הגלילה רק נרשם היום שבראש
+   * הרשימה (בלי רינדור מחדש של האריחים), ורק כשהרשימה נעצרת ועוברת השהיה
+   * קצרה (`SETTLE_MS`) היום מסומן — בתאריכון ובמסגרת שנכנסת בדהייה.
+   */
+  const [scrolling, setScrolling] = useState(false);
+  const scrollingRef = useRef(false);
+  const liveDay = useRef<string | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastY = useRef(0);
+  const lastDir = useRef(0);
+  /** נקודות "מגנט" לגלילה: ראש כל יום מתחת לפס המוצמד (ואריח ארוך — גם באמצעו). */
+  const [snapOffsets, setSnapOffsets] = useState<number[]>([]);
+  const snapDates = useRef<string[]>([]);
+  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { height: windowHeight } = useWindowDimensions();
+
   // פס השבוע עוקב אחרי החודש / הבחירה בלוח החודשי: אם השבוע שמוצג כבר לא
   // שייך אליהם — קופצים לשבוע של תחילת הבחירה, של היום (בחודש הנוכחי) או ל־1 בחודש.
   useEffect(() => {
@@ -182,6 +200,8 @@ export function useJournal() {
    * התאריכון המוצמד. גם פס השבוע עוקב אחריו.
    */
   function followScroll(y: number) {
+    if (Math.abs(y - lastY.current) > 0.5) lastDir.current = y > lastY.current ? 1 : -1;
+    lastY.current = y;
     if (Date.now() < autoScrollUntil.current) return;
     const edge = y + stripHeight - listTop.current;
     // היום הראשון שמוצג במלואו (ראשו מתחת לתחתית הפס); אם אין כזה (אריח גבוה
@@ -202,13 +222,66 @@ export function useJournal() {
     }
     top = top ?? part;
     if (!top) return;
-    if (top !== scrollDay) setScrollDay(top);
+    liveDay.current = top;
+    if (!scrollingRef.current) {
+      scrollingRef.current = true;
+      setScrolling(true);
+    }
     const ws = weekStartOf(top);
     if (ws !== weekStart) setWeekStart(ws);
     // ברשימה הרציפה — התאריכון עובר לחודש שבראש הרשימה (בתוך החלון, בלי איפוס).
     const mm = monthOfWeek(ws);
     if (!range && mm !== calMonth && mm >= win.from && mm <= win.to) setCalMonth(mm);
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(settle, SETTLE_MS);
   }
+
+  /** הרשימה נעצרה: בדפדפן — "מגנט" לראש האריח; ואז מסמנים את היום. */
+  function settle() {
+    settleTimer.current = null;
+    if (Platform.OS === 'web' && snapOffsets.length) {
+      const y = lastY.current;
+      const target = webSnapTarget(snapOffsets, y, lastDir.current);
+      if (target != null && Math.abs(target - y) > 2) {
+        autoScrollUntil.current = Date.now() + 450;
+        scrollRef.current?.scrollTo({ y: target, animated: true });
+        const date = snapDates.current[snapOffsets.indexOf(target)] ?? liveDay.current;
+        settleTimer.current = setTimeout(() => commitDay(date), 450);
+        return;
+      }
+    }
+    commitDay(liveDay.current);
+  }
+
+  function commitDay(day: string | null) {
+    settleTimer.current = null;
+    if (day && day !== scrollDay) setScrollDay(day);
+    scrollingRef.current = false;
+    setScrolling(false);
+  }
+
+  /** חישוב נקודות המגנט מהמיקומים שנמדדו (מושהה — אחרי שהמדידות נרגעות). */
+  function scheduleSnaps() {
+    if (snapTimer.current) clearTimeout(snapTimer.current);
+    snapTimer.current = setTimeout(() => {
+      const { offsets, dates } = snapPoints(
+        [...dayPos.current.map.entries()],
+        listTop.current,
+        stripHeight,
+        windowHeight,
+      );
+      snapDates.current = dates;
+      setSnapOffsets((prev) => (sameOffsets(prev, offsets) ? prev : offsets));
+    }, 150);
+  }
+  useEffect(scheduleSnaps, [stripHeight, windowHeight]);
+  useEffect(
+    () => () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      if (snapTimer.current) clearTimeout(snapTimer.current);
+    },
+    [],
+  );
 
   /** מבקש גלילה — מתבצעת אחרי שהרשימה (אולי של חודש אחר) נמדדה. */
   function requestScroll(kind: 'day' | 'week', date: string) {
@@ -240,6 +313,7 @@ export function useJournal() {
     }
     dayPos.current.map.set(date, { y: top, bottom });
     scheduleResolve();
+    scheduleSnaps();
   }
 
   /** מחיקת המיקומים של ימים שלפני התאריך (כשהם מקופלים ולא מוצגים). */
@@ -250,6 +324,10 @@ export function useJournal() {
 
   /** לחיצה על יום בלי בחירת טווח: מסמנים אותו וגוללים אליו ברשימה. */
   function focusOn(day: string) {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = null;
+    scrollingRef.current = false;
+    setScrolling(false);
     setFocusDay(day);
     setScrollDay(null);
     if (day.slice(0, 7) !== calMonth) setCalMonth(day.slice(0, 7));
@@ -514,6 +592,8 @@ export function useJournal() {
     extendTop,
     extendBottom,
     maybeExtend,
+    scrolling,
+    snapOffsets,
   };
 }
 
@@ -521,7 +601,7 @@ export type JournalCore = ReturnType<typeof useJournal>;
 
 /** נגזרות אחרי הטעינה — נקרא רק כשהדיווחים נטענו. */
 export function journalView(core: JournalCore & { reports: WorkReport[] }) {
-  const { colors, basis, reports, workplaces, tab, courses, reloadTick, statuses, wpFilter, calMonth, win, range, rangeMode, focusDay, periodMode, pinned, scrollDay, dayPos, pending, filtered, focusOn } = core;
+  const { colors, basis, reports, workplaces, tab, courses, reloadTick, statuses, wpFilter, calMonth, win, range, rangeMode, focusDay, periodMode, pinned, scrollDay, scrolling, dayPos, pending, filtered, focusOn } = core;
   const workplaceOf = (id: string) => workplaces.find((w) => w.id === id);
   const nameOf = (id: string) => workplaceOf(id)?.name ?? 'מקום עבודה שנמחק';
   // שכר לכל דיווח (שלב 4): מספר ₪ למקום שעתי, null לחודשי, undefined כשמקום
@@ -657,8 +737,8 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
   const markDay = (pinned ? scrollDay : null) ?? focusDay;
   const shownRange: DateRangeValue = rangeMode ? range : markDay ? { from: markDay, to: markDay } : null;
   const dayPress = rangeMode ? undefined : focusOn;
-  /** האריח של היום שמסומן בתאריכון (בגלילה או בלחיצה) — מודגש ברשימה */
-  const selectedDay = rangeMode ? null : markDay;
+  /** האריח של היום שמסומן בתאריכון (בלחיצה, או אחרי שהגלילה נעצרה) — מודגש ברשימה; בזמן גלילה — אף אחד */
+  const selectedDay = rangeMode || (pinned && scrolling) ? null : markDay;
 
   const showCalendar = !periodMode;
 
@@ -703,3 +783,4 @@ export function journalView(core: JournalCore & { reports: WorkReport[] }) {
 
 /** כל מה שרכיבי התצוגה מקבלים: המצב והפעולות, ונגזרות אחרי הטעינה. */
 export type Journal = JournalCore & ReturnType<typeof journalView>;
+

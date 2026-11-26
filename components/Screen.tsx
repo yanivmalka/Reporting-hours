@@ -26,6 +26,12 @@ type ScreenProps = {
   onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
   /** שכבה קבועה בראש המסך, מעל התוכן הנגלל (פקד מוצמד) */
   overlay?: ReactNode;
+  /**
+   * נקודות "מגנט" לגלילה (אנדרואיד / iOS): גלילה איטית עוברת לנקודה הבאה
+   * בכיוון הגלילה, ומהירה ממשיכה כמו גלגל כבד ונעצרת על הנקודה הקרובה ליעד.
+   * לפני הנקודה הראשונה ואחרי האחרונה — גלילה חופשית.
+   */
+  snapToOffsets?: number[];
   /** הפניה ל־ScrollView — לגלילה יזומה (למשל אל קבוצה בטופס) */
   scrollRef?: Ref<ScrollView>;
 };
@@ -65,7 +71,7 @@ function useKeyboardHeight(): number {
 }
 
 /** מעטפת מסך אחידה: רקע, שוליים בטוחים וריווח פנימי. */
-export function Screen({ children, scroll = true, keyboardFooter = false, onScroll, overlay, scrollRef }: ScreenProps) {
+export function Screen({ children, scroll = true, keyboardFooter = false, onScroll, overlay, scrollRef, snapToOffsets }: ScreenProps) {
   const styles = useThemedStyles(makeStyles);
   const keyboard = useKeyboardHeight();
   const { height: windowHeight } = useWindowDimensions();
@@ -95,6 +101,10 @@ export function Screen({ children, scroll = true, keyboardFooter = false, onScro
           keyboardDismissMode="on-drag"
           onScroll={onScroll}
           scrollEventThrottle={onScroll ? 16 : undefined}
+          snapToOffsets={snapToOffsets?.length ? snapToOffsets : undefined}
+          snapToStart={snapToOffsets?.length ? false : undefined}
+          snapToEnd={snapToOffsets?.length ? false : undefined}
+          decelerationRate={snapToOffsets?.length ? 'normal' : undefined}
         >
           {inner}
         </ScrollView>
