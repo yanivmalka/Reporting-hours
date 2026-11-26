@@ -1,7 +1,8 @@
 /**
  * תצוגת דיווח שנשמר — קריאה בלבד. עריכה דורשת פעולה אקטיבית: כפתור
  * "עריכה" פותח את האשף, ו"חזרה" באשף מחזירה לכאן.
- * דיווח בחודש שהדוח שלו כבר נשלח לשכר — נעול; במקום עריכה יש מעבר לדוח.
+ * דיווח בחודש שהדוח שלו כבר נשלח לשכר — נעול; במקום עריכה — שורת 🔒 שמובילה לדוח.
+ * מבנה קומפקטי לפי חשיבות (26.11.2026): קורס, מקום ושכר → תאריך → שעות → פרטים משניים.
  */
 import { useAccess } from '../components/Access';
 import { useRef, useState } from 'react';
@@ -34,6 +35,7 @@ import { EnterChevron } from '../components/Chevrons';
 import { useScreenData } from '../components/useScreenData';
 import { LoadingScreen } from '../components/LoadingScreen';
 import { ViaEmail } from '../components/ViaEmail';
+import { InfoLine } from '../components/InfoLine';
 import { useSessionNotes } from '../components/useSessionNotes';
 import { FLAG_LABEL, noteFor } from '../lib/sessionNotes';
 
@@ -123,70 +125,98 @@ export default function ReportViewScreen() {
   const ac = academicOf(report);
   const pay = workplace ? reportPay(report, workplace, basis) : null;
 
-  // שורות לחיצות — מעבר לרשומות הקשורות (מקום עבודה, קורס, דוח שכר).
+  // מעבר לרשומות הקשורות (מקום עבודה, קורס, דוח שכר) — שורות לחיצות עם ‹.
   const period = workplace ? currentPayPeriod(workplace.payday, new Date(y, m - 1, d)) : null;
-  const links: Partial<Record<string, () => void>> = {};
-  if (workplace) links['מקום עבודה'] = () => router.push({ pathname: '/workplace', params: { id: workplace.id } });
-  if (course) links['קורס / נושא'] = () => router.push({ pathname: '/course-form', params: { id: course.id, view: '1' } });
-  if (workplace && period)
-    links['דוח שכר'] = () =>
-      router.push({ pathname: '/payroll-report', params: { wp: workplace.id, start: period.start } });
+  const openWorkplace = workplace
+    ? () => router.push({ pathname: '/workplace', params: { id: workplace.id } })
+    : undefined;
+  const openCourse = course
+    ? () => router.push({ pathname: '/course-form', params: { id: course.id, view: '1' } })
+    : undefined;
+  const openPayroll =
+    workplace && period
+      ? () => router.push({ pathname: '/payroll-report', params: { wp: workplace.id, start: lockedStart ?? period.start } })
+      : undefined;
 
-  const rows: [string, string][] = [
-    ['מקום עבודה', workplace?.name ?? 'מקום עבודה שנמחק'],
-    ['תאריך', `יום ${weekday} · ${formatISODate(report.date)} · ${hebrewDate(report.date, false)}`],
-    ...(report.note ? ([['קורס / נושא', report.note]] as [string, string][]) : []),
-    ...(sessionNote?.flag ? ([['סימון', FLAG_LABEL[sessionNote.flag]]] as [string, string][]) : []),
-    ...(sessionNote?.summary ? ([['סיכום המפגש', sessionNote.summary]] as [string, string][]) : []),
-    ...(report.extraKind ? ([['סוג מפגש', `מפגש נוסף · ${EXTRA_SESSION_LABELS[report.extraKind]}`]] as [string, string][]) : []),
-    ['שעות', `⁦${report.start}–${report.end}⁩`],
-    ['הפסקות', breaks > 0 ? formatDuration(breaks) : 'ללא'],
-    ...(report.by ? ([['דווח על ידי', report.by.name || report.by.email]] as [string, string][]) : []),
-    ['זמן עבודה נטו', net == null ? '—' : formatDuration(net)],
-    [
-      'שעות אקדמיות',
-      ac == null
-        ? '—'
-        : ac.leftoverMinutes
-          ? `${ac.wholeHours} ו־${ac.leftoverMinutes} דק׳`
-          : String(ac.wholeHours),
-    ],
-    ...(report.carriedMinutes > 0
-      ? ([['למונה המצטבר', `${report.carriedMinutes} דק׳`]] as [string, string][])
-      : []),
-    ['שכר', typeof pay === 'number' ? formatShekels(pay) : 'משכורת חודשית קבועה'],
-    ...(period ? ([['דוח שכר', periodTitle(period)]] as [string, string][]) : []),
+  // מבנה קומפקטי לפי חשיבות: מה (קורס, מקום) וכמה (שכר) → מתי → השעות →
+  // פרטים משניים בשורה קטנה → מי דיווח. הנעילה והמייל — שורות מקופלות בכרטיס נפרד.
+  const workplaceName = workplace?.name ?? 'מקום עבודה שנמחק';
+  const title = report.note || workplaceName;
+  const notes: string[] = [
+    ...(report.extraKind ? [`מפגש נוסף · ${EXTRA_SESSION_LABELS[report.extraKind]}`] : []),
+    ...(sessionNote?.flag ? [FLAG_LABEL[sessionNote.flag]] : []),
   ];
+  const academic =
+    ac == null ? null : ac.leftoverMinutes ? `${ac.wholeHours} ו־${ac.leftoverMinutes} דק׳` : String(ac.wholeHours);
+  const secondTile: [string, string] = academic
+    ? ['שעות אקדמיות', academic]
+    : ['זמן עבודה נטו', net == null ? '—' : formatDuration(net)];
+  const details = [
+    ...(academic && net != null ? [`נטו ${formatDuration(net)}`] : []),
+    breaks > 0 ? `הפסקות ${formatDuration(breaks)}` : 'ללא הפסקות',
+    ...(report.carriedMinutes > 0 ? [`למונה המצטבר +${report.carriedMinutes} דק׳`] : []),
+  ];
+  const payrollLabel = period
+    ? lockedStart
+      ? `דוח ${periodTitle(period)} · ${paid ? 'שולם' : 'נשלח'}`
+      : `דוח שכר · ${periodTitle(period)}`
+    : null;
 
   return (
     <Screen>
       <View style={[styles.card, workplace ? { borderStartWidth: 5, borderStartColor: workplaceColor(colors, workplace) } : null]}>
-        {rows.map(([label, value], i) => {
-          const onPress = links[label];
-          const body = (
-            <>
-              <Text style={styles.label}>{label}</Text>
-              <Text style={[styles.value, onPress && styles.valueLink]}>{value}</Text>
-              {onPress ? <EnterChevron /> : null}
-            </>
-          );
-          const style = [styles.row, i === rows.length - 1 && styles.rowLast];
-          return onPress ? (
-            <Pressable
-              key={label}
-              onPress={onPress}
-              accessibilityRole="link"
-              style={({ pressed }) => [...style, pressed && styles.pressed]}
-            >
-              {body}
-            </Pressable>
-          ) : (
-            <View key={label} style={style}>
-              {body}
-            </View>
-          );
-        })}
+        <View style={styles.head}>
+          <View style={styles.headText}>
+            <LinkText text={title} onPress={report.note ? openCourse : openWorkplace} style={styles.title} styles={styles} />
+            {report.note ? (
+              <LinkText text={workplaceName} onPress={openWorkplace} style={styles.subtitle} styles={styles} />
+            ) : null}
+          </View>
+          <Text style={typeof pay === 'number' ? styles.pay : styles.payMonthly}>
+            {typeof pay === 'number' ? formatShekels(pay) : 'משכורת חודשית'}
+          </Text>
+        </View>
+
+        <InfoLine
+          parts={[`יום ${weekday}`, formatISODate(report.date), hebrewDate(report.date, false)]}
+          style={styles.date}
+        />
+        {notes.length ? <InfoLine parts={notes} style={styles.note} /> : null}
+        {sessionNote?.summary ? <Text style={styles.summary}>{sessionNote.summary}</Text> : null}
+
+        <View style={styles.tiles}>
+          <View style={styles.tile}>
+            <Text style={styles.tileLabel}>שעות</Text>
+            <Text style={styles.tileValue}>{`⁦${report.start}–${report.end}⁩`}</Text>
+          </View>
+          <View style={styles.tile}>
+            <Text style={styles.tileLabel}>{secondTile[0]}</Text>
+            <Text style={styles.tileValue}>{secondTile[1]}</Text>
+          </View>
+        </View>
+
+        <InfoLine parts={details} style={styles.small} />
+        {report.by ? <Text style={styles.small}>דווח ע״י {report.by.name || report.by.email}</Text> : null}
       </View>
+
+      {payrollLabel || report.viaEmail ? (
+        <View style={styles.linksCard}>
+          {payrollLabel ? (
+            <Pressable
+              onPress={openPayroll}
+              accessibilityRole="link"
+              accessibilityHint={
+                lockedStart && !paid ? 'כדי לערוך או למחוק, מבטלים קודם את הדוח שנשלח' : undefined
+              }
+              style={({ pressed }) => [styles.linkRow, report.viaEmail && styles.linkRowBorder, pressed && styles.pressed]}
+            >
+              <Text style={styles.linkRowText}>{lockedStart ? `🔒 ${payrollLabel}` : payrollLabel}</Text>
+              <EnterChevron size={18} />
+            </Pressable>
+          ) : null}
+          {report.viaEmail ? <ViaEmail via={report.viaEmail} /> : null}
+        </View>
+      ) : null}
 
       {data.duplicates.length ? (
         <View style={styles.dupCard}>
@@ -210,24 +240,7 @@ export default function ReportViewScreen() {
         </View>
       ) : null}
 
-      {report.viaEmail ? <ViaEmail via={report.viaEmail} /> : null}
-
-      {lockedStart && workplace ? (
-        <>
-          <Text style={styles.muted}>
-            🔒 הדוח לשכר של {periodTitle(currentPayPeriod(workplace.payday, new Date(y, m - 1, d)))}{' '}
-            {paid
-              ? 'כבר שולם — הדיווח נעול לצמיתות.'
-              : 'כבר נשלח — כדי לערוך או למחוק, מבטלים קודם את הדוח שנשלח.'}
-          </Text>
-          <Button
-            label="לדוח השכר"
-            onPress={() =>
-              router.push({ pathname: '/payroll-report', params: { wp: workplace.id, start: lockedStart } })
-            }
-          />
-        </>
-      ) : (
+      {lockedStart ? null : (
         canReport ? (
         <>
           <Button label="עריכה" onPress={() => router.push({ pathname: '/report', params: { id: report.id } })} />
@@ -257,33 +270,64 @@ export default function ReportViewScreen() {
   );
 }
 
+/** שם רשומה קשורה — לחיץ עם ‹ כשיש לאן לעבור. */
+function LinkText({
+  text,
+  onPress,
+  style,
+  styles,
+}: {
+  text: string;
+  onPress?: () => void;
+  style: object;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  if (!onPress) return <Text style={style}>{text}</Text>;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="link"
+      hitSlop={6}
+      style={({ pressed }) => [styles.linkLine, pressed && styles.pressed]}
+    >
+      <Text style={style}>{text}</Text>
+      <EnterChevron size={16} />
+    </Pressable>
+  );
+}
+
 const makeStyles = (colors: AppColors) =>
   StyleSheet.create({
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     card: {
       backgroundColor: colors.surface,
       borderRadius: radius.md,
-      paddingHorizontal: spacing.md,
+      padding: spacing.md,
+      gap: 6,
       ...cardShadow,
     },
-    row: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: spacing.md,
-      paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    rowLast: { borderBottomWidth: 0 },
-    valueLink: { color: colors.brand },
-    chevron: { fontSize: 18, color: colors.textMuted, alignSelf: 'center' },
+    head: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+    headText: { flex: 1, gap: 2 },
+    linkLine: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2 },
+    title: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT, flexShrink: 1 },
+    subtitle: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT, flexShrink: 1 },
+    pay: { fontSize: 20, fontWeight: '700', color: colors.brandDark },
+    payMonthly: { fontSize: 13, color: colors.textMuted, paddingTop: 4 },
+    date: { fontSize: 13, color: colors.textMuted },
+    note: { fontSize: 13, fontWeight: '700', color: colors.brandDark },
+    summary: { fontSize: 13, lineHeight: 19, color: colors.text, textAlign: TEXT_RIGHT },
+    tiles: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+    tile: { flex: 1, backgroundColor: colors.background, borderRadius: radius.sm, paddingVertical: 8, paddingHorizontal: 12 },
+    tileLabel: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    tileValue: { fontSize: 17, fontWeight: '700', color: colors.text, textAlign: TEXT_RIGHT },
+    small: { fontSize: 12, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    linksCard: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.md, ...cardShadow },
+    linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 44 },
+    linkRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+    linkRowText: { flex: 1, fontSize: 14, color: colors.text, textAlign: TEXT_RIGHT },
     pressed: { opacity: 0.6 },
-    linkRow: { flexDirection: 'row', alignSelf: 'center', alignItems: 'center', gap: 6, paddingVertical: 6 },
-    linkLead: { fontSize: 14, color: colors.textMuted },
-    link: { fontSize: 14, fontWeight: '700', color: colors.brand, textDecorationLine: 'underline' },
-    label: { fontSize: 14, color: colors.textMuted, textAlign: TEXT_RIGHT },
-    value: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'left' },
     muted: { fontSize: 14, lineHeight: 20, color: colors.textMuted, textAlign: TEXT_RIGHT },
+    valueLink: { color: colors.brand },
     dupCard: { backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs },
     dupTitle: { fontSize: 15, fontWeight: '700', color: colors.dangerText, textAlign: TEXT_RIGHT },
     dupRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 },
