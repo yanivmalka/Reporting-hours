@@ -8,6 +8,9 @@
  *  - כל סכום ב־₪ שמוצג ב־`Text` של האפליקציה מוחלף ב־"••• ₪" (`maskMoney`), ולחיצה עליו פותחת.
  * פתיחה אחת חלה על כל האפליקציה, עד שהטלפון מונח מהיד (lib/putDown.ts — מד התאוצה, רק כשהמידע
  * פתוח והאפליקציה פעילה): דומם ~10 שנ׳ כששוכב / ~30 שנ׳ בתנוחה אחרת, בלי נגיעה במסך.
+ * **כיבוי המסך נועל תמיד** (modules/screen-state, lib/relock.ts): כבה בזמן שהאפליקציה פתוחה — הנעילה
+ * מיד ביציאה לרקע, כך שבהדלקה מוצג שוב מסך "מידע כספי נעול" בלי שהסכומים ייחשפו לרגע; כבה כשהיא
+ * ברקע — נועלים בחזרה.
  * יציאה מהאפליקציה לבדה לא נועלת: נועלים בחזרה רק אם הטלפון כבר היה מונח כשיצאה לרקע
  * (למשל המסך כבה על השולחן), או אם עברו יותר מ־`RELOCK_AWAY_MS`. אין מד תאוצה — הכלל הישן
  * (חזרה מהרקע אחרי יותר מ־`RELOCK_AFTER_MS`).
@@ -18,6 +21,8 @@ import { AppState, Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Accelerometer } from 'expo-sensors';
 import { createPutDownDetector, SAMPLE_INTERVAL_MS } from './putDown';
+import { shouldRelockOnResume } from './relock';
+import { isScreenOn, screenOffAt } from '../modules/screen-state/src';
 import { readJSON, writeJSON } from './storage';
 import { KEYS } from './keys';
 import { authenticateWithRecovery, createAuthSession, STALE_AFTER_RESUME_MS, type AuthDriver } from './authSession';
@@ -85,6 +90,8 @@ if (appLockPlatform) {
       const now = Date.now();
       backgroundAt = now;
       downAtBackground = sensorSub != null && detector.stillFor(now) >= DOWN_AT_BACKGROUND_MS;
+      // המסך כבה (הטלפון הונח / כפתור ההפעלה) — נועלים כבר עכשיו, לפני ההדלקה הבאה
+      if (state.unlocked && isScreenOn() === false) set({ unlocked: false });
       appActive = false;
       updateMonitor();
     } else if (st === 'active') {
@@ -93,8 +100,15 @@ if (appLockPlatform) {
       const stale = session.pendingId();
       if (backgroundAt && stale != null) setTimeout(() => session.abandon(stale), STALE_AFTER_RESUME_MS);
       if (backgroundAt && state.unlocked) {
-        const away = Date.now() - backgroundAt;
-        const relock = sensorOk ? downAtBackground || away > RELOCK_AWAY_MS : away > RELOCK_AFTER_MS;
+        const relock = shouldRelockOnResume({
+          backgroundAt,
+          now: Date.now(),
+          screenOffAt: screenOffAt(),
+          sensorOk: sensorOk === true,
+          downAtBackground,
+          relockAfterMs: RELOCK_AFTER_MS,
+          relockAwayMs: RELOCK_AWAY_MS,
+        });
         if (relock) set({ unlocked: false });
       }
       backgroundAt = 0;
